@@ -369,10 +369,10 @@ class Player:
         self.invincible = False
         self.invincible_end_time = 0
         self.rapid_fire = False
-        self.rapid_fire_end_time = 0
+        self.rapid_fire_ammo = 0  # Changed from time-based to ammo-based
         self.has_laser = False
         self.has_multi_shot = False
-        self.multi_shot_end_time = 0
+        self.multi_shot_ammo = 0  # Changed from time-based to ammo-based
         self.afterimage_positions = []
         self.last_afterimage_time = 0
         self.player_id = player_id
@@ -457,11 +457,20 @@ class Player:
             laser = LaserBeam(self.x + self.width // 2, self.player_id)  # Pass player ID
             bullets.append(('laser', laser))
             self.has_laser = False
-        elif self.has_multi_shot:
+        elif self.has_multi_shot and self.multi_shot_ammo > 0:
             center_bullet = Bullet(self.x + self.width // 2, self.y, -BULLET_SPEED)
             left_bullet = Bullet(self.x + self.width // 2 - 25, self.y, -BULLET_SPEED)
             right_bullet = Bullet(self.x + self.width // 2 + 25, self.y, -BULLET_SPEED)
             bullets.extend([('bullet', center_bullet), ('bullet', left_bullet), ('bullet', right_bullet)])
+            self.multi_shot_ammo -= 1  # Consume ammo
+            if self.multi_shot_ammo <= 0:
+                self.has_multi_shot = False
+        elif self.rapid_fire and self.rapid_fire_ammo > 0:
+            bullet = Bullet(self.x + self.width // 2, self.y, -BULLET_SPEED)
+            bullets.append(('bullet', bullet))
+            self.rapid_fire_ammo -= 1  # Consume ammo
+            if self.rapid_fire_ammo <= 0:
+                self.rapid_fire = False
         else:
             bullet = Bullet(self.x + self.width // 2, self.y, -BULLET_SPEED)
             bullets.append(('bullet', bullet))
@@ -479,16 +488,19 @@ class Player:
             self.invincible = False
             self.afterimage_positions = []
             
-        if self.rapid_fire and current_time >= self.rapid_fire_end_time:
+        # Ammo-based powerups no longer need time-based updates
+        if self.rapid_fire_ammo <= 0:
             self.rapid_fire = False
             
-        if self.has_multi_shot and current_time >= self.multi_shot_end_time:
+        if self.multi_shot_ammo <= 0:
             self.has_multi_shot = False
             
     def clear_all_power_ups(self):
         self.rapid_fire = False
+        self.rapid_fire_ammo = 0
         self.has_laser = False
         self.has_multi_shot = False
+        self.multi_shot_ammo = 0
         
     def activate_invincibility(self):
         self.invincible = True
@@ -497,7 +509,7 @@ class Player:
     def activate_rapid_fire(self):
         self.clear_all_power_ups()
         self.rapid_fire = True
-        self.rapid_fire_end_time = pygame.time.get_ticks() + 10000
+        self.rapid_fire_ammo = 200  # 200 shots of rapid fire
         
     def activate_laser(self):
         self.clear_all_power_ups()
@@ -506,7 +518,7 @@ class Player:
     def activate_multi_shot(self):
         self.clear_all_power_ups()
         self.has_multi_shot = True
-        self.multi_shot_end_time = pygame.time.get_ticks() + 10000
+        self.multi_shot_ammo = 100  # 100 shots of multi-shot
         
     def handle_controller_input(self):
         if not self.is_alive:
@@ -915,12 +927,21 @@ class Game:
         self.update_enemy_speed()
         
     def update_enemy_speed(self):
-        # Progressive speed increase as enemies are destroyed within the level
+        # Much more aggressive speed increase - enemies get exponentially faster as they're eliminated
         total_enemies = 60
         remaining_enemies = len(self.enemies)
         if remaining_enemies > 0:
-            # Enemies get up to 4x faster as they're eliminated
-            speed_multiplier = 1 + (total_enemies - remaining_enemies) / total_enemies * 3
+            # Changed from 4x to much more aggressive scaling
+            # When only 1 enemy remains, it will be 15x faster than the base speed
+            # This makes the last few enemies extremely challenging
+            destroyed_ratio = (total_enemies - remaining_enemies) / total_enemies
+            speed_multiplier = 1 + destroyed_ratio * 14  # Up to 15x speed
+            
+            # Add exponential scaling for the last few enemies
+            if remaining_enemies <= 5:
+                extra_multiplier = (5 - remaining_enemies + 1) * 2  # Extra boost for last few
+                speed_multiplier += extra_multiplier
+                
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
                 
@@ -1258,9 +1279,8 @@ class Game:
                 lives_text = self.small_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
                 self.screen.blit(lives_text, (20, 120))
         
-        # Power-up status
+        # Power-up status (updated for ammo-based system)
         status_y = 260 if self.coop_mode else 170
-        current_time = pygame.time.get_ticks()
         
         for i, player in enumerate(self.players):
             if not player.is_alive:
@@ -1268,9 +1288,8 @@ class Game:
                 
             player_label = f"P{player.player_id}: " if self.coop_mode else ""
             
-            if player.rapid_fire:
-                time_left = (player.rapid_fire_end_time - current_time) / 1000
-                text = self.small_font.render(f"{player_label}Rapid Fire: {time_left:.1f}s", True, ORANGE)
+            if player.rapid_fire and player.rapid_fire_ammo > 0:
+                text = self.small_font.render(f"{player_label}Rapid Fire: {player.rapid_fire_ammo} shots", True, ORANGE)
                 self.screen.blit(text, (20, status_y))
                 status_y += 40
                 
@@ -1279,13 +1298,13 @@ class Game:
                 self.screen.blit(text, (20, status_y))
                 status_y += 40
                 
-            if player.has_multi_shot:
-                time_left = (player.multi_shot_end_time - current_time) / 1000
-                text = self.small_font.render(f"{player_label}Multi-Shot: {time_left:.1f}s", True, YELLOW)
+            if player.has_multi_shot and player.multi_shot_ammo > 0:
+                text = self.small_font.render(f"{player_label}Multi-Shot: {player.multi_shot_ammo} shots", True, YELLOW)
                 self.screen.blit(text, (20, status_y))
                 status_y += 40
                 
             if player.invincible:
+                current_time = pygame.time.get_ticks()
                 time_left = (player.invincible_end_time - current_time) / 1000
                 text = self.small_font.render(f"{player_label}Invincible: {time_left:.1f}s", True, PURPLE)
                 self.screen.blit(text, (20, status_y))
@@ -1386,4 +1405,4 @@ def main():
             clock.tick(60)
 
 if __name__ == "__main__":
-    main()        
+    main()
