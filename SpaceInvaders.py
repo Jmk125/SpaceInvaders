@@ -50,6 +50,18 @@ BOSS_SPEED_BASE = 2.0  # Base boss speed
 BOSS_SHOOT_FREQUENCY = 50  # Lower = more frequent shooting
 ENEMY_SPEED_PROGRESSION = 0.15  # Speed increase per boss level (every 5 levels)
 
+# Alien Overlord Boss Configuration
+ALIEN_BOSS_HEAD_HEALTH_BASE = 65
+ALIEN_BOSS_HEAD_HEALTH_PER_LEVEL = 15
+ALIEN_BOSS_HAND_HEALTH_BASE = 35
+ALIEN_BOSS_HAND_HEALTH_PER_LEVEL = 10
+ALIEN_BOSS_HAND_SPEED_BASE = 4.0
+ALIEN_BOSS_HAND_SPEED_GROWTH = 0.35
+ALIEN_BOSS_DROP_COOLDOWN_BASE = 4200  # ms between hand drops
+ALIEN_BOSS_DROP_COOLDOWN_SCALE = 0.9  # Multiplier applied each encounter
+ALIEN_BOSS_FIREBALL_COOLDOWN_BASE = 2600  # ms between fireballs
+ALIEN_BOSS_FIREBALL_COOLDOWN_SCALE = 0.88
+
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
@@ -707,6 +719,36 @@ class LargeBullet:
         pygame.draw.ellipse(screen, ORANGE, (self.x - 4, self.y - 7, 9, 14))
         pygame.draw.ellipse(screen, YELLOW, (self.x - 2, self.y - 5, 5, 10))
 
+class FireballProjectile:
+    def __init__(self, x, y, target_x, target_y, speed):
+        self.x = x
+        self.y = y
+        self.width = 26
+        self.height = 26
+        self.speed = speed
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.hypot(dx, dy) or 1
+        self.vel_x = (dx / distance) * speed
+        self.vel_y = (dy / distance) * speed
+        self.rect = pygame.Rect(int(self.x - self.width // 2), int(self.y - self.height // 2), self.width, self.height)
+
+    def move(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.rect.x = int(self.x - self.width // 2)
+        self.rect.y = int(self.y - self.height // 2)
+
+    def is_off_screen(self):
+        return (self.x < -50 or self.x > SCREEN_WIDTH + 50 or
+                self.y < -50 or self.y > SCREEN_HEIGHT + 50)
+
+    def draw(self, screen):
+        center = (int(self.x), int(self.y))
+        pygame.draw.circle(screen, (255, 90, 0), center, 14)
+        pygame.draw.circle(screen, (255, 140, 0), center, 10)
+        pygame.draw.circle(screen, (255, 220, 120), center, 6)
+
 class Boss:
     def __init__(self, level):
         # Boss configuration
@@ -776,7 +818,7 @@ class Boss:
                 
         return nearest_player
         
-    def update(self):
+    def update(self, players=None, sound_manager=None):
         if self.destruction_complete:
             # Update explosion effects during destruction
             self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
@@ -1861,6 +1903,299 @@ class Player:
             
         pygame.draw.polygon(screen, color, points)
 
+class AlienOverlordBoss:
+    def __init__(self, level):
+        self.encounter = max(1, level // 5)
+        self.width = SCREEN_WIDTH // 4
+        self.height = int(self.width * 1.3)
+        self.head_height = int(self.height * 0.55)
+        self.x = SCREEN_WIDTH // 2 - self.width // 2
+        self.y = 120
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.head_height)
+
+        self.max_health = ALIEN_BOSS_HEAD_HEALTH_BASE + (self.encounter - 1) * ALIEN_BOSS_HEAD_HEALTH_PER_LEVEL
+        self.health = self.max_health
+        self.max_hand_health = ALIEN_BOSS_HAND_HEALTH_BASE + (self.encounter - 1) * ALIEN_BOSS_HAND_HEALTH_PER_LEVEL
+
+        self.hand_speed = ALIEN_BOSS_HAND_SPEED_BASE + (self.encounter - 1) * ALIEN_BOSS_HAND_SPEED_GROWTH
+        self.hand_drop_cooldown = int(ALIEN_BOSS_DROP_COOLDOWN_BASE * (ALIEN_BOSS_DROP_COOLDOWN_SCALE ** (self.encounter - 1)))
+        self.fireball_cooldown = int(ALIEN_BOSS_FIREBALL_COOLDOWN_BASE * (ALIEN_BOSS_FIREBALL_COOLDOWN_SCALE ** (self.encounter - 1)))
+        self.fireball_speed = 6 + self.encounter
+
+        self.last_fireball = pygame.time.get_ticks() - random.randint(0, 1000)
+
+        self.direction = random.choice([-1, 1])
+        self.head_speed = 1.5 + (self.encounter - 1) * 0.25
+
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        self.explosion_effects = []
+
+        hand_width = 90
+        hand_height = 110
+        offsets = [-self.width // 2 - 120, self.width // 2 + 120]
+        base_y = self.y + self.head_height - hand_height // 2
+        current_time = pygame.time.get_ticks()
+        self.hands = []
+        for offset in offsets:
+            hand_x = self.x + self.width // 2 + offset - hand_width // 2
+            hand = {
+                'x': float(hand_x),
+                'y': float(base_y),
+                'width': hand_width,
+                'height': hand_height,
+                'health': self.max_hand_health,
+                'max_health': self.max_hand_health,
+                'state': 'idle',
+                'target_x': hand_x,
+                'last_drop': current_time + random.randint(-800, 0),
+                'drop_cooldown': self.hand_drop_cooldown + random.randint(-600, 600),
+                'rect': pygame.Rect(hand_x, base_y, hand_width, hand_height),
+                'home_offset': offset,
+                'destroyed': False
+            }
+            self.hands.append(hand)
+
+    def is_destruction_complete(self):
+        if not self.destruction_complete:
+            return False
+        return pygame.time.get_ticks() - self.destruction_start_time > 2000
+
+    def create_final_explosion(self):
+        explosion_particles = []
+        for _ in range(60):
+            particle = {
+                'x': self.x + random.randint(-100, self.width + 100),
+                'y': self.y + random.randint(-50, self.height + 50),
+                'vel_x': random.uniform(-8, 8),
+                'vel_y': random.uniform(-8, 3),
+                'color': random.choice([(255, 150, 0), (255, 80, 80), (255, 255, 100), (255, 255, 255)]),
+                'size': random.randint(4, 12),
+                'life': random.randint(1000, 1800),
+                'gravity': random.uniform(0.1, 0.3)
+            }
+            explosion_particles.append(particle)
+        return explosion_particles
+
+    def get_turret_rects(self):
+        rects = []
+        for index, hand in enumerate(self.hands):
+            if hand['destroyed']:
+                rects.append((None, index))
+            else:
+                rects.append((hand['rect'], index))
+        return rects
+
+    def get_main_body_rect(self):
+        if any(not hand['destroyed'] for hand in self.hands):
+            return None
+        return self.rect
+
+    def take_turret_damage(self, hand_index, damage=1):
+        if hand_index < 0 or hand_index >= len(self.hands):
+            return False
+        hand = self.hands[hand_index]
+        if hand['destroyed']:
+            return False
+        hand['health'] -= damage
+        if hand['health'] <= 0:
+            hand['health'] = 0
+            hand['destroyed'] = True
+            hand['state'] = 'destroyed'
+            hand['rect'] = None
+            return True
+        return False
+
+    def take_main_damage(self, damage=1):
+        if any(not hand['destroyed'] for hand in self.hands):
+            return False
+        self.health -= damage
+        if self.health <= 0 and not self.destruction_complete:
+            self.health = 0
+            self.destruction_complete = True
+            self.destruction_start_time = pygame.time.get_ticks()
+            for _ in range(8):
+                explosion = {
+                    'x': self.x + random.randint(0, self.width),
+                    'y': self.y + random.randint(0, self.head_height),
+                    'radius': 10,
+                    'growth': random.uniform(4, 8),
+                    'color': random.choice([ORANGE, RED, YELLOW, WHITE]),
+                    'life': random.randint(80, 150)
+                }
+                self.explosion_effects.append(explosion)
+        return self.destruction_complete
+
+    def _get_hand_home_position(self, hand):
+        center_x = self.x + self.width // 2
+        home_x = center_x + hand['home_offset'] - hand['width'] // 2
+        home_y = self.y + self.head_height - hand['height'] // 2
+        return home_x, home_y
+
+    def _start_hand_attack(self, hand, players):
+        alive_players = [p for p in players if p and p.is_alive]
+        if not alive_players:
+            return
+        target_player = random.choice(alive_players)
+        hand['target_x'] = target_player.x + target_player.width // 2 - hand['width'] // 2
+        hand['state'] = 'seeking'
+        hand['target_player'] = target_player
+        player_mid_y = target_player.y + target_player.height // 2
+        desired_drop_y = player_mid_y - hand['height']
+        max_drop_y = SCREEN_HEIGHT - hand['height'] - 40
+        min_drop_y = self.y + self.head_height // 2
+        hand['drop_target_y'] = max(min(desired_drop_y, max_drop_y), min_drop_y)
+
+    def _move_hand_toward(self, hand, target_x, target_y):
+        dx = target_x - hand['x']
+        dy = target_y - hand['y']
+        distance = math.hypot(dx, dy)
+        if distance < self.hand_speed or distance == 0:
+            hand['x'] = target_x
+            hand['y'] = target_y
+            return True
+        hand['x'] += (dx / distance) * self.hand_speed
+        hand['y'] += (dy / distance) * self.hand_speed
+        return False
+
+    def _check_hand_player_collision(self, hand, players, sound_manager):
+        if not players or hand['rect'] is None:
+            return
+        for player in players:
+            if player and player.is_alive and hand['rect'].colliderect(player.rect):
+                player.take_damage(sound_manager)
+                hand['state'] = 'returning'
+                break
+
+    def update(self, players=None, sound_manager=None):
+        if self.destruction_complete:
+            self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+            for explosion in self.explosion_effects:
+                explosion['radius'] += explosion['growth']
+                explosion['life'] -= 1
+            return
+
+        self.x += self.head_speed * self.direction
+        if self.x <= 100 or self.x + self.width >= SCREEN_WIDTH - 100:
+            self.direction *= -1
+        self.rect.x = int(self.x)
+        self.rect.y = self.y
+
+        alive_players = [p for p in players if p and p.is_alive] if players else []
+        current_time = pygame.time.get_ticks()
+
+        for hand in self.hands:
+            home_x, home_y = self._get_hand_home_position(hand)
+            if hand['destroyed']:
+                continue
+            if hand['state'] == 'idle':
+                self._move_hand_toward(hand, home_x, home_y)
+                if alive_players and current_time - hand['last_drop'] >= hand['drop_cooldown']:
+                    self._start_hand_attack(hand, alive_players)
+            elif hand['state'] == 'seeking':
+                target_x = max(0, min(SCREEN_WIDTH - hand['width'], hand['target_x']))
+                self._move_hand_toward(hand, target_x, home_y)
+                if abs(hand['x'] - target_x) < 2:
+                    hand['state'] = 'dropping'
+            elif hand['state'] == 'dropping':
+                drop_target_y = hand.get('drop_target_y', SCREEN_HEIGHT - hand['height'] - 40)
+                hand['y'] += self.hand_speed * 1.8
+                if hand['y'] >= drop_target_y:
+                    hand['y'] = drop_target_y
+                    hand['state'] = 'returning'
+                self._update_hand_rect(hand)
+                self._check_hand_player_collision(hand, alive_players, sound_manager)
+            elif hand['state'] == 'returning':
+                reached = self._move_hand_toward(hand, home_x, home_y)
+                if reached:
+                    hand['state'] = 'idle'
+                    hand['last_drop'] = current_time
+            self._update_hand_rect(hand)
+
+        for explosion in self.explosion_effects:
+            explosion['radius'] += explosion['growth']
+            explosion['life'] -= 1
+
+    def _update_hand_rect(self, hand):
+        if hand['destroyed']:
+            hand['rect'] = None
+        else:
+            hand['rect'] = pygame.Rect(int(hand['x']), int(hand['y']), hand['width'], hand['height'])
+
+    def shoot(self, players, sound_manager=None):
+        if self.destruction_complete:
+            return []
+        alive_players = [p for p in players if p and p.is_alive]
+        if not alive_players:
+            return []
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_fireball < self.fireball_cooldown:
+            return []
+        head_center_x = self.x + self.width // 2
+        head_center_y = self.y + self.head_height // 2
+        closest_player = min(alive_players, key=lambda p: abs(p.x - head_center_x))
+        target_x = closest_player.x + closest_player.width // 2
+        target_y = closest_player.y
+        self.last_fireball = current_time
+        return [FireballProjectile(head_center_x, head_center_y, target_x, target_y, self.fireball_speed)]
+
+    def draw(self, screen):
+        if self.destruction_complete:
+            for explosion in self.explosion_effects:
+                if explosion['radius'] > 0:
+                    alpha = int(255 * (explosion['life'] / 150))
+                    explosion_surface = pygame.Surface((explosion['radius']*2, explosion['radius']*2), pygame.SRCALPHA)
+                    pygame.draw.circle(explosion_surface, explosion['color'], (explosion['radius'], explosion['radius']), explosion['radius'])
+                    explosion_surface.set_alpha(alpha)
+                    screen.blit(explosion_surface, (explosion['x'] - explosion['radius'], explosion['y'] - explosion['radius']))
+            return
+
+        shield_active = any(not hand['destroyed'] for hand in self.hands)
+        head_color = (200, max(50, int(200 * (self.health / self.max_health))), max(50, int(200 * (self.health / self.max_health))))
+        head_rect = pygame.Rect(self.x, self.y, self.width, self.head_height)
+        pygame.draw.ellipse(screen, head_color, head_rect)
+        pygame.draw.ellipse(screen, WHITE, head_rect, 3)
+
+        eye_width = self.width // 5
+        eye_height = self.head_height // 4
+        eye_y = self.y + self.head_height // 3
+        left_eye = pygame.Rect(self.x + self.width // 4 - eye_width // 2, eye_y, eye_width, eye_height)
+        right_eye = pygame.Rect(self.x + 3 * self.width // 4 - eye_width // 2, eye_y, eye_width, eye_height)
+        pygame.draw.ellipse(screen, BLACK, left_eye)
+        pygame.draw.ellipse(screen, BLACK, right_eye)
+        pygame.draw.ellipse(screen, CYAN, left_eye.inflate(-10, -10))
+        pygame.draw.ellipse(screen, CYAN, right_eye.inflate(-10, -10))
+
+        mouth_rect = pygame.Rect(self.x + self.width // 3, self.y + int(self.head_height * 0.7), self.width // 3, self.head_height // 6)
+        pygame.draw.rect(screen, BLACK, mouth_rect, border_radius=10)
+
+        if shield_active:
+            shield_surface = pygame.Surface((self.width + 80, self.head_height + 80), pygame.SRCALPHA)
+            pygame.draw.ellipse(shield_surface, (0, 200, 255, 90), shield_surface.get_rect(), 8)
+            screen.blit(shield_surface, (self.x - 40, self.y - 40))
+
+        for hand in self.hands:
+            if hand['destroyed']:
+                continue
+            rect = pygame.Rect(int(hand['x']), int(hand['y']), hand['width'], hand['height'])
+            pygame.draw.rect(screen, DARK_GREEN, rect, border_radius=25)
+            pygame.draw.rect(screen, GREEN, rect.inflate(-15, -15), border_radius=20)
+            pygame.draw.circle(screen, BLACK, (rect.centerx, rect.centery), 12)
+            self._draw_health_bar(screen, rect.centerx - 50, rect.top - 15, 100, 8, hand['health'] / hand['max_health'])
+
+        self._draw_health_bar(screen, self.x, self.y - 30, self.width, 12, self.health / self.max_health, label='ALIEN CORE')
+
+    def _draw_health_bar(self, screen, x, y, width, height, ratio, label=None):
+        pygame.draw.rect(screen, RED, (x, y, width, height))
+        pygame.draw.rect(screen, GREEN, (x, y, int(width * ratio), height))
+        pygame.draw.rect(screen, WHITE, (x, y, width, height), 2)
+        if label:
+            font = pygame.font.Font(None, 32)
+            text = font.render(f"{label}: {int(ratio * 100)}%", True, WHITE)
+            text_rect = text.get_rect(center=(x + width // 2, y - 18))
+            screen.blit(text, text_rect)
+
+
 class Enemy:
     def __init__(self, x, y, enemy_type=0):
         self.x = x
@@ -2417,7 +2752,8 @@ class Game:
         self.screen_shake_duration = 0
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
-        self.boss_explosion_waves = []        
+        self.boss_explosion_waves = []
+        self.available_bosses = [Boss, AlienOverlordBoss]
 
         self.font = pygame.font.Font(None, 72)
         self.small_font = pygame.font.Font(None, 48)
@@ -2464,7 +2800,7 @@ class Game:
     def setup_level(self):
         """Setup current level - either boss or regular enemies"""
         self.is_boss_level = (self.level % 5 == 0)
-        
+
         if self.is_boss_level:
             # ADDED: Show UFO warning before boss level
             self.showing_ufo_warning = True
@@ -2476,6 +2812,10 @@ class Game:
             self.ufo_warning_screen = None
             self.current_boss = None
             self.create_enemy_grid()
+
+    def create_boss_instance(self):
+        boss_class = random.choice(self.available_bosses)
+        return boss_class(self.level)
         
     def create_barriers(self):
         self.barriers = []
@@ -2762,7 +3102,7 @@ class Game:
         if self.showing_ufo_warning:
             if self.ufo_warning_screen.is_finished():
                 self.showing_ufo_warning = False
-                self.current_boss = Boss(self.level)  # Create boss after warning
+                self.current_boss = self.create_boss_instance()
                 self.ufo_warning_screen = None
             return  # Don't update game during warning
             
@@ -2835,7 +3175,7 @@ class Game:
         
         # Update boss or regular enemies
         if self.is_boss_level and self.current_boss:
-            self.current_boss.update()
+            self.current_boss.update(self.players, self.sound_manager)
             # Boss shooting
             boss_bullets = self.current_boss.shoot(self.players, self.sound_manager)
             self.enemy_bullets.extend(boss_bullets)
@@ -3096,6 +3436,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
+        self.available_bosses = [Boss, AlienOverlordBoss]
         
         # Reset all players with new individual upgrades
         for player in self.players:
