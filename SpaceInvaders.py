@@ -2040,6 +2040,11 @@ class AlienOverlordBoss:
         hand['target_x'] = target_player.x + target_player.width // 2 - hand['width'] // 2
         hand['state'] = 'seeking'
         hand['target_player'] = target_player
+        player_mid_y = target_player.y + target_player.height // 2
+        desired_drop_y = player_mid_y - hand['height']
+        max_drop_y = SCREEN_HEIGHT - hand['height'] - 40
+        min_drop_y = self.y + self.head_height // 2
+        hand['drop_target_y'] = max(min(desired_drop_y, max_drop_y), min_drop_y)
 
     def _move_hand_toward(self, hand, target_x, target_y):
         dx = target_x - hand['x']
@@ -2093,8 +2098,10 @@ class AlienOverlordBoss:
                 if abs(hand['x'] - target_x) < 2:
                     hand['state'] = 'dropping'
             elif hand['state'] == 'dropping':
+                drop_target_y = hand.get('drop_target_y', SCREEN_HEIGHT - hand['height'] - 40)
                 hand['y'] += self.hand_speed * 1.8
-                if hand['y'] >= SCREEN_HEIGHT - 220:
+                if hand['y'] >= drop_target_y:
+                    hand['y'] = drop_target_y
                     hand['state'] = 'returning'
                 self._update_hand_rect(hand)
                 self._check_hand_player_collision(hand, alive_players, sound_manager)
