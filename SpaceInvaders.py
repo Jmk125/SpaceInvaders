@@ -24,21 +24,1230 @@ ORANGE = (255, 165, 0)
 CYAN = (0, 255, 255)
 DARK_GREEN = (0, 128, 0)
 GRAY = (128, 128, 128)
+GOLD = (255, 215, 0)
 
 # Game settings
-PLAYER_SPEED = 8
-BULLET_SPEED = 10
-BASE_ENEMY_SPEED = 0.8
+BASE_PLAYER_SPEED = 8
+BASE_BULLET_SPEED = 10
+BASE_ENEMY_SPEED = 0.2
+BASE_SHOOT_COOLDOWN = 300
 ENEMY_DROP_SPEED = 30
-SHOOT_COOLDOWN = 300
 RAPID_FIRE_COOLDOWN = 100
 AFTERIMAGE_INTERVAL = 80
 RESPAWN_IMMUNITY_DURATION = 1000
+
+# XP and Leveling System Configuration
+XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
+XP_INCREASE_RATE = 0.10  # 10% increase per level (configurable)
+UPGRADE_PERCENTAGE = 0.1  # 5% increase per upgrade (configurable)
+MAX_UPGRADE_MULTIPLIER = 2.0  # 100% increase maximum (configurable)
+BASE_POWERUP_DURATION = 10000  # Base power-up duration in milliseconds
+
+# Boss Configuration
+BOSS_HEALTH_BASE = 50  # Base boss health
+BOSS_HEALTH_PER_LEVEL = 10  # Additional health per boss level
+BOSS_SPEED_BASE = 2.0  # Base boss speed
+BOSS_SHOOT_FREQUENCY = 50  # Lower = more frequent shooting
+ENEMY_SPEED_PROGRESSION = 0.15  # Speed increase per boss level (every 5 levels)
 
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
 
+class SoundManager:
+    def __init__(self):
+        # Initialize pygame mixer with more channels and better settings
+        pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=512)
+        pygame.mixer.init()
+        pygame.mixer.set_num_channels(32)  # Increase from default 8 to 32 channels
+        
+        # Sound storage
+        self.sounds = {}
+        self.sound_volume = 0.7  # Global volume control (0.0 to 1.0)
+        self.music_volume = 0.5
+        
+        # Channel management for rapid fire
+        self.shoot_channel = None
+        self.last_shoot_time = 0
+        self.shoot_cooldown = 50  # Minimum ms between shoot sounds to prevent audio spam
+        
+        # Load all sounds
+        self.load_sounds()
+        
+    def load_sounds(self):
+        """Load all sound files"""
+        sound_files = {
+            'menu_change': 'assets/sounds/menu_change.wav',
+            'menu_select': 'assets/sounds/menu_select.wav',
+            'shoot': 'assets/sounds/shoot.wav',
+            'enemy_shoot': 'assets/sounds/enemy_shoot.wav',
+            'explosion_small': 'assets/sounds/explosion_small.wav',
+            'explosion_large': 'assets/sounds/explosion_large.wav',
+            'laser': 'assets/sounds/laser.wav',
+            'powerup': 'assets/sounds/powerup.wav',
+            'ufo_hit': 'assets/sounds/ufo_hit.wav',
+            'levelup': 'assets/sounds/levelup.wav',
+            'player_explosion': 'assets/sounds/player_explosion.wav' 
+        }
+        
+        for sound_name, file_path in sound_files.items():
+            try:
+                sound = pygame.mixer.Sound(file_path)
+                sound.set_volume(self.sound_volume)
+                self.sounds[sound_name] = sound
+                print(f"Loaded sound: {sound_name}")
+            except pygame.error as e:
+                print(f"Could not load sound {file_path}: {e}")
+                # Create a silent sound as fallback
+                self.sounds[sound_name] = None
+    
+    def play_sound(self, sound_name, volume_override=None):
+        """Play a sound effect"""
+        if sound_name in self.sounds and self.sounds[sound_name]:
+            sound = self.sounds[sound_name]
+            if volume_override is not None:
+                sound.set_volume(volume_override)
+            else:
+                sound.set_volume(self.sound_volume)
+            sound.play()
+    
+    def set_volume(self, volume):
+        """Set global sound volume (0.0 to 1.0)"""
+        self.sound_volume = max(0.0, min(1.0, volume))
+        for sound in self.sounds.values():
+            if sound:
+                sound.set_volume(self.sound_volume)
+    
+    def stop_all_sounds(self):
+        """Stop all currently playing sounds"""
+        pygame.mixer.stop()
+
+    def play_sound(self, sound_name, volume_override=None, force_play=False):
+        """Play a sound effect with smart channel management"""
+        if sound_name not in self.sounds or not self.sounds[sound_name]:
+            return
+            
+        sound = self.sounds[sound_name]
+        
+        # Special handling for shoot sounds to prevent audio spam
+        if sound_name == 'shoot':
+            current_time = pygame.time.get_ticks()
+            
+            # If not forcing and too soon since last shoot sound, skip
+            if not force_play and current_time - self.last_shoot_time < self.shoot_cooldown:
+                return
+                
+            # Try to reuse the same channel for shoot sounds
+            if self.shoot_channel and self.shoot_channel.get_busy():
+                # If channel is busy, either skip or force stop depending on situation
+                if current_time - self.last_shoot_time < 100:  # Very rapid fire
+                    return  # Skip this shot sound
+                else:
+                    self.shoot_channel.stop()  # Stop previous sound for new one
+            
+            # Set volume and play
+            if volume_override is not None:
+                sound.set_volume(volume_override)
+            else:
+                sound.set_volume(self.sound_volume)
+                
+            self.shoot_channel = sound.play()
+            self.last_shoot_time = current_time
+        else:
+            # Normal sound playing for non-shoot sounds
+            if volume_override is not None:
+                sound.set_volume(volume_override)
+            else:
+                sound.set_volume(self.sound_volume)
+            sound.play()
+    
+    def play_shoot_sound(self, volume_override=None):
+        """Dedicated method for shoot sounds with rate limiting"""
+        self.play_sound('shoot', volume_override, force_play=False)
+
+class XPSystem:
+    def __init__(self):
+        self.current_xp = 0
+        self.level = 1
+        self.xp_for_next_level = XP_BASE_REQUIREMENT
+        
+    def add_xp(self, amount):
+        """Add XP and check for level up"""
+        self.current_xp += amount
+        leveled_up = False
+        
+        while self.current_xp >= self.xp_for_next_level:
+            self.current_xp -= self.xp_for_next_level
+            self.level += 1
+            leveled_up = True
+            # Calculate next level requirement with exponential growth
+            self.xp_for_next_level = int(XP_BASE_REQUIREMENT * (1 + XP_INCREASE_RATE) ** (self.level - 1))
+            
+        return leveled_up
+    
+    def get_xp_progress(self):
+        """Get XP progress as percentage"""
+        return self.current_xp / self.xp_for_next_level if self.xp_for_next_level > 0 else 0
+
+class PlayerUpgrades:
+    def __init__(self):
+        self.shot_speed_level = 0
+        self.fire_rate_level = 0
+        self.movement_speed_level = 0
+        self.powerup_duration_level = 0
+        
+    def get_max_upgrade_level(self):
+        """Calculate maximum upgrade level based on multiplier"""
+        # If max multiplier is 2.0 (100% increase) and each upgrade is 5%, max level is 20
+        return int((MAX_UPGRADE_MULTIPLIER - 1.0) / UPGRADE_PERCENTAGE)
+        
+    def can_upgrade(self, stat):
+        """Check if a stat can be upgraded further"""
+        current_level = getattr(self, f"{stat}_level")
+        return current_level < self.get_max_upgrade_level()
+        
+    def upgrade_stat(self, stat):
+        """Upgrade a specific stat"""
+        if self.can_upgrade(stat):
+            setattr(self, f"{stat}_level", getattr(self, f"{stat}_level") + 1)
+            return True
+        return False
+        
+    def get_multiplier(self, stat):
+        """Get the multiplier for a specific stat"""
+        level = getattr(self, f"{stat}_level")
+        return 1.0 + (level * UPGRADE_PERCENTAGE)
+
+class FloatingText:
+    def __init__(self, x, y, text, color=YELLOW, duration=1000):
+        self.x = x
+        self.y = y
+        self.text = text
+        self.color = color
+        self.duration = duration
+        self.start_time = pygame.time.get_ticks()
+        self.font = pygame.font.Font(None, 36)
+        
+    def update(self):
+        """Update floating text position and check if expired"""
+        self.y -= 1  # Float upward
+        current_time = pygame.time.get_ticks()
+        return current_time - self.start_time < self.duration
+        
+    def draw(self, screen):
+        """Draw the floating text with fade effect"""
+        current_time = pygame.time.get_ticks()
+        elapsed = current_time - self.start_time
+        alpha = max(0, 255 - int((elapsed / self.duration) * 255))
+        
+        text_surface = self.font.render(self.text, True, self.color)
+        text_surface.set_alpha(alpha)
+        screen.blit(text_surface, (self.x, self.y))
+        
+class LevelUpScreen:
+    def __init__(self, screen, players, is_coop=False, sound_manager=None):
+        self.screen = screen
+        self.players = players
+        self.is_coop = is_coop
+        self.sound_manager = sound_manager
+        self.font_large = pygame.font.Font(None, 96)
+        self.font_medium = pygame.font.Font(None, 64)
+        self.font_small = pygame.font.Font(None, 48)
+        self.tiny_font = pygame.font.Font(None, 36)
+        
+        self.upgrade_options = [
+            ("shot_speed", "Shot Speed", "Increase bullet travel speed"),
+            ("fire_rate", "Fire Rate", "Reduce shooting cooldown"),
+            ("movement_speed", "Movement Speed", "Increase player movement speed"),
+            ("powerup_duration", "Power-up Duration", "Extend power-up effects")
+        ]
+        
+        # For co-op mode, track each player's selection
+        self.player1_selection = 0
+        self.player2_selection = 0
+        self.player1_confirmed = False
+        self.player2_confirmed = False
+        
+        # For single player
+        self.current_selection = 0
+        
+        # Input delay and countdown system
+        self.start_time = pygame.time.get_ticks()
+        self.input_delay = 2000  # 2 seconds input lock
+        self.countdown_start = None
+        self.countdown_duration = 3000  # 3 seconds countdown
+        
+        # Visual feedback for upgrades
+        self.upgrade_effects = []  # Store floating upgrade indicators
+        
+        # Controllers
+        self.controllers = []
+        for i in range(pygame.joystick.get_count()):
+            controller = pygame.joystick.Joystick(i)
+            controller.init()
+            self.controllers.append(controller)  
+          
+    def handle_events(self):
+        # FIXED: During input delay, consume ALL events to prevent buffering
+        if pygame.time.get_ticks() - self.start_time < self.input_delay:
+            # Clear the event queue during input delay to prevent input buffering
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return "quit"
+            return None
+            
+        # If countdown is active, don't accept input
+        if self.countdown_start is not None:
+            if pygame.time.get_ticks() - self.countdown_start >= self.countdown_duration:
+                return "continue"
+            return None
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if not self.is_coop:
+                    # Single player keyboard controls
+                    if event.key == pygame.K_UP or event.key == pygame.K_w:
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        self.current_selection = (self.current_selection - 1) % len(self.upgrade_options)
+                    elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        self.current_selection = (self.current_selection + 1) % len(self.upgrade_options)
+                    elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                        stat_name = self.upgrade_options[self.current_selection][0]
+                        if self.players[0].upgrades.can_upgrade(stat_name):
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                            self.players[0].upgrades.upgrade_stat(stat_name)
+                            new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                            self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
+                            # Start a brief countdown for single player too
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000  # 2 seconds to see the effect
+                else:
+                    # Co-op keyboard controls (Player 1)
+                    if not self.player1_confirmed:
+                        if event.key == pygame.K_UP or event.key == pygame.K_w:
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player1_selection = (self.player1_selection - 1) % len(self.upgrade_options)
+                        elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player1_selection = (self.player1_selection + 1) % len(self.upgrade_options)
+                        elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                            stat_name = self.upgrade_options[self.player1_selection][0]
+                            if self.players[0].upgrades.can_upgrade(stat_name):
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                                self.players[0].upgrades.upgrade_stat(stat_name)
+                                new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                                self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
+                                self.player1_confirmed = True
+                    
+                    # Player 2 controls (Right Ctrl for confirm, arrows for selection)
+                    if not self.player2_confirmed:
+                        if event.key == pygame.K_LEFT:
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player2_selection = (self.player2_selection - 1) % len(self.upgrade_options)
+                        elif event.key == pygame.K_RIGHT:
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player2_selection = (self.player2_selection + 1) % len(self.upgrade_options)
+                        elif event.key == pygame.K_RCTRL:
+                            stat_name = self.upgrade_options[self.player2_selection][0]
+                            if self.players[1].upgrades.can_upgrade(stat_name):
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                old_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                                self.players[1].upgrades.upgrade_stat(stat_name)
+                                new_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                                self.create_upgrade_effect(1, stat_name, old_multiplier, new_multiplier)
+                                self.player2_confirmed = True
+                    
+                    # Check if both players confirmed - start countdown
+                    if self.player1_confirmed and self.player2_confirmed and self.countdown_start is None:
+                        self.countdown_start = pygame.time.get_ticks()
+                        
+            elif event.type == pygame.JOYBUTTONDOWN:
+                if not self.is_coop:
+                    # Single player controller
+                    if event.button == 0:  # A button
+                        stat_name = self.upgrade_options[self.current_selection][0]
+                        if self.players[0].upgrades.can_upgrade(stat_name):
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                            self.players[0].upgrades.upgrade_stat(stat_name)
+                            new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                            self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
+                            # Start a brief countdown for single player too
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000  # 2 seconds to see the effect
+                else:
+                    # Co-op controller handling
+                    if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
+                        if event.button == 0:  # A button
+                            stat_name = self.upgrade_options[self.player1_selection][0]
+                            if self.players[0].upgrades.can_upgrade(stat_name):
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                                self.players[0].upgrades.upgrade_stat(stat_name)
+                                new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                                self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
+                                self.player1_confirmed = True
+                    
+                    if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
+                        if event.button == 0:  # A button
+                            stat_name = self.upgrade_options[self.player2_selection][0]
+                            if self.players[1].upgrades.can_upgrade(stat_name):
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                old_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                                self.players[1].upgrades.upgrade_stat(stat_name)
+                                new_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                                self.create_upgrade_effect(1, stat_name, old_multiplier, new_multiplier)
+                                self.player2_confirmed = True
+                    
+                    # Check if both players confirmed - start countdown
+                    if self.player1_confirmed and self.player2_confirmed and self.countdown_start is None:
+                        self.countdown_start = pygame.time.get_ticks()
+                        
+            elif event.type == pygame.JOYHATMOTION:
+                if not self.is_coop:
+                    # Single player controller
+                    if event.value[1] == 1:  # Up
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        self.current_selection = (self.current_selection - 1) % len(self.upgrade_options)
+                    elif event.value[1] == -1:  # Down
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        self.current_selection = (self.current_selection + 1) % len(self.upgrade_options)
+                else:
+                    # Co-op controller handling
+                    if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
+                        if event.value[1] == 1:  # Up
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player1_selection = (self.player1_selection - 1) % len(self.upgrade_options)
+                        elif event.value[1] == -1:  # Down
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player1_selection = (self.player1_selection + 1) % len(self.upgrade_options)
+                    
+                    if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
+                        if event.value[1] == 1:  # Up
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player2_selection = (self.player2_selection - 1) % len(self.upgrade_options)
+                        elif event.value[1] == -1:  # Down
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            self.player2_selection = (self.player2_selection + 1) % len(self.upgrade_options)
+                            
+        return None
+        
+    def create_upgrade_effect(self, player_index, stat_name, old_multiplier, new_multiplier):
+        """Create floating upgrade indicator"""
+        # Find the index by stat name only
+        stat_index = 0
+        for i, (stat, _, _) in enumerate(self.upgrade_options):
+            if stat == stat_name:
+                stat_index = i
+                break
+        
+        # Calculate position based on player and stat
+        if self.is_coop:
+            if player_index == 0:
+                x = 350  # Player 1 column
+            else:
+                x = 1250  # Player 2 column
+        else:
+            x = 600  # Single player center position
+            
+        y = 240 + (stat_index * 80) + 40  # Match the new row height and positioning
+        
+        # Create floating text showing the upgrade
+        old_percent = int((old_multiplier - 1) * 100)
+        new_percent = int((new_multiplier - 1) * 100)
+        text = f"+{old_percent}% → +{new_percent}%"
+        
+        effect = {
+            'x': x,
+            'y': y,
+            'text': text,
+            'color': GREEN if player_index == 0 else BLUE,
+            'start_time': pygame.time.get_ticks(),
+            'duration': 2000  # 2 seconds duration
+        }
+        self.upgrade_effects.append(effect)
+        
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        # Update upgrade effects
+        current_time = pygame.time.get_ticks()
+        self.upgrade_effects = [effect for effect in self.upgrade_effects 
+                               if current_time - effect['start_time'] < effect['duration']]
+        
+        # Title
+        title_text = self.font_large.render("LEVEL UP!", True, GOLD)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 80))
+        self.screen.blit(title_text, title_rect)
+        
+        # Input delay indicator
+        if pygame.time.get_ticks() - self.start_time < self.input_delay:
+            remaining = (self.input_delay - (pygame.time.get_ticks() - self.start_time)) / 1000.0
+            delay_text = self.font_medium.render(f"Input unlocks in {remaining:.1f}s", True, YELLOW)
+            delay_rect = delay_text.get_rect(center=(SCREEN_WIDTH // 2, 140))
+            self.screen.blit(delay_text, delay_rect)
+            return  # Don't draw the rest during input delay
+            
+        if self.is_coop:
+            # Table layout for co-op
+            # Headers
+            p1_header = self.font_medium.render("PLAYER 1", True, GREEN)
+            desc_header = self.font_medium.render("UPGRADE", True, WHITE)
+            p2_header = self.font_medium.render("PLAYER 2", True, BLUE)
+            
+            self.screen.blit(p1_header, (350, 180))
+            self.screen.blit(desc_header, (SCREEN_WIDTH // 2 - 50, 180))
+            self.screen.blit(p2_header, (1250, 180))
+            
+            # Table rows
+            start_y = 240
+            row_height = 80
+            
+            for i, (stat_name, display_name, description) in enumerate(self.upgrade_options):
+                y = start_y + i * row_height
+                
+                # Row background (alternating)
+                if i % 2 == 1:
+                    pygame.draw.rect(self.screen, (20, 20, 20), (250, y - 5, 1200, row_height - 10))
+                
+                # Selection arrows (outside table)
+                if i == self.player1_selection and not self.player1_confirmed:
+                    arrow_points = [(200, y + 15), (200, y + 35), (230, y + 25)]
+                    pygame.draw.polygon(self.screen, GREEN, arrow_points)
+                    
+                if i == self.player2_selection and not self.player2_confirmed:
+                    arrow_points = [(1520, y + 15), (1520, y + 35), (1490, y + 25)]
+                    pygame.draw.polygon(self.screen, BLUE, arrow_points)
+                
+                # Middle column - Upgrade description
+                name_text = self.tiny_font.render(display_name, True, WHITE)
+                desc_text = self.tiny_font.render(description, True, GRAY)
+                name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, y + 15))
+                desc_rect = desc_text.get_rect(center=(SCREEN_WIDTH // 2, y + 35))
+                self.screen.blit(name_text, name_rect)
+                self.screen.blit(desc_text, desc_rect)
+                
+                # Left column - Player 1 stats
+                p1_can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
+                p1_level = getattr(self.players[0].upgrades, f"{stat_name}_level")
+                p1_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                p1_color = WHITE if p1_can_upgrade else GRAY
+                
+                if self.player1_confirmed and i == self.player1_selection:
+                    confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
+                    self.screen.blit(confirm_text, (350, y + 25))
+                else:
+                    p1_level_text = self.tiny_font.render(f"Lv {p1_level}", True, p1_color)
+                    p1_bonus_text = self.tiny_font.render(f"+{int((p1_multiplier - 1) * 100)}%", True, YELLOW if p1_can_upgrade else GRAY)
+                    self.screen.blit(p1_level_text, (350, y + 15))
+                    self.screen.blit(p1_bonus_text, (350, y + 35))
+                
+                # Right column - Player 2 stats
+                p2_can_upgrade = self.players[1].upgrades.can_upgrade(stat_name)
+                p2_level = getattr(self.players[1].upgrades, f"{stat_name}_level")
+                p2_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                p2_color = WHITE if p2_can_upgrade else GRAY
+                
+                if self.player2_confirmed and i == self.player2_selection:
+                    confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
+                    self.screen.blit(confirm_text, (1250, y + 25))
+                else:
+                    p2_level_text = self.tiny_font.render(f"Lv {p2_level}", True, p2_color)
+                    p2_bonus_text = self.tiny_font.render(f"+{int((p2_multiplier - 1) * 100)}%", True, YELLOW if p2_can_upgrade else GRAY)
+                    self.screen.blit(p2_level_text, (1250, y + 15))
+                    self.screen.blit(p2_bonus_text, (1250, y + 35))
+            
+            # FIXED: Only show ONE countdown or instruction section
+            if self.countdown_start is not None:
+                # Countdown when both players ready
+                elapsed = pygame.time.get_ticks() - self.countdown_start
+                remaining = max(0, (self.countdown_duration - elapsed) / 1000.0)
+                countdown_text = self.font_large.render(f"Next level in {remaining:.1f}s", True, GOLD)
+                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                self.screen.blit(countdown_text, countdown_rect)
+            else:
+                # Instructions (only show when NOT counting down)
+                if not self.player1_confirmed or not self.player2_confirmed:
+                    inst_text = self.tiny_font.render("P1: WASD + Enter  |  P2: Arrows + Right Ctrl  |  Controllers: D-pad + A", True, GRAY)
+                    inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                    self.screen.blit(inst_text, inst_rect)
+        
+        else:
+            # Single player layout
+            desc_header = self.font_medium.render("UPGRADES", True, WHITE)
+            self.screen.blit(desc_header, (SCREEN_WIDTH // 2 - 50, 180))
+            
+            start_y = 240
+            row_height = 80
+            
+            for i, (stat_name, display_name, description) in enumerate(self.upgrade_options):
+                y = start_y + i * row_height
+                
+                if i % 2 == 1:
+                    pygame.draw.rect(self.screen, (20, 20, 20), (300, y - 5, 800, row_height - 10))
+                
+                # Selection arrow
+                if i == self.current_selection:
+                    arrow_points = [(250, y + 15), (250, y + 35), (280, y + 25)]
+                    pygame.draw.polygon(self.screen, GREEN, arrow_points)
+                
+                # Upgrade info
+                name_text = self.tiny_font.render(display_name, True, WHITE)
+                desc_text = self.tiny_font.render(description, True, GRAY)
+                self.screen.blit(name_text, (350, y + 10))
+                self.screen.blit(desc_text, (350, y + 30))
+                
+                # Stats
+                can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
+                level = getattr(self.players[0].upgrades, f"{stat_name}_level")
+                multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                
+                level_text = self.tiny_font.render(f"Level {level} (+{int((multiplier - 1) * 100)}%)", True, WHITE if can_upgrade else GRAY)
+                self.screen.blit(level_text, (350, y + 50))
+            
+            # FIXED: Only show ONE countdown or instruction section for single player
+            if self.countdown_start is not None:
+                # Countdown for single player after upgrade
+                elapsed = pygame.time.get_ticks() - self.countdown_start
+                remaining = max(0, (self.countdown_duration - elapsed) / 1000.0)
+                countdown_text = self.font_large.render(f"Continuing in {remaining:.1f}s", True, GOLD)
+                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                self.screen.blit(countdown_text, countdown_rect)
+            else:
+                # Instructions (only show when NOT counting down)
+                inst_text = self.tiny_font.render("WASD/Arrows: Navigate  |  Enter/Space: Select  |  Controller: D-pad + A", True, GRAY)
+                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                self.screen.blit(inst_text, inst_rect)
+        
+        # Draw floating upgrade effects
+        for effect in self.upgrade_effects:
+            elapsed = current_time - effect['start_time']
+            alpha = max(0, 255 - int((elapsed / effect['duration']) * 255))
+            y_offset = -int(elapsed * 0.08)
+            
+            effect_surface = self.font_small.render(effect['text'], True, effect['color'])
+            effect_surface.set_alpha(alpha)
+            
+            # Add background for better visibility
+            text_rect = effect_surface.get_rect()
+            bg_surface = pygame.Surface((text_rect.width + 20, text_rect.height + 10), pygame.SRCALPHA)
+            bg_surface.fill((0, 0, 0, 128))
+            
+            self.screen.blit(bg_surface, (effect['x'] - 10, effect['y'] + y_offset - 5))
+            self.screen.blit(effect_surface, (effect['x'], effect['y'] + y_offset))
+        
+        pygame.display.flip()
+
+class TargetedBullet:
+    def __init__(self, x, y, vel_x, vel_y):
+        self.x = x
+        self.y = y
+        self.width = 8
+        self.height = 8
+        self.vel_x = vel_x
+        self.vel_y = vel_y
+        self.rect = pygame.Rect(x, y, self.width, self.height)
+        
+    def move(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.rect.x = self.x
+        self.rect.y = self.y
+        
+    def is_off_screen(self):
+        return (self.x < -20 or self.x > SCREEN_WIDTH + 20 or 
+                self.y < -20 or self.y > SCREEN_HEIGHT + 20)
+        
+    def draw(self, screen):
+        pygame.draw.circle(screen, RED, (int(self.x), int(self.y)), 4)
+        pygame.draw.circle(screen, ORANGE, (int(self.x), int(self.y)), 2)
+
+class LargeBullet:
+    def __init__(self, x, y, speed):
+        self.x = x
+        self.y = y
+        self.width = 15
+        self.height = 20
+        self.speed = speed
+        self.rect = pygame.Rect(x, y, self.width, self.height)
+        
+    def move(self):
+        self.y += self.speed
+        self.rect.y = self.y
+        
+    def is_off_screen(self):
+        return self.y < -30 or self.y > SCREEN_HEIGHT + 30
+        
+    def draw(self, screen):
+        # Large glowing bullet
+        pygame.draw.ellipse(screen, RED, (self.x - 7, self.y - 10, 15, 20))
+        pygame.draw.ellipse(screen, ORANGE, (self.x - 4, self.y - 7, 9, 14))
+        pygame.draw.ellipse(screen, YELLOW, (self.x - 2, self.y - 5, 5, 10))
+
+class Boss:
+    def __init__(self, level):
+        # Boss configuration
+        self.width = SCREEN_WIDTH // 3  # One third of screen width
+        self.height = int(self.width * 0.6)  # Proportional height
+        self.x = SCREEN_WIDTH // 2 - self.width // 2
+        self.y = 150
+        
+        # Health system
+        self.max_health = BOSS_HEALTH_BASE + (level // 5 - 1) * BOSS_HEALTH_PER_LEVEL
+        self.health = self.max_health
+        self.turret_health_percentage = 0.20  # Configurable: 20% of main body health
+        self.max_turret_health = int(self.max_health * self.turret_health_percentage)
+        
+        # Turret system
+        self.turrets = [
+            {'health': self.max_turret_health, 'max_health': self.max_turret_health, 'destroyed': False, 'last_shot': 0, 'cooldown': 1200},
+            {'health': self.max_turret_health, 'max_health': self.max_turret_health, 'destroyed': False, 'last_shot': 400, 'cooldown': 1200},  # Staggered start
+            {'health': self.max_turret_health, 'max_health': self.max_turret_health, 'destroyed': False, 'last_shot': 800, 'cooldown': 1200}   # Staggered start
+        ]
+        
+        # Movement
+        self.speed = BOSS_SPEED_BASE
+        self.direction = random.choice([-1, 1])
+        self.last_direction_change = pygame.time.get_ticks()
+        self.direction_change_cooldown = random.randint(1000, 3000)
+        
+        # Main body shooting (when turrets destroyed)
+        self.main_body_last_shot = 0
+        self.main_body_cooldown = 800
+        
+        # Visual effects
+        self.debris_effects = []
+        self.explosion_effects = []
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        
+    def get_turret_positions(self):
+        """Get the screen positions of the three turrets"""
+        turret_spacing = self.width // 4
+        base_y = self.y + int(self.height * 0.8)  # Near bottom of UFO
+        
+        return [
+            (self.x + turret_spacing, base_y),           # Left turret
+            (self.x + self.width // 2, base_y),         # Center turret  
+            (self.x + self.width - turret_spacing, base_y)  # Right turret
+        ]
+        
+    def get_nearest_player_position(self, turret_pos, players):
+        """Find the nearest alive player to a turret"""
+        alive_players = [p for p in players if p.is_alive]
+        if not alive_players:
+            return None
+            
+        nearest_player = None
+        min_distance = float('inf')
+        
+        for player in alive_players:
+            player_center = (player.x + player.width // 2, player.y + player.height // 2)
+            distance = math.sqrt((turret_pos[0] - player_center[0])**2 + (turret_pos[1] - player_center[1])**2)
+            
+            if distance < min_distance:
+                min_distance = distance
+                nearest_player = player_center
+                
+        return nearest_player
+        
+    def update(self):
+        if self.destruction_complete:
+            # Update explosion effects during destruction
+            self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+            for explosion in self.explosion_effects:
+                explosion['radius'] += explosion['growth']
+                explosion['life'] -= 1
+                # Stop growing at max radius
+                if 'max_radius' in explosion and explosion['radius'] >= explosion['max_radius']:
+                    explosion['growth'] = 0
+            return
+            
+        # Normal UFO movement (existing code)
+        self.x += self.speed * self.direction
+        
+        if self.x <= 0 or self.x >= SCREEN_WIDTH - self.width:
+            self.direction *= -1
+        
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_direction_change > self.direction_change_cooldown:
+            if random.randint(1, 100) <= 30:
+                self.direction *= -1
+                self.last_direction_change = current_time
+                self.direction_change_cooldown = random.randint(1000, 3000)
+        
+        self.rect.x = self.x
+        self.rect.y = self.y
+        
+        # Update debris effects
+        self.debris_effects = [debris for debris in self.debris_effects if debris['life'] > 0]
+        for debris in self.debris_effects:
+            debris['x'] += debris['vel_x']
+            debris['y'] += debris['vel_y']
+            debris['vel_y'] += 0.2
+            debris['life'] -= 1
+            
+        # Update explosion effects  
+        self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+        for explosion in self.explosion_effects:
+            explosion['radius'] += explosion['growth']
+            explosion['life'] -= 1
+        
+    def shoot(self, players, sound_manager=None):
+        """Boss shooting patterns"""
+        if self.destruction_complete:
+            return []
+            
+        bullets = []
+        current_time = pygame.time.get_ticks()
+        turret_positions = self.get_turret_positions()
+        
+        # Count active turrets for fire rate calculation
+        active_turrets = sum(1 for turret in self.turrets if not turret['destroyed'])
+        
+        # Calculate fire rate increase (faster as turrets destroyed)
+        fire_rate_multiplier = 1.0 + (3 - active_turrets) * 0.3  # 30% faster per destroyed turret
+        
+        # Turret shooting
+        turret_shot_fired = False
+        for i, (turret, pos) in enumerate(zip(self.turrets, turret_positions)):
+            if turret['destroyed']:
+                continue
+                
+            adjusted_cooldown = turret['cooldown'] / fire_rate_multiplier
+            
+            if current_time - turret['last_shot'] > adjusted_cooldown:
+                target_pos = self.get_nearest_player_position(pos, players)
+                if target_pos:
+                    # Calculate angle to target
+                    dx = target_pos[0] - pos[0]
+                    dy = target_pos[1] - pos[1]
+                    
+                    # Create bullet with velocity toward target
+                    speed = BASE_BULLET_SPEED * 0.8  # Slightly slower than player bullets
+                    distance = math.sqrt(dx*dx + dy*dy)
+                    if distance > 0:
+                        vel_x = (dx / distance) * speed
+                        vel_y = (dy / distance) * speed
+                        bullet = TargetedBullet(pos[0], pos[1], vel_x, vel_y)
+                        bullets.append(bullet)
+                        turret_shot_fired = True
+                        
+                turret['last_shot'] = current_time
+        
+        # Play sound for turret shots
+        if turret_shot_fired and sound_manager:
+            sound_manager.play_sound('enemy_shoot', volume_override=0.4)
+        
+        # Main body shooting (when all turrets destroyed)
+        if active_turrets == 0:
+            if current_time - self.main_body_last_shot > self.main_body_cooldown:
+                center_x = self.x + self.width // 2
+                center_y = self.y + self.height
+                
+                # Fire larger, more powerful shots
+                bullet = LargeBullet(center_x, center_y, BASE_BULLET_SPEED)
+                bullets.append(bullet)
+                self.main_body_last_shot = current_time
+                
+                # Play sound for main body shot
+                if sound_manager:
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.5)
+        
+        return bullets
+        
+    def take_turret_damage(self, turret_index, damage=1):
+        """Damage a specific turret"""
+        if turret_index < 0 or turret_index >= len(self.turrets):
+            return False
+            
+        turret = self.turrets[turret_index]
+        if turret['destroyed']:
+            return False
+            
+        turret['health'] -= damage
+        
+        if turret['health'] <= 0:
+            turret['destroyed'] = True
+            self.create_debris_effect(turret_index)
+            return True  # Turret destroyed
+            
+        return False
+        
+    def take_main_damage(self, damage=1):
+        """Damage the main body (only if all turrets destroyed)"""
+        active_turrets = sum(1 for turret in self.turrets if not turret['destroyed'])
+        if active_turrets > 0:
+            return False  # Main body is protected
+            
+        self.health -= damage
+        
+        if self.health <= 0:
+            self.start_destruction_sequence()
+            return True  # Boss destroyed
+            
+        return False
+        
+    def create_debris_effect(self, turret_index):
+        """Create debris when turret is destroyed"""
+        turret_pos = self.get_turret_positions()[turret_index]
+        
+        for _ in range(8):
+            debris = {
+                'x': turret_pos[0] + random.randint(-20, 20),
+                'y': turret_pos[1] + random.randint(-10, 10),
+                'vel_x': random.uniform(-3, 3),
+                'vel_y': random.uniform(-5, -1),
+                'size': random.randint(3, 8),
+                'color': random.choice([ORANGE, RED, YELLOW]),
+                'life': random.randint(30, 60)
+            }
+            self.debris_effects.append(debris)
+            
+    def start_destruction_sequence(self):
+        """Start the dramatic destruction sequence"""
+        self.destruction_complete = True
+        self.destruction_start_time = pygame.time.get_ticks()
+        
+        # Create multiple MASSIVE explosion effects 
+        for _ in range(20):  # Even more explosions
+            explosion = {
+                'x': self.x + random.randint(-50, self.width + 50),  # Extend beyond UFO
+                'y': self.y + random.randint(-30, self.height + 30),
+                'radius': 0,
+                'growth': random.uniform(6, 12),  # Much faster growth
+                'color': random.choice([ORANGE, RED, YELLOW, WHITE, (255, 100, 0)]),
+                'life': random.randint(80, 150),  # Longer lasting
+                'max_radius': random.randint(60, 120)  # Different max sizes
+            }
+            self.explosion_effects.append(explosion)
+
+    def create_final_explosion(self):
+        """Create a massive particle explosion when boss is completely destroyed"""
+        explosion_particles = []
+        
+        # Create TONS of particles across a huge area
+        for _ in range(50):  # Way more particles
+            particle = {
+                'x': self.x + random.randint(-100, self.width + 100),  # Much wider spread
+                'y': self.y + random.randint(-50, self.height + 50),
+                'vel_x': random.uniform(-8, 8),  # Faster and wider spread
+                'vel_y': random.uniform(-8, 3),
+                'color': random.choice([
+                    (255, 150, 0),   # Bright Orange
+                    (255, 80, 80),   # Bright Red  
+                    (255, 255, 100), # Bright Yellow
+                    (255, 255, 255), # White
+                    (100, 255, 255), # Bright Cyan
+                    (255, 200, 0),   # Gold
+                    (255, 0, 0),     # Pure Red
+                ]),
+                'size': random.randint(4, 12),  # Much bigger particles
+                'life': random.randint(1000, 1800),  # Much longer lasting
+                'gravity': random.uniform(0.1, 0.3)  # Variable gravity
+            }
+            explosion_particles.append(particle)
+        
+        return explosion_particles
+            
+    def is_destruction_complete(self):
+        """Check if destruction sequence is finished"""
+        if not self.destruction_complete:
+            return False
+        return pygame.time.get_ticks() - self.destruction_start_time > 2000  # 2 second sequence
+        
+    def get_turret_rects(self):
+        """Get collision rectangles for each turret"""
+        turret_positions = self.get_turret_positions()
+        turret_size = 40
+        rects = []
+        
+        for i, pos in enumerate(turret_positions):
+            if not self.turrets[i]['destroyed']:
+                rect = pygame.Rect(pos[0] - turret_size//2, pos[1] - turret_size//2, turret_size, turret_size)
+                rects.append((rect, i))
+            else:
+                rects.append((None, i))
+                
+        return rects
+        
+    def get_main_body_rect(self):
+        """Get collision rectangle for main body"""
+        active_turrets = sum(1 for turret in self.turrets if not turret['destroyed'])
+        if active_turrets > 0:
+            return None  # Main body protected
+        return self.rect
+        
+    def get_health_color(self):
+        """Get UFO color based on health (white to red)"""
+        if self.destruction_complete:
+            return RED
+            
+        health_ratio = self.health / self.max_health
+        # Interpolate from white (255,255,255) to red (255,0,0)
+        red = 255
+        green = int(255 * health_ratio)
+        blue = int(255 * health_ratio)
+        return (red, green, blue)
+        
+    def draw(self, screen):
+        # DON'T draw the UFO if destruction is complete
+        if self.destruction_complete:
+            # Only draw explosion effects during destruction
+            for explosion in self.explosion_effects:
+                if explosion['radius'] > 0:
+                    alpha = int(255 * (explosion['life'] / 150))
+                    explosion_surface = pygame.Surface((explosion['radius']*2, explosion['radius']*2), pygame.SRCALPHA)
+                    pygame.draw.circle(explosion_surface, explosion['color'], (explosion['radius'], explosion['radius']), explosion['radius'])
+                    explosion_surface.set_alpha(alpha)
+                    screen.blit(explosion_surface, (explosion['x'] - explosion['radius'], explosion['y'] - explosion['radius']))
+            return  # Don't draw anything else
+            
+        if self.is_destruction_complete():
+            return  # Don't draw if destruction is complete
+            
+        # Get UFO color based on health
+        ufo_color = self.get_health_color()
+        
+        # IMPROVED PIXEL ART UFO DESIGN
+        
+        # 1. MAIN HULL - Detailed segmented design
+        hull_segments = 8
+        segment_width = self.width // hull_segments
+        hull_y = self.y + int(self.height * 0.4)
+        hull_height = int(self.height * 0.4)
+        
+        # Draw hull segments with alternating colors for detail
+        for i in range(hull_segments):
+            segment_x = self.x + i * segment_width
+            # Alternate between main color and slightly darker
+            if i % 2 == 0:
+                color = ufo_color
+            else:
+                color = (max(0, ufo_color[0] - 30), max(0, ufo_color[1] - 30), max(0, ufo_color[2] - 30))
+            
+            pygame.draw.rect(screen, color, (segment_x, hull_y, segment_width, hull_height))
+            
+        # Hull outline
+        pygame.draw.rect(screen, (100, 100, 100), (self.x, hull_y, self.width, hull_height), 3)
+        
+        # 2. UPPER DOME - Multi-layered with details
+        dome_width = int(self.width * 0.6)
+        dome_height = int(self.height * 0.5)
+        dome_x = self.x + (self.width - dome_width) // 2
+        dome_y = self.y
+        
+        # Outer dome layer
+        pygame.draw.ellipse(screen, (80, 150, 200), (dome_x - 10, dome_y - 5, dome_width + 20, dome_height + 10))
+        # Main dome
+        pygame.draw.ellipse(screen, (120, 200, 255), (dome_x, dome_y, dome_width, dome_height))
+        # Inner dome highlight
+        pygame.draw.ellipse(screen, (180, 220, 255), (dome_x + 20, dome_y + 10, dome_width - 40, dome_height - 20))
+        # Dome outline
+        pygame.draw.ellipse(screen, WHITE, (dome_x, dome_y, dome_width, dome_height), 2)
+        
+        # 3. COMMAND BRIDGE/COCKPIT in center of dome
+        bridge_width = dome_width // 3
+        bridge_height = dome_height // 2
+        bridge_x = dome_x + (dome_width - bridge_width) // 2
+        bridge_y = dome_y + dome_height // 4
+        
+        pygame.draw.ellipse(screen, (50, 50, 50), (bridge_x, bridge_y, bridge_width, bridge_height))
+        pygame.draw.ellipse(screen, (150, 150, 150), (bridge_x + 5, bridge_y + 3, bridge_width - 10, bridge_height - 6))
+        pygame.draw.ellipse(screen, WHITE, (bridge_x, bridge_y, bridge_width, bridge_height), 2)
+        
+        # 4. DETAILED HULL PANELS
+        panel_width = self.width // 6
+        panel_height = hull_height // 2
+        panel_y = hull_y + panel_height // 2
+        
+        for i in range(0, 6):
+            panel_x = self.x + i * panel_width + panel_width // 4
+            # Hull panels with rivets/details
+            pygame.draw.rect(screen, (max(0, ufo_color[0] - 20), max(0, ufo_color[1] - 20), max(0, ufo_color[2] - 20)), 
+                           (panel_x, panel_y, panel_width // 2, panel_height))
+            pygame.draw.rect(screen, GRAY, (panel_x, panel_y, panel_width // 2, panel_height), 1)
+            
+            # Rivets/bolts on panels
+            pygame.draw.circle(screen, (80, 80, 80), (panel_x + 8, panel_y + 8), 3)
+            pygame.draw.circle(screen, (80, 80, 80), (panel_x + panel_width//2 - 8, panel_y + panel_height - 8), 3)
+        
+        # 5. ENHANCED LIGHTING SYSTEM
+        light_count = 12
+        for i in range(light_count):
+            angle = (i / light_count) * 2 * math.pi
+            light_x = self.x + self.width // 2 + int(math.cos(angle) * (self.width // 2 - 15))
+            light_y = hull_y + hull_height // 2 + int(math.sin(angle) * 20)
+            
+            # Animated pulse based on time and position
+            pulse = abs(math.sin(pygame.time.get_ticks() * 0.008 + i * 0.5)) * 0.6 + 0.4
+            
+            # Different colored lights around the perimeter
+            if i % 3 == 0:
+                light_color = (int(255 * pulse), int(100 * pulse), 0)  # Orange
+            elif i % 3 == 1:
+                light_color = (0, int(255 * pulse), int(100 * pulse))  # Cyan
+            else:
+                light_color = (int(255 * pulse), int(255 * pulse), 0)  # Yellow
+                
+            pygame.draw.circle(screen, light_color, (light_x, light_y), 8)
+            pygame.draw.circle(screen, WHITE, (light_x, light_y), 8, 2)
+        
+        # 6. IMPROVED TURRETS with more detail
+        turret_positions = self.get_turret_positions()
+        for i, (turret, pos) in enumerate(zip(self.turrets, turret_positions)):
+            if not turret['destroyed']:
+                # Turret base (larger)
+                pygame.draw.circle(screen, (60, 60, 60), pos, 25)
+                pygame.draw.circle(screen, DARK_GREEN, pos, 20)
+                
+                # Turret gun barrel
+                barrel_length = 15
+                barrel_angle = math.atan2(pos[1] - (self.y + self.height//2), pos[0] - (self.x + self.width//2))
+                barrel_end_x = pos[0] + int(math.cos(barrel_angle) * barrel_length)
+                barrel_end_y = pos[1] + int(math.sin(barrel_angle) * barrel_length)
+                
+                pygame.draw.line(screen, (40, 40, 40), pos, (barrel_end_x, barrel_end_y), 8)
+                pygame.draw.line(screen, (80, 80, 80), pos, (barrel_end_x, barrel_end_y), 4)
+                
+                # Turret details
+                pygame.draw.circle(screen, GREEN, pos, 15)
+                pygame.draw.circle(screen, (0, 100, 0), pos, 10)
+                pygame.draw.circle(screen, WHITE, pos, 20, 2)
+                
+                # Turret health indicator
+                health_ratio = turret['health'] / turret['max_health']
+                if health_ratio < 0.7:
+                    damage_color = RED if health_ratio < 0.3 else ORANGE
+                    pygame.draw.circle(screen, damage_color, pos, 22, 4)
+                    
+                    # Damage sparks/effects
+                    if health_ratio < 0.5:
+                        for _ in range(3):
+                            spark_x = pos[0] + random.randint(-15, 15)
+                            spark_y = pos[1] + random.randint(-15, 15)
+                            pygame.draw.circle(screen, YELLOW, (spark_x, spark_y), 2)
+        
+        # 7. ENGINE GLOW/EXHAUST at bottom
+        engine_count = 4
+        engine_spacing = self.width // (engine_count + 1)
+        engine_y = hull_y + hull_height
+        
+        for i in range(engine_count):
+            engine_x = self.x + engine_spacing * (i + 1)
+            
+            # Engine glow effect
+            glow_intensity = abs(math.sin(pygame.time.get_ticks() * 0.01 + i)) * 0.5 + 0.5
+            engine_color = (int(100 * glow_intensity), int(150 * glow_intensity), int(255 * glow_intensity))
+            
+            # Multiple engine glow layers
+            pygame.draw.circle(screen, engine_color, (engine_x, engine_y), 12)
+            pygame.draw.circle(screen, (int(150 * glow_intensity), int(200 * glow_intensity), 255), (engine_x, engine_y), 8)
+            pygame.draw.circle(screen, WHITE, (engine_x, engine_y), 4)
+        
+        # 8. ANTENNA/COMMUNICATION ARRAYS on dome
+        antenna_count = 3
+        for i in range(antenna_count):
+            antenna_x = dome_x + (i + 1) * (dome_width // (antenna_count + 1))
+            antenna_base_y = dome_y + dome_height // 3
+            antenna_tip_y = dome_y - 10
+            
+            # Antenna structure
+            pygame.draw.line(screen, GRAY, (antenna_x, antenna_base_y), (antenna_x, antenna_tip_y), 3)
+            pygame.draw.circle(screen, RED, (antenna_x, antenna_tip_y), 4)  # Antenna tip
+            pygame.draw.circle(screen, WHITE, (antenna_x, antenna_tip_y), 4, 1)
+        
+        # Draw debris effects
+        for debris in self.debris_effects:
+            alpha = int(255 * (debris['life'] / 60))
+            debris_surface = pygame.Surface((debris['size']*2, debris['size']*2), pygame.SRCALPHA)
+            color_with_alpha = (*debris['color'], alpha)
+            pygame.draw.circle(debris_surface, color_with_alpha, (debris['size'], debris['size']), debris['size'])
+            screen.blit(debris_surface, (debris['x'] - debris['size'], debris['y'] - debris['size']))
+            
+        # Draw explosion effects (for turret destruction)
+        for explosion in self.explosion_effects:
+            if explosion['radius'] > 0:
+                alpha = int(255 * (explosion['life'] / 80))
+                explosion_surface = pygame.Surface((explosion['radius']*2, explosion['radius']*2), pygame.SRCALPHA)
+                pygame.draw.circle(explosion_surface, explosion['color'], (explosion['radius'], explosion['radius']), explosion['radius'])
+                explosion_surface.set_alpha(alpha)
+                screen.blit(explosion_surface, (explosion['x'] - explosion['radius'], explosion['y'] - explosion['radius']))
+        
+        # Health bars
+        self.draw_health_bars(screen)
+        
+    def draw_health_bars(self, screen):
+        """Draw health bars for turrets and main body"""
+        # Main body health bar
+        main_bar_width = self.width
+        main_bar_height = 12
+        main_bar_x = self.x
+        main_bar_y = self.y - 30
+        
+        # Background
+        pygame.draw.rect(screen, RED, (main_bar_x, main_bar_y, main_bar_width, main_bar_height))
+        
+        # Health
+        health_ratio = self.health / self.max_health
+        health_width = int(main_bar_width * health_ratio)
+        health_color = self.get_health_color()
+        pygame.draw.rect(screen, health_color, (main_bar_x, main_bar_y, health_width, main_bar_height))
+        
+        # Border
+        pygame.draw.rect(screen, WHITE, (main_bar_x, main_bar_y, main_bar_width, main_bar_height), 2)
+        
+        # Health text
+        font = pygame.font.Font(None, 36)
+        health_text = font.render(f"UFO: {self.health}/{self.max_health}", True, WHITE)
+        text_rect = health_text.get_rect(center=(self.x + self.width // 2, main_bar_y - 20))
+        screen.blit(health_text, text_rect)
+        
+        # Turret health bars
+        turret_positions = self.get_turret_positions()
+        for i, (turret, pos) in enumerate(zip(self.turrets, turret_positions)):
+            if not turret['destroyed']:
+                bar_width = 60
+                bar_height = 6
+                bar_x = pos[0] - bar_width // 2
+                bar_y = pos[1] - 35
+                
+                # Background
+                pygame.draw.rect(screen, RED, (bar_x, bar_y, bar_width, bar_height))
+                
+                # Health
+                turret_health_ratio = turret['health'] / turret['max_health']
+                turret_health_width = int(bar_width * turret_health_ratio)
+                pygame.draw.rect(screen, GREEN, (bar_x, bar_y, turret_health_width, bar_height))
+                
+                # Border
+                pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 1) 
+       
 class HighScoreManager:
     def __init__(self):
         self.single_scores = self.load_scores(SINGLE_SCORES_FILE)
@@ -266,9 +1475,10 @@ class NameInputScreen:
         pygame.display.flip()
 
 class HighScoreScreen:
-    def __init__(self, screen, score_manager):
+    def __init__(self, screen, score_manager, sound_manager):
         self.screen = screen
         self.score_manager = score_manager
+        self.sound_manager = sound_manager
         self.font_large = pygame.font.Font(None, 96)
         self.font_medium = pygame.font.Font(None, 64)
         self.font_small = pygame.font.Font(None, 48)
@@ -280,14 +1490,18 @@ class HighScoreScreen:
                 return "quit"
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
+                    self.sound_manager.play_sound('menu_select')
                     return "back"
                 elif event.key == pygame.K_TAB or event.key == pygame.K_LEFT or event.key == pygame.K_RIGHT:
+                    self.sound_manager.play_sound('menu_change')
                     self.viewing_coop = not self.viewing_coop
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.button == 0 or event.button == 1:  # A or B button
+                    self.sound_manager.play_sound('menu_select')
                     return "back"
             elif event.type == pygame.JOYHATMOTION:
                 if event.value[0] != 0:  # Left or Right
+                    self.sound_manager.play_sound('menu_change')
                     self.viewing_coop = not self.viewing_coop
         return None
     
@@ -356,32 +1570,59 @@ class HighScoreScreen:
         self.screen.blit(instruction_text, instruction_rect)
         
         pygame.display.flip()
-
+        
 class Player:
-    def __init__(self, x, y, player_id=1, controller=None):
+    def __init__(self, x, y, player_id=1, controller=None, upgrades=None):
         self.x = x
         self.y = y
         self.width = 60
         self.height = 45
-        self.speed = PLAYER_SPEED
+        self.base_speed = BASE_PLAYER_SPEED
         self.rect = pygame.Rect(x, y, self.width, self.height)
         self.last_shot_time = 0
         self.invincible = False
         self.invincible_end_time = 0
         self.rapid_fire = False
-        self.rapid_fire_ammo = 0  # Changed from time-based to ammo-based
+        self.rapid_fire_ammo = 0
         self.has_laser = False
         self.has_multi_shot = False
-        self.multi_shot_ammo = 0  # Changed from time-based to ammo-based
+        self.multi_shot_ammo = 0
         self.afterimage_positions = []
         self.last_afterimage_time = 0
         self.player_id = player_id
         self.controller = controller
-        self.color = GREEN if player_id == 1 else BLUE  # Changed to BLUE for player 2
+        self.color = GREEN if player_id == 1 else BLUE
         self.lives = 3
         self.respawn_immunity = False
         self.respawn_immunity_end_time = 0
         self.is_alive = True
+        self.upgrades = upgrades or PlayerUpgrades()
+        
+        # ADDED: Level up indicator
+        self.level_up_indicator = False
+        self.level_up_indicator_time = 0
+        
+    def show_level_up_indicator(self):
+        """Show level up indicator at player"""
+        self.level_up_indicator = True
+        self.level_up_indicator_time = pygame.time.get_ticks()
+        
+    def get_speed(self):
+        """Get current movement speed with upgrades"""
+        return self.base_speed * self.upgrades.get_multiplier('movement_speed')
+        
+    def get_bullet_speed(self):
+        """Get current bullet speed with upgrades"""
+        return BASE_BULLET_SPEED * self.upgrades.get_multiplier('shot_speed')
+        
+    def get_shoot_cooldown(self):
+        """Get current shoot cooldown with upgrades"""
+        base_cooldown = RAPID_FIRE_COOLDOWN if self.rapid_fire else BASE_SHOOT_COOLDOWN
+        return base_cooldown / self.upgrades.get_multiplier('fire_rate')
+        
+    def get_powerup_duration_multiplier(self):
+        """Get power-up duration multiplier"""
+        return self.upgrades.get_multiplier('powerup_duration')
         
     def reset_position(self):
         """Reset player to center of screen"""
@@ -401,10 +1642,14 @@ class Player:
         self.respawn_immunity_end_time = pygame.time.get_ticks() + RESPAWN_IMMUNITY_DURATION
         self.clear_all_power_ups()
         
-    def take_damage(self):
+    def take_damage(self, sound_manager=None):
         """Player takes damage"""
         if self.respawn_immunity or self.invincible:
             return False
+
+        # Play player explosion sound
+        if sound_manager:
+            sound_manager.play_sound('player_explosion', volume_override=0.8)
         
         self.lives -= 1
         if self.lives <= 0:
@@ -417,7 +1662,7 @@ class Player:
         if not self.is_alive:
             return
         if self.x > 0:
-            self.x -= self.speed
+            self.x -= self.get_speed()
             self.rect.x = self.x
             self.update_afterimage()
             
@@ -425,7 +1670,7 @@ class Player:
         if not self.is_alive:
             return
         if self.x < SCREEN_WIDTH - self.width:
-            self.x += self.speed
+            self.x += self.get_speed()
             self.rect.x = self.x
             self.update_afterimage()
             
@@ -443,37 +1688,51 @@ class Player:
         if not self.is_alive:
             return False
         current_time = pygame.time.get_ticks()
-        cooldown = RAPID_FIRE_COOLDOWN if self.rapid_fire else SHOOT_COOLDOWN
+        cooldown = self.get_shoot_cooldown()
         return current_time - self.last_shot_time >= cooldown
         
-    def shoot(self):
+    def shoot(self, sound_manager=None):
         if not self.can_shoot():
             return []
             
         self.last_shot_time = pygame.time.get_ticks()
         bullets = []
+        bullet_speed = -self.get_bullet_speed()
         
         if self.has_laser:
-            laser = LaserBeam(self.x + self.width // 2, self.player_id)  # Pass player ID
+            # Pass the duration multiplier to the laser
+            laser = LaserBeam(self.x + self.width // 2, self.player_id, self.get_powerup_duration_multiplier())
             bullets.append(('laser', laser))
             self.has_laser = False
+            # Play laser sound
+            if sound_manager:
+                sound_manager.play_sound('laser')
         elif self.has_multi_shot and self.multi_shot_ammo > 0:
-            center_bullet = Bullet(self.x + self.width // 2, self.y, -BULLET_SPEED)
-            left_bullet = Bullet(self.x + self.width // 2 - 25, self.y, -BULLET_SPEED)
-            right_bullet = Bullet(self.x + self.width // 2 + 25, self.y, -BULLET_SPEED)
+            center_bullet = Bullet(self.x + self.width // 2, self.y, bullet_speed)
+            left_bullet = Bullet(self.x + self.width // 2 - 25, self.y, bullet_speed)
+            right_bullet = Bullet(self.x + self.width // 2 + 25, self.y, bullet_speed)
             bullets.extend([('bullet', center_bullet), ('bullet', left_bullet), ('bullet', right_bullet)])
-            self.multi_shot_ammo -= 1  # Consume ammo
+            self.multi_shot_ammo -= 1
             if self.multi_shot_ammo <= 0:
                 self.has_multi_shot = False
+            # Play shoot sound at lower volume for multi-shot to avoid amplification
+            if sound_manager:
+                sound_manager.play_shoot_sound(volume_override=0.4)
         elif self.rapid_fire and self.rapid_fire_ammo > 0:
-            bullet = Bullet(self.x + self.width // 2, self.y, -BULLET_SPEED)
+            bullet = Bullet(self.x + self.width // 2, self.y, bullet_speed)
             bullets.append(('bullet', bullet))
-            self.rapid_fire_ammo -= 1  # Consume ammo
+            self.rapid_fire_ammo -= 1
             if self.rapid_fire_ammo <= 0:
                 self.rapid_fire = False
+            # Use smart sound management for rapid fire
+            if sound_manager:
+                sound_manager.play_shoot_sound(volume_override=0.6)
         else:
-            bullet = Bullet(self.x + self.width // 2, self.y, -BULLET_SPEED)
+            bullet = Bullet(self.x + self.width // 2, self.y, bullet_speed)
             bullets.append(('bullet', bullet))
+            # Play shoot sound for normal shot
+            if sound_manager:
+                sound_manager.play_sound('shoot', force_play=True)  # Always play normal shots
             
         return bullets
         
@@ -488,7 +1747,7 @@ class Player:
             self.invincible = False
             self.afterimage_positions = []
             
-        # Ammo-based powerups no longer need time-based updates
+        # Ammo-based powerups
         if self.rapid_fire_ammo <= 0:
             self.rapid_fire = False
             
@@ -504,21 +1763,27 @@ class Player:
         
     def activate_invincibility(self):
         self.invincible = True
-        self.invincible_end_time = pygame.time.get_ticks() + 10000
+        duration = BASE_POWERUP_DURATION * self.get_powerup_duration_multiplier()
+        self.invincible_end_time = pygame.time.get_ticks() + duration
         
     def activate_rapid_fire(self):
         self.clear_all_power_ups()
         self.rapid_fire = True
-        self.rapid_fire_ammo = 200  # 200 shots of rapid fire
+        # Apply powerup duration multiplier to ammo count
+        base_ammo = 200
+        self.rapid_fire_ammo = int(base_ammo * self.get_powerup_duration_multiplier())
         
     def activate_laser(self):
         self.clear_all_power_ups()
         self.has_laser = True
+        # Note: Laser duration is handled in LaserBeam class, we need to pass the multiplier
         
     def activate_multi_shot(self):
         self.clear_all_power_ups()
         self.has_multi_shot = True
-        self.multi_shot_ammo = 100  # 100 shots of multi-shot
+        # Apply powerup duration multiplier to ammo count
+        base_ammo = 100
+        self.multi_shot_ammo = int(base_ammo * self.get_powerup_duration_multiplier())
         
     def handle_controller_input(self):
         if not self.is_alive:
@@ -554,6 +1819,27 @@ class Player:
                 pygame.draw.polygon(afterimage_surface, (*PURPLE, alpha), points)
                 screen.blit(afterimage_surface, (x, y))
         
+        # ADDED: Draw level up indicator
+        if self.level_up_indicator:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.level_up_indicator_time < 3000:  # Show for 3 seconds
+                # Pulsing "LEVEL UP!" text above player
+                pulse = abs(math.sin(current_time * 0.01)) * 50 + 50
+                font = pygame.font.Font(None, 48)
+                level_up_text = font.render("LEVEL UP!", True, (255, 255, int(pulse)))
+                text_rect = level_up_text.get_rect(center=(self.x + self.width // 2, self.y - 30))
+                screen.blit(level_up_text, text_rect)
+                
+                # Glowing ring around player
+                ring_alpha = int(pulse)
+                ring_surface = pygame.Surface((self.width + 40, self.height + 40), pygame.SRCALPHA)
+                pygame.draw.circle(ring_surface, (255, 255, 0, ring_alpha), 
+                                 (self.width // 2 + 20, self.height // 2 + 20), 
+                                 self.width // 2 + 20, 3)
+                screen.blit(ring_surface, (self.x - 20, self.y - 20))
+            else:
+                self.level_up_indicator = False
+        
         # Draw player
         points = [
             (self.x + self.width // 2, self.y),
@@ -576,15 +1862,16 @@ class Player:
         pygame.draw.polygon(screen, color, points)
 
 class Enemy:
-    def __init__(self, x, y):
+    def __init__(self, x, y, enemy_type=0):
         self.x = x
         self.y = y
         self.width = 45
         self.height = 30
-        self.base_speed = BASE_ENEMY_SPEED  # Store base speed for the level
+        self.base_speed = BASE_ENEMY_SPEED
         self.speed = BASE_ENEMY_SPEED
         self.rect = pygame.Rect(x, y, self.width, self.height)
         self.direction = 1
+        self.enemy_type = enemy_type  # 0-4 for different rows
         
     def move(self):
         self.x += self.speed * self.direction
@@ -595,15 +1882,207 @@ class Enemy:
         self.rect.y = self.y
         self.direction *= -1
         
-    def shoot(self):
+    def shoot(self, sound_manager=None):
         if random.randint(1, 1500) < 3:
-            return Bullet(self.x + self.width // 2, self.y + self.height, BULLET_SPEED)
+            if sound_manager:
+                sound_manager.play_sound('enemy_shoot', volume_override=0.3)  # Quieter than player
+            return Bullet(self.x + self.width // 2, self.y + self.height, BASE_BULLET_SPEED)
         return None
+    
+    def draw_squid_enemy(self, screen):
+        """Top row - Green squid-like alien (most points) - EVEN BIGGER VERSION"""
+        # Main body (green) - expanded further
+        body_color = (0, 200, 0)
+        dark_green = (0, 150, 0)
+        
+        # Body outline - made bigger
+        pygame.draw.rect(screen, body_color, (self.x + 3, self.y + 2, 39, 26))
+        
+        # Head bumps - bigger
+        pygame.draw.rect(screen, body_color, (self.x - 2, self.y + 5, 12, 12))
+        pygame.draw.rect(screen, body_color, (self.x + 35, self.y + 5, 12, 12))
+        
+        # Eyes (white with black pupils) - bigger
+        pygame.draw.rect(screen, WHITE, (self.x + 8, self.y + 6, 10, 10))
+        pygame.draw.rect(screen, WHITE, (self.x + 27, self.y + 6, 10, 10))
+        pygame.draw.rect(screen, BLACK, (self.x + 10, self.y + 8, 6, 6))
+        pygame.draw.rect(screen, BLACK, (self.x + 29, self.y + 8, 6, 6))
+        
+        # Tentacles - bigger and more
+        pygame.draw.rect(screen, dark_green, (self.x + 3, self.y + 24, 5, 10))
+        pygame.draw.rect(screen, dark_green, (self.x + 10, self.y + 26, 5, 8))
+        pygame.draw.rect(screen, dark_green, (self.x + 17, self.y + 24, 5, 10))
+        pygame.draw.rect(screen, dark_green, (self.x + 24, self.y + 26, 5, 8))
+        pygame.draw.rect(screen, dark_green, (self.x + 31, self.y + 24, 5, 10))
+        pygame.draw.rect(screen, dark_green, (self.x + 38, self.y + 26, 5, 8))
+        
+    def draw_crab_enemy(self, screen):
+        """Second row - Red crab-like alien - EVEN BIGGER VERSION"""
+        # Main body (red) - expanded further
+        body_color = (220, 20, 20)
+        dark_red = (180, 0, 0)
+        
+        # Main body - bigger
+        pygame.draw.rect(screen, body_color, (self.x + 2, self.y + 6, 41, 18))
+        
+        # Claws - bigger
+        pygame.draw.rect(screen, dark_red, (self.x - 3, self.y + 3, 12, 10))
+        pygame.draw.rect(screen, dark_red, (self.x + 36, self.y + 3, 12, 10))
+        
+        # Claw details - bigger
+        pygame.draw.rect(screen, body_color, (self.x - 5, self.y, 8, 8))
+        pygame.draw.rect(screen, body_color, (self.x + 42, self.y, 8, 8))
+        
+        # Eyes - bigger
+        pygame.draw.rect(screen, WHITE, (self.x + 9, self.y + 8, 8, 8))
+        pygame.draw.rect(screen, WHITE, (self.x + 28, self.y + 8, 8, 8))
+        pygame.draw.rect(screen, BLACK, (self.x + 11, self.y + 10, 4, 4))
+        pygame.draw.rect(screen, BLACK, (self.x + 30, self.y + 10, 4, 4))
+        
+        # Legs - more and bigger
+        pygame.draw.rect(screen, dark_red, (self.x + 6, self.y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (self.x + 13, self.y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (self.x + 20, self.y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (self.x + 27, self.y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (self.x + 34, self.y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (self.x + 41, self.y + 24, 4, 6))
+        
+    def draw_octopus_enemy(self, screen):
+        """Middle rows - Blue octopus-like alien - EVEN BIGGER VERSION"""
+        # Main body (blue) - expanded further
+        body_color = (20, 100, 220)
+        dark_blue = (0, 60, 180)
+        
+        # Round head - bigger
+        pygame.draw.rect(screen, body_color, (self.x + 5, self.y, 35, 24))
+        pygame.draw.rect(screen, body_color, (self.x + 1, self.y + 6, 43, 14))
+        
+        # Eyes - bigger
+        pygame.draw.rect(screen, WHITE, (self.x + 10, self.y + 6, 9, 10))
+        pygame.draw.rect(screen, WHITE, (self.x + 26, self.y + 6, 9, 10))
+        pygame.draw.rect(screen, BLACK, (self.x + 12, self.y + 8, 5, 6))
+        pygame.draw.rect(screen, BLACK, (self.x + 28, self.y + 8, 5, 6))
+        
+        # Wavy tentacles - bigger and more
+        pygame.draw.rect(screen, dark_blue, (self.x + 1, self.y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (self.x + 7, self.y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (self.x + 13, self.y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (self.x + 19, self.y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (self.x + 25, self.y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (self.x + 31, self.y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (self.x + 37, self.y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (self.x + 43, self.y + 20, 4, 8))
+        
+        # Tentacle curves - bigger
+        pygame.draw.rect(screen, dark_blue, (self.x - 1, self.y + 26, 4, 4))
+        pygame.draw.rect(screen, dark_blue, (self.x + 42, self.y + 26, 4, 4))
+        
+    def draw_basic_enemy(self, screen):
+        """Bottom rows - Simple geometric alien - EVEN BIGGER VERSION"""
+        # Main body (mixed colors) - expanded further
+        if self.enemy_type == 3:
+            body_color = (200, 100, 0)  # Orange
+            accent_color = (255, 150, 0)
+        else:
+            body_color = (150, 0, 150)  # Purple
+            accent_color = (200, 0, 200)
+        
+        # Simple rectangular body - bigger
+        pygame.draw.rect(screen, body_color, (self.x + 2, self.y + 4, 41, 22))
+        
+        # Top details - bigger
+        pygame.draw.rect(screen, accent_color, (self.x - 2, self.y, 12, 12))
+        pygame.draw.rect(screen, accent_color, (self.x + 35, self.y, 12, 12))
+        
+        # Eyes - bigger
+        pygame.draw.rect(screen, WHITE, (self.x + 8, self.y + 6, 10, 10))
+        pygame.draw.rect(screen, WHITE, (self.x + 27, self.y + 6, 10, 10))
+        pygame.draw.rect(screen, BLACK, (self.x + 10, self.y + 8, 6, 6))
+        pygame.draw.rect(screen, BLACK, (self.x + 29, self.y + 8, 6, 6))
+        
+        # Bottom spikes - bigger and more
+        pygame.draw.rect(screen, accent_color, (self.x + 5, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (self.x + 11, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (self.x + 17, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (self.x + 23, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (self.x + 29, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (self.x + 35, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (self.x + 41, self.y + 26, 5, 6))
         
     def draw(self, screen):
-        pygame.draw.rect(screen, RED, (self.x, self.y, self.width, self.height))
-        pygame.draw.rect(screen, WHITE, (self.x + 8, self.y + 8, 8, 8))
-        pygame.draw.rect(screen, WHITE, (self.x + 30, self.y + 8, 8, 8))
+        """Draw the enemy based on its type"""
+        if self.enemy_type == 0:  # Top row
+            self.draw_squid_enemy(screen)
+        elif self.enemy_type == 1:  # Second row
+            self.draw_crab_enemy(screen)
+        elif self.enemy_type == 2:  # Middle row
+            self.draw_octopus_enemy(screen)
+        else:  # Bottom rows (3 and 4)
+            self.draw_basic_enemy(screen)
+
+class EnemyExplosion:
+    """Simple explosion effect when enemy is destroyed"""
+    def __init__(self, x, y, enemy_type):
+        self.x = x
+        self.y = y
+        self.enemy_type = enemy_type
+        self.particles = []
+        self.start_time = pygame.time.get_ticks()
+        self.duration = 500  # 0.5 seconds
+        
+        # Create explosion particles based on enemy type
+        colors = [
+            [(0, 255, 0), (0, 200, 0), (255, 255, 0)],  # Green squid
+            [(255, 50, 50), (200, 0, 0), (255, 150, 0)],  # Red crab
+            [(50, 150, 255), (0, 100, 200), (255, 255, 255)],  # Blue octopus
+            [(255, 150, 0), (200, 100, 0), (255, 255, 0)],  # Orange
+            [(200, 50, 200), (150, 0, 150), (255, 100, 255)]   # Purple
+        ]
+        
+        explosion_colors = colors[enemy_type] if enemy_type < len(colors) else colors[0]
+        
+        # Create 8-12 particles
+        for _ in range(random.randint(8, 12)):
+            particle = {
+                'x': x + random.randint(-10, 10),
+                'y': y + random.randint(-10, 10),
+                'vel_x': random.uniform(-3, 3),
+                'vel_y': random.uniform(-3, 3),
+                'color': random.choice(explosion_colors),
+                'size': random.randint(2, 5),
+                'life': random.randint(300, 500)
+            }
+            self.particles.append(particle)
+    
+    def update(self):
+        """Update explosion animation"""
+        current_time = pygame.time.get_ticks()
+        
+        # Update particles
+        for particle in self.particles[:]:
+            particle['x'] += particle['vel_x']
+            particle['y'] += particle['vel_y']
+            particle['vel_y'] += 0.1  # Gravity
+            particle['life'] -= 16  # Assuming 60 FPS
+            
+            if particle['life'] <= 0:
+                self.particles.remove(particle)
+        
+        # Check if explosion is done
+        return current_time - self.start_time < self.duration and len(self.particles) > 0
+    
+    def draw(self, screen):
+        """Draw explosion particles"""
+        for particle in self.particles:
+            if particle['life'] > 0:
+                alpha = max(0, min(255, particle['life']))
+                # Create a surface for alpha blending
+                particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+                color_with_alpha = (*particle['color'], alpha)
+                pygame.draw.circle(particle_surface, color_with_alpha, 
+                                 (particle['size'], particle['size']), particle['size'])
+                screen.blit(particle_surface, (int(particle['x'] - particle['size']), 
+                                             int(particle['y'] - particle['size'])))
 
 class Bullet:
     def __init__(self, x, y, speed):
@@ -622,7 +2101,7 @@ class Bullet:
         return self.y < -20 or self.y > SCREEN_HEIGHT + 20
         
     def draw(self, screen):
-        color = YELLOW if self.speed < 0 else RED
+        color = YELLOW if self.speed < 0 else WHITE
         pygame.draw.rect(screen, color, (self.x, self.y, self.width, self.height))
 
 class PowerUp:
@@ -673,14 +2152,16 @@ class PowerUp:
         screen.blit(text, text_rect)
 
 class LaserBeam:
-    def __init__(self, x, owner_player_id=1):
+    def __init__(self, x, owner_player_id=1, duration_multiplier=1.0):
         self.x = x
         self.width = 15
         self.height = SCREEN_HEIGHT
-        self.duration = 1000
+        # Apply duration multiplier to base duration
+        base_duration = 1000  # 1 second base
+        self.duration = int(base_duration * duration_multiplier)
         self.start_time = pygame.time.get_ticks()
         self.rect = pygame.Rect(x - self.width // 2, 0, self.width, self.height)
-        self.owner_player_id = owner_player_id  # Track which player owns this laser
+        self.owner_player_id = owner_player_id
         
     def update_position(self, new_x):
         self.x = new_x
@@ -725,9 +2206,10 @@ class Barrier:
             pygame.draw.rect(screen, GREEN, block)
 
 class TitleScreen:
-    def __init__(self, screen, score_manager):
+    def __init__(self, screen, score_manager, sound_manager):
         self.screen = screen
         self.score_manager = score_manager
+        self.sound_manager = sound_manager
         self.font_large = pygame.font.Font(None, 128)
         self.font_medium = pygame.font.Font(None, 72)
         self.font_small = pygame.font.Font(None, 48)
@@ -749,10 +2231,13 @@ class TitleScreen:
                 return "quit"
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
+                    self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option - 1) % len(self.options)
                 elif event.key == pygame.K_DOWN:
+                    self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option + 1) % len(self.options)
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                    self.sound_manager.play_sound('menu_select')
                     if self.selected_option == 0:
                         return "single"
                     elif self.selected_option == 1:
@@ -763,6 +2248,7 @@ class TitleScreen:
                         return "quit"
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.button == 0:
+                    self.sound_manager.play_sound('menu_select')
                     if self.selected_option == 0:
                         return "single"
                     elif self.selected_option == 1:
@@ -773,8 +2259,10 @@ class TitleScreen:
                         return "quit"
             elif event.type == pygame.JOYHATMOTION:
                 if event.value[1] == 1:
+                    self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option - 1) % len(self.options)
                 elif event.value[1] == -1:
+                    self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option + 1) % len(self.options)
                     
         return None
@@ -783,7 +2271,7 @@ class TitleScreen:
         self.screen.fill(BLACK)
         
         # Title
-        title_text = self.font_large.render("SPACE INVADERS", True, WHITE)
+        title_text = self.font_large.render("PLACE INVADERS", True, WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 200))
         self.screen.blit(title_text, title_rect)
         
@@ -830,8 +2318,52 @@ class TitleScreen:
         
         pygame.display.flip()
 
+class UFOWarningScreen:
+    def __init__(self, screen, level):
+        self.screen = screen
+        self.level = level
+        self.font_huge = pygame.font.Font(None, 144)
+        self.font_large = pygame.font.Font(None, 96)
+        self.font_medium = pygame.font.Font(None, 64)
+        self.start_time = pygame.time.get_ticks()
+        self.duration = 3000  # 3 seconds
+        
+    def is_finished(self):
+        return pygame.time.get_ticks() - self.start_time >= self.duration
+        
+    def draw(self):
+        self.screen.fill(BLACK)
+        
+        # Flashing red background
+        flash_intensity = abs(math.sin(pygame.time.get_ticks() * 0.01)) * 0.3
+        flash_color = (int(50 * flash_intensity), 0, 0)
+        self.screen.fill(flash_color)
+        
+        # Main warning text
+        warning_text = self.font_huge.render("WARNING!", True, RED)
+        warning_rect = warning_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 100))
+        self.screen.blit(warning_text, warning_rect)
+        
+        # UFO approaching text
+        ufo_text = self.font_large.render("UFO APPROACHING!", True, YELLOW)
+        ufo_rect = ufo_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+        self.screen.blit(ufo_text, ufo_rect)
+        
+        # Level indicator
+        level_text = self.font_medium.render(f"BOSS LEVEL {self.level}", True, WHITE)
+        level_rect = level_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 80))
+        self.screen.blit(level_text, level_rect)
+        
+        # Countdown
+        remaining = (self.duration - (pygame.time.get_ticks() - self.start_time)) / 1000.0
+        countdown_text = self.font_medium.render(f"Prepare! {remaining:.1f}s", True, CYAN)
+        countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 150))
+        self.screen.blit(countdown_text, countdown_rect)
+        
+        pygame.display.flip()
+
 class Game:
-    def __init__(self, score_manager):
+    def __init__(self, score_manager, sound_manager):
         try:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
         except:
@@ -846,7 +2378,27 @@ class Game:
         self.total_enemies_killed = 0
         self.coop_mode = False
         self.score_manager = score_manager
+        self.sound_manager = sound_manager
         self.awaiting_name_input = False
+        self.awaiting_level_up = False
+        self.pending_level_up = False  # Track if player leveled up during current level
+        self.player_xp_level = 1  # Track player's XP level separately from game level
+        self.showing_ufo_warning = False
+        self.ufo_warning_screen = None
+        
+        # ADDED: Game over timing and input delay
+        self.game_over_time = 0
+        self.input_delay_duration = 1000  # 1 second delay
+        
+        # XP and upgrade system
+        self.xp_system = XPSystem()
+        
+        # Visual feedback
+        self.floating_texts = []
+        
+        # Boss system
+        self.current_boss = None
+        self.is_boss_level = False
         
         self.controllers = []
         self.scan_controllers()
@@ -858,9 +2410,18 @@ class Game:
         self.barriers = []
         self.power_ups = []
         self.laser_beams = []
-        
+        self.enemy_explosions = []
+        self.boss_explosion_particles = []
+        self.boss_explosion_particles = []
+        self.screen_shake_intensity = 0
+        self.screen_shake_duration = 0
+        self.screen_flash_intensity = 0
+        self.screen_flash_duration = 0
+        self.boss_explosion_waves = []        
+
         self.font = pygame.font.Font(None, 72)
         self.small_font = pygame.font.Font(None, 48)
+        self.tiny_font = pygame.font.Font(None, 36)
         
     def scan_controllers(self):
         self.controllers = []
@@ -875,25 +2436,46 @@ class Game:
         
         if self.coop_mode:
             controller1 = self.controllers[0] if len(self.controllers) > 0 else None
-            player1 = Player(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 80, 1, controller1)
+            # Create individual upgrades for each player
+            player1_upgrades = PlayerUpgrades()
+            player1 = Player(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 80, 1, controller1, player1_upgrades)
             player1.coop_mode = True
             self.players.append(player1)
             
             controller2 = self.controllers[1] if len(self.controllers) > 1 else None
-            player2 = Player(SCREEN_WIDTH // 2 + 30, SCREEN_HEIGHT - 80, 2, controller2)
+            player2_upgrades = PlayerUpgrades()
+            player2 = Player(SCREEN_WIDTH // 2 + 30, SCREEN_HEIGHT - 80, 2, controller2, player2_upgrades)
             player2.coop_mode = True
             self.players.append(player2)
         else:
             controller = self.controllers[0] if len(self.controllers) > 0 else None
-            self.players.append(Player(SCREEN_WIDTH // 2 - 30, SCREEN_HEIGHT - 80, 1, controller))
+            player_upgrades = PlayerUpgrades()
+            self.players.append(Player(SCREEN_WIDTH // 2 - 30, SCREEN_HEIGHT - 80, 1, controller, player_upgrades))
             
         self.create_barriers()
-        self.create_enemy_grid()
+        self.setup_level()
         
     def calculate_enemy_speed_for_level(self, level):
-        # Remove speed cap - enemies get faster every level without limit
-        speed_increase = (level - 1) * 0.2  # Increased increment for more challenge
+        # Enemy speed only increases every 5 levels now
+        speed_level = ((level - 1) // 5) + 1
+        speed_increase = (speed_level - 1) * ENEMY_SPEED_PROGRESSION
         return BASE_ENEMY_SPEED + speed_increase
+        
+    def setup_level(self):
+        """Setup current level - either boss or regular enemies"""
+        self.is_boss_level = (self.level % 5 == 0)
+        
+        if self.is_boss_level:
+            # ADDED: Show UFO warning before boss level
+            self.showing_ufo_warning = True
+            self.ufo_warning_screen = UFOWarningScreen(self.screen, self.level)
+            self.current_boss = None  # Don't create boss until warning is done
+            self.enemies = []
+        else:
+            self.showing_ufo_warning = False
+            self.ufo_warning_screen = None
+            self.current_boss = None
+            self.create_enemy_grid()
         
     def create_barriers(self):
         self.barriers = []
@@ -919,32 +2501,53 @@ class Game:
             for col in range(cols):
                 enemy_x = start_x + col * enemy_spacing_x
                 enemy_y = start_y + row * enemy_spacing_y
-                enemy = Enemy(enemy_x, enemy_y)
-                enemy.base_speed = level_speed  # Set base speed for this level
+                enemy = Enemy(enemy_x, enemy_y, row)  # Pass row as enemy_type
+                enemy.base_speed = level_speed
                 enemy.speed = level_speed
                 self.enemies.append(enemy)
                 
         self.update_enemy_speed()
         
     def update_enemy_speed(self):
-        # Much more aggressive speed increase - enemies get exponentially faster as they're eliminated
+        # More aggressive speed increase as enemies are eliminated
         total_enemies = 60
         remaining_enemies = len(self.enemies)
         if remaining_enemies > 0:
-            # Changed from 4x to much more aggressive scaling
-            # When only 1 enemy remains, it will be 15x faster than the base speed
-            # This makes the last few enemies extremely challenging
             destroyed_ratio = (total_enemies - remaining_enemies) / total_enemies
-            speed_multiplier = 1 + destroyed_ratio * 14  # Up to 15x speed
+            speed_multiplier = 1 + destroyed_ratio * 14
             
-            # Add exponential scaling for the last few enemies
             if remaining_enemies <= 5:
-                extra_multiplier = (5 - remaining_enemies + 1) * 2  # Extra boost for last few
+                extra_multiplier = (5 - remaining_enemies + 1) * 2
                 speed_multiplier += extra_multiplier
                 
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
                 
+    def add_xp(self, amount, source_x=None, source_y=None):
+        """Add XP and handle level up"""
+        old_level = self.xp_system.level
+        leveled_up = self.xp_system.add_xp(amount)
+        
+        # Visual feedback
+        if source_x and source_y:
+            self.floating_texts.append(FloatingText(source_x, source_y, f"+{amount} XP", GOLD))
+        
+        # Check if XP level increased
+        if self.xp_system.level > old_level:
+            self.pending_level_up = True
+            print(f"Player leveled up! XP Level: {self.xp_system.level}, Game Level: {self.level}")  # Debug
+
+            # PLAY LEVEL UP SOUND
+            if self.sound_manager:
+                self.sound_manager.play_sound('levelup')
+
+            # ADDED: Show visual indicator on all alive players
+            for player in self.players:
+                if player.is_alive:
+                    player.show_level_up_indicator()
+        
+        return leveled_up
+            
     def spawn_power_up(self):
         if random.randint(1, 100) <= 5:
             power_types = ['rapid_fire', 'invincibility', 'laser', 'multi_shot']
@@ -956,6 +2559,8 @@ class Game:
     def handle_events(self):
         if self.awaiting_name_input:
             return self.handle_name_input_events()
+        elif self.awaiting_level_up:
+            return self.handle_level_up_events()
             
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -963,42 +2568,65 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and not self.game_over:
                     if len(self.players) > 0 and self.players[0].is_alive:
-                        shots = self.players[0].shoot()
+                        shots = self.players[0].shoot(self.sound_manager)
                         for shot_type, shot in shots:
                             if shot_type == 'bullet':
+                                self.sound_manager.play_sound('shoot')
                                 self.player_bullets.append(shot)
                             elif shot_type == 'laser':
+                                self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
                 elif event.key == pygame.K_RCTRL and not self.game_over and self.coop_mode:
                     if len(self.players) > 1 and self.players[1].is_alive:
-                        shots = self.players[1].shoot()
+                        shots = self.players[1].shoot(self.sound_manager)
                         for shot_type, shot in shots:
                             if shot_type == 'bullet':
+                                self.sound_manager.play_sound('shoot')
                                 self.player_bullets.append(shot)
                             elif shot_type == 'laser':
+                                self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
                 elif event.key == pygame.K_r and self.game_over and not self.awaiting_name_input:
-                    return "restart"
+                    # FIXED: Check input delay before allowing restart
+                    if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
+                        return "restart"
                 elif event.key == pygame.K_ESCAPE:
                     if self.game_over and not self.awaiting_name_input:
-                        return "title"
+                        # FIXED: Check input delay before allowing title screen
+                        if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
+                            return "title"
                     elif not self.game_over:
                         return "title"
             elif event.type == pygame.JOYBUTTONDOWN:
-                for i, player in enumerate(self.players):
-                    if player.controller and event.joy == player.controller.get_instance_id() and player.is_alive:
-                        if event.button == 0:
-                            shots = player.shoot()
-                            for shot_type, shot in shots:
-                                if shot_type == 'bullet':
-                                    self.player_bullets.append(shot)
-                                elif shot_type == 'laser':
-                                    self.laser_beams.append(shot)
-                                    
+                # FIXED: Add controller support for game over screen
+                if self.game_over and not self.awaiting_name_input:
+                    if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
+                        if event.button == 0:  # A button - restart
+                            return "restart"
+                        elif event.button == 1:  # B button - title screen
+                            return "title"
+                else:
+                    # Normal controller shooting
+                    for i, player in enumerate(self.players):
+                        if player.controller and event.joy == player.controller.get_instance_id() and player.is_alive:
+                            if event.button == 0:
+                                shots = player.shoot(self.sound_manager)
+                                for shot_type, shot in shots:
+                                    if shot_type == 'bullet':
+                                        self.sound_manager.play_sound('shoot')
+                                        self.player_bullets.append(shot)
+                                    elif shot_type == 'laser':
+                                        self.sound_manager.play_sound('laser')
+                                        self.laser_beams.append(shot)
+                                        
         return None
     
     def handle_name_input_events(self):
         """Handle events during name input"""
+        # ADDED: Input delay after game over
+        if pygame.time.get_ticks() - self.game_over_time < self.input_delay_duration:
+            return None
+            
         if hasattr(self, 'name_input_screen'):
             name = self.name_input_screen.handle_events()
             if name == "quit":
@@ -1010,9 +2638,39 @@ class Game:
                 del self.name_input_screen
                 return "title"
         return None
+    
+    def handle_level_up_events(self):
+        """Handle events during level up screen"""
+        if hasattr(self, 'level_up_screen'):
+            result = self.level_up_screen.handle_events()
+            if result == "quit":
+                self.running = False
+                return None
+            elif result == "continue":
+                print("Level up complete, continuing...")  # Debug
+                self.awaiting_level_up = False
+                self.pending_level_up = False  # Clear the flag
+                del self.level_up_screen
+                
+                # Now advance the game level
+                self.level += 1
+                print(f"Advanced to game level {self.level} after level up")  # Debug
+                
+                # Respawn dead players with 1 life if their partner survived
+                if self.coop_mode and len(self.players) == 2:
+                    if not self.players[0].is_alive and self.players[1].is_alive:
+                        self.players[0].lives = 1
+                        self.players[0].respawn()
+                    elif not self.players[1].is_alive and self.players[0].is_alive:
+                        self.players[1].lives = 1
+                        self.players[1].respawn()
+                
+                self.setup_level()
+                self.create_barriers()
+        return None
                     
     def handle_input(self):
-        if not self.game_over:
+        if not self.game_over and not self.awaiting_level_up:
             keys = pygame.key.get_pressed()
             
             if len(self.players) > 0:
@@ -1031,7 +2689,7 @@ class Game:
                         self.players[1].move_right()
                 else:
                     self.players[1].handle_controller_input()
-                    
+    
     def activate_power_up(self, player, power_type):
         if power_type == 'rapid_fire':
             player.activate_rapid_fire()
@@ -1043,9 +2701,31 @@ class Game:
             player.activate_multi_shot()
             
     def check_level_complete(self):
-        """Check if level is complete and handle respawns"""
-        if not self.enemies:
+        """Check if level is complete and handle progression"""
+        level_complete = False
+        
+        if self.is_boss_level:
+            if self.current_boss and self.current_boss.is_destruction_complete():
+                # Boss destruction sequence finished
+                self.current_boss = None
+                level_complete = True
+            elif not self.current_boss:  # Boss was destroyed instantly (shouldn't happen with new system)
+                level_complete = True
+        else:
+            if not self.enemies:  # All regular enemies defeated
+                level_complete = True
+        
+        if level_complete:
+            print(f"Level complete! pending_level_up: {self.pending_level_up}")  # Debug
+            # Check if player leveled up during this level - show level up screen first
+            if self.pending_level_up:
+                print("Showing level up screen...")  # Debug
+                self.awaiting_level_up = True
+                return False  # Don't advance game level yet, wait for upgrade selection
+            
+            # No level up pending, advance to next level
             self.level += 1
+            print(f"Advanced to game level {self.level}")  # Debug
             
             # Respawn dead players with 1 life if their partner survived
             if self.coop_mode and len(self.players) == 2:
@@ -1056,7 +2736,7 @@ class Game:
                     self.players[1].lives = 1
                     self.players[1].respawn()
             
-            self.create_enemy_grid()
+            self.setup_level()
             self.create_barriers()
             return True
         return False
@@ -1064,24 +2744,64 @@ class Game:
     def check_game_over(self):
         """Check if game is over based on player lives"""
         if self.coop_mode:
-            # Game over only if both players are dead
             game_over = all(not player.is_alive for player in self.players)
         else:
-            # Game over if single player is dead
             game_over = not self.players[0].is_alive if self.players else True
             
         if game_over and not self.game_over:
             self.game_over = True
-            # Check for high score immediately
+            self.game_over_time = pygame.time.get_ticks()  # ADDED: Record when game over occurred
             if self.score_manager.is_high_score(self.score, self.coop_mode):
                 self.awaiting_name_input = True
                 self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode)
                 
-        return game_over
-                
+        return game_over 
+    
     def update(self):
-        if self.game_over:
+        # ADDED: Handle UFO warning screen
+        if self.showing_ufo_warning:
+            if self.ufo_warning_screen.is_finished():
+                self.showing_ufo_warning = False
+                self.current_boss = Boss(self.level)  # Create boss after warning
+                self.ufo_warning_screen = None
+            return  # Don't update game during warning
+            
+        if self.game_over or self.awaiting_level_up:
             return
+        
+        # Update floating texts
+        self.floating_texts = [text for text in self.floating_texts if text.update()]
+
+        # Update enemy explosions
+        self.enemy_explosions = [explosion for explosion in self.enemy_explosions if explosion.update()]
+
+        # Update screen effects
+        if self.screen_shake_duration > 0:
+            self.screen_shake_duration -= 16  # Assuming 60 FPS
+            if self.screen_shake_duration <= 0:
+                self.screen_shake_intensity = 0
+
+        if self.screen_flash_duration > 0:
+            self.screen_flash_duration -= 16
+            self.screen_flash_intensity = max(0, int(255 * (self.screen_flash_duration / 1500)))
+
+        # Update explosion waves
+        for wave in self.boss_explosion_waves[:]:
+            wave['radius'] += wave['growth_speed']
+            wave['life'] -= 1
+            
+            if wave['life'] <= 0 or wave['radius'] >= wave['max_radius']:
+                self.boss_explosion_waves.remove(wave)
+
+        # Update boss explosion particles
+        for particle in self.boss_explosion_particles[:]:
+            particle['x'] += particle['vel_x']
+            particle['y'] += particle['vel_y']
+            particle['vel_y'] += 0.2  # Gravity
+            particle['life'] -= 16  # Assuming 60 FPS
+            
+            if particle['life'] <= 0:
+                self.boss_explosion_particles.remove(particle)
             
         for player in self.players:
             player.update_power_ups()
@@ -1101,121 +2821,287 @@ class Game:
             if power_up.is_off_screen() or power_up.is_expired():
                 self.power_ups.remove(power_up)
                 
-        # Update laser beams and make them follow the correct owner
+        # Update laser beams
         for laser in self.laser_beams[:]:
             if laser.is_active():
-                # Find the player who owns this laser
                 owner = next((p for p in self.players if p.player_id == laser.owner_player_id and p.is_alive), None)
                 if owner:
                     laser.update_position(owner.x + owner.width // 2)
                 else:
-                    # If owner is dead, remove laser
                     self.laser_beams.remove(laser)
                     continue
             else:
                 self.laser_beams.remove(laser)
-                
-        edge_hit = False
-        for enemy in self.enemies:
-            enemy.move()
-            if enemy.x <= 0 or enemy.x >= SCREEN_WIDTH - enemy.width:
-                edge_hit = True
-                
-        if edge_hit:
+        
+        # Update boss or regular enemies
+        if self.is_boss_level and self.current_boss:
+            self.current_boss.update()
+            # Boss shooting
+            boss_bullets = self.current_boss.shoot(self.players, self.sound_manager)
+            self.enemy_bullets.extend(boss_bullets)
+        else:
+            # Regular enemy movement
+            edge_hit = False
             for enemy in self.enemies:
-                enemy.drop_down()
-                
-        for enemy in self.enemies:
-            bullet = enemy.shoot()
-            if bullet:
-                self.enemy_bullets.append(bullet)
+                enemy.move()
+                if enemy.x <= 0 or enemy.x >= SCREEN_WIDTH - enemy.width:
+                    edge_hit = True
+                    
+            if edge_hit:
+                for enemy in self.enemies:
+                    enemy.drop_down()
+                    
+            for enemy in self.enemies:
+                bullet = enemy.shoot(self.sound_manager)
+                if bullet:
+                    self.enemy_bullets.append(bullet)
                 
         self.check_collisions()
         
         # Check level completion first
         if self.check_level_complete():
-            pass  # Level completed, players may have been respawned
+            pass
             
         # Then check game over
         self.check_game_over()
             
-        # Check if enemies reached any alive player
-        for enemy in self.enemies:
+        # CHANGED: Check if enemies reached bottom - kill player and reset aliens
+        if not self.is_boss_level:
+            aliens_reached_bottom = False
+            for enemy in self.enemies:
+                if enemy.y + enemy.height >= SCREEN_HEIGHT - 200:  # Near bottom
+                    aliens_reached_bottom = True
+                    break
+            
+            if aliens_reached_bottom:
+                # Kill all alive players
+                for player in self.players:
+                    if player.is_alive:
+                        if player.take_damage(self.sound_manager):
+                            pass  # Player took damage/died
+                
+                # Reset alien positions but keep their speed
+                current_speeds = [enemy.speed for enemy in self.enemies]
+                self.create_enemy_grid()
+                # Restore the progressed speeds
+                for i, enemy in enumerate(self.enemies):
+                    if i < len(current_speeds):
+                        enemy.speed = current_speeds[i]
+        elif self.current_boss:
+            # Check if boss reached player
             for player in self.players:
-                if player.is_alive and enemy.y + enemy.height >= player.y:
+                if player.is_alive and self.current_boss.y + self.current_boss.height >= player.y:
+                    # Kill the player first with sound
+                    player.take_damage(self.sound_manager)
                     self.game_over = True
+                    self.game_over_time = pygame.time.get_ticks()
                     if self.score_manager.is_high_score(self.score, self.coop_mode):
                         self.awaiting_name_input = True
                         self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode)
                     
     def check_collisions(self):
+        # Player bullets vs enemies
         for bullet in self.player_bullets[:]:
-            for enemy in self.enemies[:]:
-                if bullet.rect.colliderect(enemy.rect):
-                    self.player_bullets.remove(bullet)
-                    self.enemies.remove(enemy)
-                    self.score += 10
-                    self.total_enemies_killed += 1
-                    self.update_enemy_speed()  # Update speed as enemies are killed
-                    self.spawn_power_up()
-                    break
-                    
-        for laser in self.laser_beams:
-            if laser.is_active():
+            if self.is_boss_level and self.current_boss and not self.current_boss.destruction_complete:
+                # Check turret collisions first
+                turret_rects = self.current_boss.get_turret_rects()
+                hit_turret = False
+                
+                for turret_rect, turret_index in turret_rects:
+                    if turret_rect and bullet.rect.colliderect(turret_rect):
+                        self.player_bullets.remove(bullet)
+                        self.sound_manager.play_sound('ufo_hit', volume_override=0.6)
+                        if self.current_boss.take_turret_damage(turret_index):
+                            # Turret destroyed
+                            self.score += 100
+                            self.add_xp(20, turret_rect.centerx, turret_rect.centery)
+                            self.sound_manager.play_sound('explosion_small', volume_override=0.6)
+                        else:
+                            self.score += 5
+                            self.add_xp(2, turret_rect.centerx, turret_rect.centery)
+                        hit_turret = True
+                        break
+                
+                # Check main body collision if no turret hit
+                if not hit_turret:
+                    main_body_rect = self.current_boss.get_main_body_rect()
+                    if main_body_rect and bullet.rect.colliderect(main_body_rect):
+                        self.player_bullets.remove(bullet)
+                        self.sound_manager.play_sound('ufo_hit', volume_override=0.8)
+                        if self.current_boss.take_main_damage():
+                            # Boss completely destroyed - EPIC EXPLOSION SEQUENCE
+                            self.score += 1000
+                            self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
+
+                            # PLAY LARGE EXPLOSION SOUND
+                            self.sound_manager.play_sound('explosion_large')
+                            
+                            # CREATE MASSIVE BOSS EXPLOSION
+                            self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+                            
+                            # SCREEN EFFECTS
+                            self.screen_shake_intensity = 25  # Strong shake
+                            self.screen_shake_duration = 2000  # 2 seconds
+                            self.screen_flash_intensity = 255  # Bright white flash
+                            self.screen_flash_duration = 1500  # 1.5 seconds
+                            
+                            # CREATE EXPLOSION WAVES
+                            boss_center_x = self.current_boss.x + self.current_boss.width // 2
+                            boss_center_y = self.current_boss.y + self.current_boss.height // 2
+                            
+                            for i in range(5):  # 5 expanding shock waves
+                                wave = {
+                                    'x': boss_center_x,
+                                    'y': boss_center_y,
+                                    'radius': 0,
+                                    'max_radius': 300 + i * 100,
+                                    'growth_speed': 8 + i * 2,
+                                    'color': random.choice([(255, 200, 0), (255, 100, 0), (255, 255, 255)]),
+                                    'thickness': 8 - i,
+                                    'life': 180 - i * 20
+                                }
+                                self.boss_explosion_waves.append(wave)
+                        else:
+                            self.score += 10
+                            self.add_xp(5, main_body_rect.centerx, main_body_rect.centery)
+            else:
                 for enemy in self.enemies[:]:
-                    if laser.rect.colliderect(enemy.rect):
+                    if bullet.rect.colliderect(enemy.rect):
+                        self.player_bullets.remove(bullet)
+
+                        # PLAY SMALL EXPLOSION SOUND
+                        self.sound_manager.play_sound('explosion_small', volume_override=0.4)
+
+                        # CREATE EXPLOSION BEFORE REMOVING ENEMY
+                        explosion = EnemyExplosion(enemy.x + enemy.width // 2, enemy.y + enemy.height // 2, enemy.enemy_type)
+                        self.enemy_explosions.append(explosion)
+
                         self.enemies.remove(enemy)
                         self.score += 10
                         self.total_enemies_killed += 1
+                        self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
+                        self.update_enemy_speed()
                         self.spawn_power_up()
+                        break
                         
-        self.update_enemy_speed()  # Update speed after laser kills too
+        # Laser vs enemies
+        for laser in self.laser_beams:
+            if laser.is_active():
+                if self.is_boss_level and self.current_boss and not self.current_boss.destruction_complete:
+                    # Laser vs turrets
+                    turret_rects = self.current_boss.get_turret_rects()
+                    for turret_rect, turret_index in turret_rects:
+                        if turret_rect and laser.rect.colliderect(turret_rect):
+                            # Play UFO hit sound for laser turret hits (but limit frequency)
+                            if pygame.time.get_ticks() % 200 == 0:  # Only every 200ms to avoid spam
+                                self.sound_manager.play_sound('ufo_hit', volume_override=0.4)
+                            if self.current_boss.take_turret_damage(turret_index, 2):  # Laser does more damage
+                                self.score += 100
+                                self.add_xp(20, turret_rect.centerx, turret_rect.centery)
+                            else:
+                                self.score += 10
+                                self.add_xp(4, turret_rect.centerx, turret_rect.centery)
+                    
+                    # Laser vs main body
+                    main_body_rect = self.current_boss.get_main_body_rect()
+                    if main_body_rect and laser.rect.colliderect(main_body_rect):
+                        # Play UFO hit sound for laser main body hits (but limit frequency)
+                        if pygame.time.get_ticks() % 200 == 0:  # Only every 200ms to avoid spam
+                            self.sound_manager.play_sound('ufo_hit', volume_override=0.6)
+                        if self.current_boss.take_main_damage(3):  # Laser does lots of damage to main body
+                            self.score += 1000
+                            self.add_xp(200, main_body_rect.centerx, main_body_rect.centery)
+                        else:
+                            self.score += 15
+                            self.add_xp(8, main_body_rect.centerx, main_body_rect.centery)
+                else:
+                    for enemy in self.enemies[:]:
+                        if laser.rect.colliderect(enemy.rect):
+                            # PLAY SMALL EXPLOSION SOUND
+                            self.sound_manager.play_sound('explosion_small', volume_override=0.4)
+                            # CREATE EXPLOSION BEFORE REMOVING ENEMY
+                            explosion = EnemyExplosion(enemy.x + enemy.width // 2, enemy.y + enemy.height // 2, enemy.enemy_type)
+                            self.enemy_explosions.append(explosion)
+
+                            self.enemies.remove(enemy)
+                            self.score += 10
+                            self.total_enemies_killed += 1
+                            self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
+                            self.spawn_power_up()
+                            
+        self.update_enemy_speed()
                         
+        # Player bullets vs barriers
         for bullet in self.player_bullets[:]:
             for barrier in self.barriers:
                 if barrier.check_collision(bullet.rect):
                     self.player_bullets.remove(bullet)
                     break
                     
+        # Enemy bullets vs barriers
         for bullet in self.enemy_bullets[:]:
             for barrier in self.barriers:
                 if barrier.check_collision(bullet.rect):
                     self.enemy_bullets.remove(bullet)
                     break
                     
+        # Power-ups vs players
         for power_up in self.power_ups[:]:
             for player in self.players:
                 if player.is_alive and power_up.rect.colliderect(player.rect):
                     self.power_ups.remove(power_up)
+                    self.sound_manager.play_sound('powerup', volume_override=0.7)
                     self.activate_power_up(player, power_up.power_type)
                     self.score += 50
+                    self.add_xp(10, power_up.x, power_up.y)
                     break
                     
+        # Enemy bullets vs players
         for bullet in self.enemy_bullets[:]:
             for player in self.players:
                 if player.is_alive and bullet.rect.colliderect(player.rect):
-                    if player.take_damage():
+                    if player.take_damage(self.sound_manager):
                         self.enemy_bullets.remove(bullet)
                         break
                     
     def restart_game(self):
         self.game_over = False
         self.awaiting_name_input = False
+        self.awaiting_level_up = False
+        self.pending_level_up = False
         if hasattr(self, 'name_input_screen'):
             del self.name_input_screen
+        if hasattr(self, 'level_up_screen'):
+            del self.level_up_screen
+            
         self.score = 0
         self.level = 1
         self.total_enemies_killed = 0
+        self.current_boss = None
+        self.is_boss_level = False
+        
+        # Reset XP system
+        self.xp_system = XPSystem()
         
         self.player_bullets = []
         self.enemy_bullets = []
         self.power_ups = []
         self.laser_beams = []
+        self.floating_texts = []
+        self.enemy_explosions = []
+        self.boss_explosion_particles = []
+        self.boss_explosion_particles = []
+        self.screen_shake_intensity = 0
+        self.screen_shake_duration = 0
+        self.screen_flash_intensity = 0
+        self.screen_flash_duration = 0
+        self.boss_explosion_waves = []
         
-        # Reset all players
+        # Reset all players with new individual upgrades
         for player in self.players:
             player.lives = 3
             player.is_alive = True
+            player.upgrades = PlayerUpgrades()  # Each player gets their own upgrades
             player.reset_position()
             player.clear_all_power_ups()
             player.invincible = False
@@ -1223,10 +3109,29 @@ class Game:
             player.afterimage_positions = []
         
         self.create_barriers()
-        self.create_enemy_grid()
+        self.setup_level()
         
     def draw(self):
+        # ADDED: Show UFO warning screen if active
+        if self.showing_ufo_warning and self.ufo_warning_screen:
+            self.ufo_warning_screen.draw()
+            return
+            
         self.screen.fill(BLACK)
+        # SCREEN FLASH EFFECT - Apply early for maximum impact
+        if self.screen_flash_intensity > 0:
+            # Fill screen with bright color based on flash intensity
+            flash_color = (min(255, self.screen_flash_intensity), 
+                          min(255, self.screen_flash_intensity), 
+                          min(255, self.screen_flash_intensity))
+            self.screen.fill(flash_color)
+        
+        # Handle level up screen
+        if self.awaiting_level_up:
+            if not hasattr(self, 'level_up_screen'):
+                 self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager)
+            self.level_up_screen.draw()
+            return
         
         # Handle name input screen
         if self.awaiting_name_input and hasattr(self, 'name_input_screen'):
@@ -1234,6 +3139,13 @@ class Game:
             return
         
         if not self.game_over:
+            # Simple screen shake - just use a random background color pulse
+            if self.screen_shake_intensity > 0:
+                # Make the background flash red/orange during shake
+                shake_color = (min(255, self.screen_shake_intensity * 3), 
+                              min(255, self.screen_shake_intensity), 0)
+                self.screen.fill(shake_color)
+    
             for laser in self.laser_beams:
                 laser.draw(self.screen)
                 
@@ -1246,14 +3158,37 @@ class Game:
             for bullet in self.enemy_bullets:
                 bullet.draw(self.screen)
                 
-            for enemy in self.enemies:
-                enemy.draw(self.screen)
+            # Draw boss or regular enemies
+            if self.is_boss_level and self.current_boss:
+                self.current_boss.draw(self.screen)
+            else:
+                for enemy in self.enemies:
+                    enemy.draw(self.screen)
+
+            # Draw enemy explosions
+            for explosion in self.enemy_explosions:
+                explosion.draw(self.screen)
+
+            # Draw boss explosion particles
+            for particle in self.boss_explosion_particles:
+                if particle['life'] > 0:
+                    alpha = max(0, min(255, particle['life'] // 3))
+                    particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+                    color_with_alpha = (*particle['color'], alpha)
+                    pygame.draw.circle(particle_surface, color_with_alpha, 
+                                     (particle['size'], particle['size']), particle['size'])
+                    self.screen.blit(particle_surface, (int(particle['x'] - particle['size']), 
+                                                     int(particle['y'] - particle['size'])))
                 
             for barrier in self.barriers:
                 barrier.draw(self.screen)
                 
             for power_up in self.power_ups:
                 power_up.draw(self.screen)
+            
+            # Draw floating texts
+            for text in self.floating_texts:
+                text.draw(self.screen)
                 
         # UI
         score_text = self.small_font.render(f"Score: {self.score:,}", True, WHITE)
@@ -1262,84 +3197,113 @@ class Game:
         self.screen.blit(score_text, (20, 20))
         self.screen.blit(level_text, (20, 70))
         
-        # Player lives display
+        # FIXED: XP Bar - simplified, no overlapping text
+        bar_width = 300
+        bar_height = 20
+        bar_x = SCREEN_WIDTH - bar_width - 20
+        bar_y = 20
+        
+        # Background
+        pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
+        
+        # Progress
+        progress = self.xp_system.get_xp_progress()
+        progress_width = int(bar_width * progress)
+        pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, progress_width, bar_height))
+        
+        # Border
+        pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+        
+        # Only show XP level number - clean and simple
+        xp_level_text = self.small_font.render(f"XP Level: {self.xp_system.level}", True, WHITE)
+        self.screen.blit(xp_level_text, (bar_x, bar_y + bar_height + 10))
+        
+        # Player lives display - keep it simple and compact
         if self.coop_mode:
-            mode_text = self.small_font.render("CO-OP MODE", True, CYAN)
-            self.screen.blit(mode_text, (20, 120))
-            
-            for i, player in enumerate(self.players):
-                status_text = f"P{player.player_id}: {player.lives} lives"
-                if not player.is_alive:
-                    status_text += " (DEAD)"
-                color = player.color if player.is_alive else RED
-                lives_text = self.small_font.render(status_text, True, color)
-                self.screen.blit(lives_text, (20, 170 + i * 40))
+            lives_text1 = self.small_font.render(f"P1: {self.players[0].lives} lives {'(DEAD)' if not self.players[0].is_alive else ''}", True, GREEN if self.players[0].is_alive else RED)
+            lives_text2 = self.small_font.render(f"P2: {self.players[1].lives} lives {'(DEAD)' if not self.players[1].is_alive else ''}", True, BLUE if self.players[1].is_alive else RED)
+            self.screen.blit(lives_text1, (20, 120))
+            self.screen.blit(lives_text2, (20, 160))
         else:
             if self.players:
                 lives_text = self.small_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
                 self.screen.blit(lives_text, (20, 120))
         
-        # Power-up status (updated for ammo-based system)
-        status_y = 260 if self.coop_mode else 170
-        
-        for i, player in enumerate(self.players):
+        # Power-up status - very compact, right side
+        active_powerups = []
+        for player in self.players:
             if not player.is_alive:
                 continue
-                
-            player_label = f"P{player.player_id}: " if self.coop_mode else ""
-            
+            prefix = f"P{player.player_id}:" if self.coop_mode else ""
             if player.rapid_fire and player.rapid_fire_ammo > 0:
-                text = self.small_font.render(f"{player_label}Rapid Fire: {player.rapid_fire_ammo} shots", True, ORANGE)
-                self.screen.blit(text, (20, status_y))
-                status_y += 40
-                
+                active_powerups.append(f"{prefix}Rapid({player.rapid_fire_ammo})")
             if player.has_laser:
-                text = self.small_font.render(f"{player_label}Laser Ready!", True, CYAN)
-                self.screen.blit(text, (20, status_y))
-                status_y += 40
-                
+                active_powerups.append(f"{prefix}Laser")
             if player.has_multi_shot and player.multi_shot_ammo > 0:
-                text = self.small_font.render(f"{player_label}Multi-Shot: {player.multi_shot_ammo} shots", True, YELLOW)
-                self.screen.blit(text, (20, status_y))
-                status_y += 40
-                
+                active_powerups.append(f"{prefix}Multi({player.multi_shot_ammo})")
             if player.invincible:
-                current_time = pygame.time.get_ticks()
-                time_left = (player.invincible_end_time - current_time) / 1000
-                text = self.small_font.render(f"{player_label}Invincible: {time_left:.1f}s", True, PURPLE)
-                self.screen.blit(text, (20, status_y))
-                status_y += 40
+                time_left = (player.invincible_end_time - pygame.time.get_ticks()) / 1000
+                active_powerups.append(f"{prefix}Invincible({time_left:.1f}s)")
+        
+        if active_powerups:
+            powerup_text = " | ".join(active_powerups)
+            text = self.tiny_font.render(powerup_text, True, ORANGE)
+            self.screen.blit(text, (20, 200))
         
         # Game over screen
         if self.game_over and not self.awaiting_name_input:
             game_over_text = self.font.render("GAME OVER", True, RED)
             final_score_text = self.small_font.render(f"Final Score: {self.score:,}", True, WHITE)
             level_reached_text = self.small_font.render(f"Level Reached: {self.level}", True, WHITE)
-            restart_text = self.small_font.render("Press R to restart or ESC for title", True, WHITE)
+            xp_level_text = self.small_font.render(f"XP Level Reached: {self.xp_system.level}", True, GOLD)
             
-            text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 80))
-            score_rect = final_score_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 20))
-            level_rect = level_reached_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 30))
-            restart_rect = restart_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 80))
+            # FIXED: Show input delay message or controls
+            if pygame.time.get_ticks() - self.game_over_time < self.input_delay_duration:
+                remaining = (self.input_delay_duration - (pygame.time.get_ticks() - self.game_over_time)) / 1000.0
+                controls_text = self.small_font.render(f"Controls unlocking in {remaining:.1f}s...", True, YELLOW)
+            else:
+                controls_text = self.small_font.render("R/A: Restart | ESC/B: Title Menu", True, WHITE)
+            
+            text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 100))
+            score_rect = final_score_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 40))
+            level_rect = level_reached_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+            xp_rect = xp_level_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 40))
+            controls_rect = controls_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 100))
             
             self.screen.blit(game_over_text, text_rect)
             self.screen.blit(final_score_text, score_rect)
             self.screen.blit(level_reached_text, level_rect)
-            self.screen.blit(restart_text, restart_rect)
+            self.screen.blit(xp_level_text, xp_rect)
+            self.screen.blit(controls_text, controls_rect)
             
-        # Instructions
+        # FIXED: Instructions moved below XP bar to avoid overlap
         if not self.game_over:
             instructions = [
                 "P1: WASD/Arrows + Space",
-                "ESC: Return to title",
-                f"Enemy speed: {self.calculate_enemy_speed_for_level(self.level):.1f}"
+                "ESC: Return to title"
             ]
             if self.coop_mode:
                 instructions.insert(1, "P2: Right Ctrl (or controller)")
                 
+            # Add boss level indicator
+            if self.is_boss_level:
+                instructions.append("BOSS LEVEL!")
+                
+            # Position instructions below the XP bar instead of overlapping it
+            start_y = bar_y + bar_height + 50  # Start below XP level text
             for i, instruction in enumerate(instructions):
-                text = self.small_font.render(instruction, True, WHITE)
-                self.screen.blit(text, (SCREEN_WIDTH - 500, 20 + i * 40))
+                color = RED if instruction == "BOSS LEVEL!" else WHITE
+                text = self.small_font.render(instruction, True, color)
+                # Position on right side but below XP bar
+                self.screen.blit(text, (SCREEN_WIDTH - 400, start_y + i * 35))
+        
+
+            # INTENSE WHITE FLASH OVERLAY - This goes over everything for maximum effect
+            if self.screen_flash_intensity > 0:
+                flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+                flash_surface.fill((255, 255, 255))
+                flash_surface.set_alpha(self.screen_flash_intensity)
+                self.screen.blit(flash_surface, (0, 0))
         
         pygame.display.flip()
         
@@ -1352,7 +3316,7 @@ class Game:
             elif action == "title":
                 result = "title"
             else:
-                if not self.awaiting_name_input:
+                if not self.awaiting_name_input and not self.awaiting_level_up:
                     self.handle_input()
                     self.update()
                 self.draw()
@@ -1363,6 +3327,9 @@ class Game:
 def main():
     score_manager = HighScoreManager()
     
+    # Initialize sound manager
+    sound_manager = SoundManager()
+    
     try:
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
     except:
@@ -1371,7 +3338,7 @@ def main():
     clock = pygame.time.Clock()
     
     while True:
-        title_screen = TitleScreen(screen, score_manager)
+        title_screen = TitleScreen(screen, score_manager, sound_manager)
         
         while True:
             action = title_screen.handle_events()
@@ -1379,7 +3346,7 @@ def main():
                 pygame.quit()
                 sys.exit()
             elif action == "highscores":
-                high_score_screen = HighScoreScreen(screen, score_manager)
+                high_score_screen = HighScoreScreen(screen, score_manager, sound_manager)
                 while True:
                     hs_action = high_score_screen.handle_events()
                     if hs_action == "back":
@@ -1391,7 +3358,7 @@ def main():
                     clock.tick(60)
                 break
             elif action in ["single", "coop"]:
-                game = Game(score_manager)
+                game = Game(score_manager, sound_manager)
                 game.setup_game(action)
                 result = game.run()
                 
