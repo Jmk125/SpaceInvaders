@@ -257,11 +257,12 @@ class FloatingText:
         screen.blit(text_surface, (self.x, self.y))
         
 class LevelUpScreen:
-    def __init__(self, screen, players, is_coop=False, sound_manager=None):
+    def __init__(self, screen, players, is_coop=False, sound_manager=None, xp_level=1):
         self.screen = screen
         self.players = players
         self.is_coop = is_coop
         self.sound_manager = sound_manager
+        self.xp_level = xp_level
         self.font_large = pygame.font.Font(None, 96)
         self.font_medium = pygame.font.Font(None, 64)
         self.font_small = pygame.font.Font(None, 48)
@@ -273,6 +274,11 @@ class LevelUpScreen:
             ("movement_speed", "Movement Speed", "Increase player movement speed"),
             ("powerup_duration", "Power-up Duration", "Extend power-up effects")
         ]
+
+        if self.xp_level % 5 == 0:
+            self.upgrade_options.append(
+                ("extra_life", "Extra Life", "Gain +1 life instead of a stat upgrade")
+            )
         
         # For co-op mode, track each player's selection
         self.player1_selection = 0
@@ -330,7 +336,13 @@ class LevelUpScreen:
                         self.current_selection = (self.current_selection + 1) % len(self.upgrade_options)
                     elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                         stat_name = self.upgrade_options[self.current_selection][0]
-                        if self.players[0].upgrades.can_upgrade(stat_name):
+                        if stat_name == "extra_life":
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            self.grant_extra_life(0, stat_name)
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000
+                        elif self.players[0].upgrades.can_upgrade(stat_name):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
                             old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
@@ -353,7 +365,12 @@ class LevelUpScreen:
                             self.player1_selection = (self.player1_selection + 1) % len(self.upgrade_options)
                         elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                             stat_name = self.upgrade_options[self.player1_selection][0]
-                            if self.players[0].upgrades.can_upgrade(stat_name):
+                            if stat_name == "extra_life":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_extra_life(0, stat_name)
+                                self.player1_confirmed = True
+                            elif self.players[0].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
@@ -361,7 +378,7 @@ class LevelUpScreen:
                                 new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
                                 self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
                                 self.player1_confirmed = True
-                    
+
                     # Player 2 controls (Right Ctrl for confirm, arrows for selection)
                     if not self.player2_confirmed:
                         if event.key == pygame.K_LEFT:
@@ -374,7 +391,12 @@ class LevelUpScreen:
                             self.player2_selection = (self.player2_selection + 1) % len(self.upgrade_options)
                         elif event.key == pygame.K_RCTRL:
                             stat_name = self.upgrade_options[self.player2_selection][0]
-                            if self.players[1].upgrades.can_upgrade(stat_name):
+                            if stat_name == "extra_life":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_extra_life(1, stat_name)
+                                self.player2_confirmed = True
+                            elif self.players[1].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 old_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
@@ -392,7 +414,13 @@ class LevelUpScreen:
                     # Single player controller
                     if event.button == 0:  # A button
                         stat_name = self.upgrade_options[self.current_selection][0]
-                        if self.players[0].upgrades.can_upgrade(stat_name):
+                        if stat_name == "extra_life":
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            self.grant_extra_life(0, stat_name)
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000
+                        elif self.players[0].upgrades.can_upgrade(stat_name):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
                             old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
@@ -407,7 +435,12 @@ class LevelUpScreen:
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
                         if event.button == 0:  # A button
                             stat_name = self.upgrade_options[self.player1_selection][0]
-                            if self.players[0].upgrades.can_upgrade(stat_name):
+                            if stat_name == "extra_life":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_extra_life(0, stat_name)
+                                self.player1_confirmed = True
+                            elif self.players[0].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 old_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
@@ -415,11 +448,16 @@ class LevelUpScreen:
                                 new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
                                 self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
                                 self.player1_confirmed = True
-                    
+
                     if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
                         if event.button == 0:  # A button
                             stat_name = self.upgrade_options[self.player2_selection][0]
-                            if self.players[1].upgrades.can_upgrade(stat_name):
+                            if stat_name == "extra_life":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_extra_life(1, stat_name)
+                                self.player2_confirmed = True
+                            elif self.players[1].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 old_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
@@ -469,24 +507,8 @@ class LevelUpScreen:
         
     def create_upgrade_effect(self, player_index, stat_name, old_multiplier, new_multiplier):
         """Create floating upgrade indicator"""
-        # Find the index by stat name only
-        stat_index = 0
-        for i, (stat, _, _) in enumerate(self.upgrade_options):
-            if stat == stat_name:
-                stat_index = i
-                break
-        
-        # Calculate position based on player and stat
-        if self.is_coop:
-            if player_index == 0:
-                x = 350  # Player 1 column
-            else:
-                x = 1250  # Player 2 column
-        else:
-            x = 600  # Single player center position
-            
-        y = 240 + (stat_index * 80) + 40  # Match the new row height and positioning
-        
+        x, y = self.get_effect_position(player_index, stat_name)
+
         # Create floating text showing the upgrade
         old_percent = int((old_multiplier - 1) * 100)
         new_percent = int((new_multiplier - 1) * 100)
@@ -501,6 +523,37 @@ class LevelUpScreen:
             'duration': 2000  # 2 seconds duration
         }
         self.upgrade_effects.append(effect)
+
+    def grant_extra_life(self, player_index, stat_name):
+        """Grant an extra life instead of a stat upgrade"""
+        self.players[player_index].lives += 1
+        x, y = self.get_effect_position(player_index, stat_name)
+
+        effect = {
+            'x': x,
+            'y': y,
+            'text': "+1 LIFE",
+            'color': GOLD,
+            'start_time': pygame.time.get_ticks(),
+            'duration': 2000
+        }
+        self.upgrade_effects.append(effect)
+
+    def get_effect_position(self, player_index, stat_name):
+        """Calculate the effect position based on player and selected option"""
+        stat_index = 0
+        for i, (stat, _, _) in enumerate(self.upgrade_options):
+            if stat == stat_name:
+                stat_index = i
+                break
+
+        if self.is_coop:
+            x = 350 if player_index == 0 else 1250
+        else:
+            x = 600
+
+        y = 240 + (stat_index * 80) + 40
+        return x, y
         
     def draw(self):
         self.screen.fill(BLACK)
@@ -563,34 +616,52 @@ class LevelUpScreen:
                 self.screen.blit(desc_text, desc_rect)
                 
                 # Left column - Player 1 stats
-                p1_can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
-                p1_level = getattr(self.players[0].upgrades, f"{stat_name}_level")
-                p1_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
-                p1_color = WHITE if p1_can_upgrade else GRAY
-                
-                if self.player1_confirmed and i == self.player1_selection:
-                    confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
-                    self.screen.blit(confirm_text, (350, y + 25))
+                if stat_name == "extra_life":
+                    p1_color = WHITE
+                    if self.player1_confirmed and i == self.player1_selection:
+                        confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
+                        self.screen.blit(confirm_text, (350, y + 25))
+                    else:
+                        lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
+                        self.screen.blit(lives_text, (350, y + 25))
                 else:
-                    p1_level_text = self.tiny_font.render(f"Lv {p1_level}", True, p1_color)
-                    p1_bonus_text = self.tiny_font.render(f"+{int((p1_multiplier - 1) * 100)}%", True, YELLOW if p1_can_upgrade else GRAY)
-                    self.screen.blit(p1_level_text, (350, y + 15))
-                    self.screen.blit(p1_bonus_text, (350, y + 35))
-                
+                    p1_can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
+                    p1_level = getattr(self.players[0].upgrades, f"{stat_name}_level")
+                    p1_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                    p1_color = WHITE if p1_can_upgrade else GRAY
+
+                    if self.player1_confirmed and i == self.player1_selection:
+                        confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
+                        self.screen.blit(confirm_text, (350, y + 25))
+                    else:
+                        p1_level_text = self.tiny_font.render(f"Lv {p1_level}", True, p1_color)
+                        p1_bonus_text = self.tiny_font.render(f"+{int((p1_multiplier - 1) * 100)}%", True, YELLOW if p1_can_upgrade else GRAY)
+                        self.screen.blit(p1_level_text, (350, y + 15))
+                        self.screen.blit(p1_bonus_text, (350, y + 35))
+
                 # Right column - Player 2 stats
-                p2_can_upgrade = self.players[1].upgrades.can_upgrade(stat_name)
-                p2_level = getattr(self.players[1].upgrades, f"{stat_name}_level")
-                p2_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
-                p2_color = WHITE if p2_can_upgrade else GRAY
-                
-                if self.player2_confirmed and i == self.player2_selection:
-                    confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
-                    self.screen.blit(confirm_text, (1250, y + 25))
+                if stat_name == "extra_life":
+                    p2_color = WHITE
+                    if self.player2_confirmed and i == self.player2_selection:
+                        confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
+                        self.screen.blit(confirm_text, (1250, y + 25))
+                    else:
+                        lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
+                        self.screen.blit(lives_text, (1250, y + 25))
                 else:
-                    p2_level_text = self.tiny_font.render(f"Lv {p2_level}", True, p2_color)
-                    p2_bonus_text = self.tiny_font.render(f"+{int((p2_multiplier - 1) * 100)}%", True, YELLOW if p2_can_upgrade else GRAY)
-                    self.screen.blit(p2_level_text, (1250, y + 15))
-                    self.screen.blit(p2_bonus_text, (1250, y + 35))
+                    p2_can_upgrade = self.players[1].upgrades.can_upgrade(stat_name)
+                    p2_level = getattr(self.players[1].upgrades, f"{stat_name}_level")
+                    p2_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                    p2_color = WHITE if p2_can_upgrade else GRAY
+
+                    if self.player2_confirmed and i == self.player2_selection:
+                        confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
+                        self.screen.blit(confirm_text, (1250, y + 25))
+                    else:
+                        p2_level_text = self.tiny_font.render(f"Lv {p2_level}", True, p2_color)
+                        p2_bonus_text = self.tiny_font.render(f"+{int((p2_multiplier - 1) * 100)}%", True, YELLOW if p2_can_upgrade else GRAY)
+                        self.screen.blit(p2_level_text, (1250, y + 15))
+                        self.screen.blit(p2_bonus_text, (1250, y + 35))
             
             # FIXED: Only show ONE countdown or instruction section
             if self.countdown_start is not None:
@@ -633,12 +704,16 @@ class LevelUpScreen:
                 self.screen.blit(desc_text, (350, y + 30))
                 
                 # Stats
-                can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
-                level = getattr(self.players[0].upgrades, f"{stat_name}_level")
-                multiplier = self.players[0].upgrades.get_multiplier(stat_name)
-                
-                level_text = self.tiny_font.render(f"Level {level} (+{int((multiplier - 1) * 100)}%)", True, WHITE if can_upgrade else GRAY)
-                self.screen.blit(level_text, (350, y + 50))
+                if stat_name == "extra_life":
+                    lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
+                    self.screen.blit(lives_text, (350, y + 50))
+                else:
+                    can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
+                    level = getattr(self.players[0].upgrades, f"{stat_name}_level")
+                    multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+
+                    level_text = self.tiny_font.render(f"Level {level} (+{int((multiplier - 1) * 100)}%)", True, WHITE if can_upgrade else GRAY)
+                    self.screen.blit(level_text, (350, y + 50))
             
             # FIXED: Only show ONE countdown or instruction section for single player
             if self.countdown_start is not None:
@@ -3470,7 +3545,7 @@ class Game:
         # Handle level up screen
         if self.awaiting_level_up:
             if not hasattr(self, 'level_up_screen'):
-                 self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager)
+                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, self.xp_system.level)
             self.level_up_screen.draw()
             return
         
