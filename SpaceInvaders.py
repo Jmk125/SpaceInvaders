@@ -687,20 +687,36 @@ class LevelUpScreen:
             
         if self.is_coop:
             # Table layout for co-op
+            table_center = SCREEN_WIDTH // 2
+            left_col_x = table_center - 420
+            right_col_x = table_center + 420
+            header_y = 170
+            table_top = header_y + 50
+            row_height = 80
+
             # Headers
             p1_header = self.font_medium.render("PLAYER 1", True, GREEN)
             desc_header = self.font_medium.render("UPGRADE", True, WHITE)
             p2_header = self.font_medium.render("PLAYER 2", True, BLUE)
-            
-            self.screen.blit(p1_header, (350, 180))
-            self.screen.blit(desc_header, (SCREEN_WIDTH // 2 - 50, 180))
-            self.screen.blit(p2_header, (1250, 180))
-            
+
+            self.screen.blit(p1_header, p1_header.get_rect(center=(left_col_x, header_y)))
+            self.screen.blit(desc_header, desc_header.get_rect(center=(table_center, header_y)))
+            self.screen.blit(p2_header, p2_header.get_rect(center=(right_col_x, header_y)))
+
             # Table rows
-            start_y = 240
-            row_height = 80
-            
+            start_y = table_top
+
             max_rows = max((len(opts) for opts in self.player_options), default=0)
+            table_height = max_rows * row_height
+
+            # Background panel behind the table for readability
+            panel_margin_x = 220
+            panel_width = SCREEN_WIDTH - (panel_margin_x * 2)
+            panel_height = table_height + 40
+            panel_rect = pygame.Rect(panel_margin_x, start_y - 20, panel_width, panel_height)
+            pygame.draw.rect(self.screen, (10, 10, 10), panel_rect, border_radius=12)
+            pygame.draw.rect(self.screen, (40, 40, 40), panel_rect, 2, border_radius=12)
+
             for i in range(max_rows):
                 y = start_y + i * row_height
                 p1_option = self.get_option_at(0, i)
@@ -709,43 +725,43 @@ class LevelUpScreen:
                 if not display_option:
                     continue
                 stat_name, display_name, description = display_option
-                
+
                 # Row background (alternating)
                 if i % 2 == 1:
-                    pygame.draw.rect(self.screen, (20, 20, 20), (250, y - 5, 1200, row_height - 10))
-                
+                    pygame.draw.rect(self.screen, (20, 20, 20), (panel_margin_x + 10, y - 5, panel_width - 20, row_height - 10), border_radius=6)
+
                 # Selection arrows (outside table)
                 if p1_option and i == self.player1_selection and not self.player1_confirmed:
-                    arrow_points = [(200, y + 15), (200, y + 35), (230, y + 25)]
+                    arrow_points = [(panel_margin_x - 25, y + 15), (panel_margin_x - 25, y + 35), (panel_margin_x + 5, y + 25)]
                     pygame.draw.polygon(self.screen, GREEN, arrow_points)
 
                 if p2_option and i == self.player2_selection and not self.player2_confirmed:
-                    arrow_points = [(1520, y + 15), (1520, y + 35), (1490, y + 25)]
+                    arrow_points = [(panel_margin_x + panel_width + 25, y + 15), (panel_margin_x + panel_width + 25, y + 35), (panel_margin_x + panel_width - 5, y + 25)]
                     pygame.draw.polygon(self.screen, BLUE, arrow_points)
-                
+
                 # Middle column - Upgrade description
                 name_text = self.tiny_font.render(display_name, True, WHITE)
                 desc_text = self.tiny_font.render(description, True, GRAY)
-                name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, y + 15))
-                desc_rect = desc_text.get_rect(center=(SCREEN_WIDTH // 2, y + 35))
+                name_rect = name_text.get_rect(center=(table_center, y + 15))
+                desc_rect = desc_text.get_rect(center=(table_center, y + 35))
                 self.screen.blit(name_text, name_rect)
                 self.screen.blit(desc_text, desc_rect)
-                
+
                 # Left column - Player 1 stats
                 p1_stat_name = p1_option[0] if p1_option else None
                 p1_display_name = p1_option[1] if p1_option else ""
                 if p1_display_name:
                     name_surface = self.tiny_font.render(p1_display_name, True, WHITE)
-                    self.screen.blit(name_surface, (350, y))
+                    self.screen.blit(name_surface, name_surface.get_rect(topleft=(left_col_x - 70, y)))
 
                 if p1_stat_name == "extra_life":
                     p1_color = WHITE
                     if self.player1_confirmed and i == self.player1_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
-                        self.screen.blit(confirm_text, (350, y + 25))
+                        self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                     elif p1_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
-                        self.screen.blit(lives_text, (350, y + 25))
+                        self.screen.blit(lives_text, lives_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                 elif p1_option:
                     p1_can_upgrade = self.players[0].upgrades.can_upgrade(p1_stat_name)
                     p1_level = getattr(self.players[0].upgrades, f"{p1_stat_name}_level")
@@ -754,12 +770,12 @@ class LevelUpScreen:
 
                     if self.player1_confirmed and i == self.player1_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
-                        self.screen.blit(confirm_text, (350, y + 25))
+                        self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                     else:
                         p1_level_text = self.tiny_font.render(f"Lv {p1_level}", True, p1_color)
                         p1_bonus_text = self.tiny_font.render(f"+{int((p1_multiplier - 1) * 100)}%", True, YELLOW if p1_can_upgrade else GRAY)
-                        self.screen.blit(p1_level_text, (350, y + 15))
-                        self.screen.blit(p1_bonus_text, (350, y + 35))
+                        self.screen.blit(p1_level_text, p1_level_text.get_rect(topleft=(left_col_x - 70, y + 15)))
+                        self.screen.blit(p1_bonus_text, p1_bonus_text.get_rect(topleft=(left_col_x - 70, y + 35)))
 
                 # Right column - Player 2 stats
                 p2_stat_name = p2_option[0] if p2_option else None
@@ -767,7 +783,7 @@ class LevelUpScreen:
                 if p2_display_name:
                     name_surface = self.tiny_font.render(p2_display_name, True, WHITE)
                     name_rect = name_surface.get_rect()
-                    name_rect.right = 1400
+                    name_rect.right = right_col_x + 70
                     name_rect.y = y
                     self.screen.blit(name_surface, name_rect)
 
@@ -775,10 +791,12 @@ class LevelUpScreen:
                     p2_color = WHITE
                     if self.player2_confirmed and i == self.player2_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
-                        self.screen.blit(confirm_text, (1250, y + 25))
+                        confirm_rect = confirm_text.get_rect()
+                        confirm_rect.topleft = (right_col_x - 70, y + 25)
+                        self.screen.blit(confirm_text, confirm_rect)
                     elif p2_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
-                        self.screen.blit(lives_text, (1250, y + 25))
+                        self.screen.blit(lives_text, lives_text.get_rect(topleft=(right_col_x - 70, y + 25)))
                 elif p2_option:
                     p2_can_upgrade = self.players[1].upgrades.can_upgrade(p2_stat_name)
                     p2_level = getattr(self.players[1].upgrades, f"{p2_stat_name}_level")
@@ -787,78 +805,89 @@ class LevelUpScreen:
 
                     if self.player2_confirmed and i == self.player2_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
-                        self.screen.blit(confirm_text, (1250, y + 25))
+                        confirm_rect = confirm_text.get_rect()
+                        confirm_rect.topleft = (right_col_x - 70, y + 25)
+                        self.screen.blit(confirm_text, confirm_rect)
                     else:
                         p2_level_text = self.tiny_font.render(f"Lv {p2_level}", True, p2_color)
                         p2_bonus_text = self.tiny_font.render(f"+{int((p2_multiplier - 1) * 100)}%", True, YELLOW if p2_can_upgrade else GRAY)
-                        self.screen.blit(p2_level_text, (1250, y + 15))
-                        self.screen.blit(p2_bonus_text, (1250, y + 35))
-            
+                        self.screen.blit(p2_level_text, p2_level_text.get_rect(topleft=(right_col_x - 70, y + 15)))
+                        self.screen.blit(p2_bonus_text, p2_bonus_text.get_rect(topleft=(right_col_x - 70, y + 35)))
+
             # FIXED: Only show ONE countdown or instruction section
+            instructions_y = min(SCREEN_HEIGHT - 60, start_y + table_height + 60)
             if self.countdown_start is not None:
                 # Countdown when both players ready
                 elapsed = pygame.time.get_ticks() - self.countdown_start
                 remaining = max(0, (self.countdown_duration - elapsed) / 1000.0)
                 countdown_text = self.font_large.render(f"Next level in {remaining:.1f}s", True, GOLD)
-                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                 self.screen.blit(countdown_text, countdown_rect)
             else:
                 # Instructions (only show when NOT counting down)
                 if not self.player1_confirmed or not self.player2_confirmed:
                     inst_text = self.tiny_font.render("P1: WASD + Enter  |  P2: Arrows + Right Ctrl  |  Controllers: D-pad + A", True, GRAY)
-                    inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                    inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                     self.screen.blit(inst_text, inst_rect)
         
         else:
             # Single player layout
             desc_header = self.font_medium.render("UPGRADES", True, WHITE)
-            self.screen.blit(desc_header, (SCREEN_WIDTH // 2 - 50, 180))
-            
-            start_y = 240
+            self.screen.blit(desc_header, desc_header.get_rect(center=(SCREEN_WIDTH // 2, 170)))
+
+            start_y = 230
             row_height = 80
-            
+
             options = self.get_options_for_player(0)
+            panel_margin_x = 300
+            panel_width = SCREEN_WIDTH - (panel_margin_x * 2)
+            panel_height = len(options) * row_height + 40
+            panel_rect = pygame.Rect(panel_margin_x, start_y - 20, panel_width, panel_height)
+            pygame.draw.rect(self.screen, (10, 10, 10), panel_rect, border_radius=12)
+            pygame.draw.rect(self.screen, (40, 40, 40), panel_rect, 2, border_radius=12)
+
             for i, (stat_name, display_name, description) in enumerate(options):
                 y = start_y + i * row_height
-                
+
                 if i % 2 == 1:
-                    pygame.draw.rect(self.screen, (20, 20, 20), (300, y - 5, 800, row_height - 10))
-                
+                    pygame.draw.rect(self.screen, (20, 20, 20), (panel_margin_x + 10, y - 5, panel_width - 20, row_height - 10), border_radius=6)
+
                 # Selection arrow
                 if i == self.current_selection:
-                    arrow_points = [(250, y + 15), (250, y + 35), (280, y + 25)]
+                    arrow_points = [(panel_margin_x - 30, y + 15), (panel_margin_x - 30, y + 35), (panel_margin_x, y + 25)]
                     pygame.draw.polygon(self.screen, GREEN, arrow_points)
-                
+
                 # Upgrade info
                 name_text = self.tiny_font.render(display_name, True, WHITE)
                 desc_text = self.tiny_font.render(description, True, GRAY)
-                self.screen.blit(name_text, (350, y + 10))
-                self.screen.blit(desc_text, (350, y + 30))
-                
+                self.screen.blit(name_text, name_text.get_rect(topleft=(panel_margin_x + 40, y + 10)))
+                self.screen.blit(desc_text, desc_text.get_rect(topleft=(panel_margin_x + 40, y + 30)))
+
                 # Stats
                 if stat_name == "extra_life":
                     lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
-                    self.screen.blit(lives_text, (350, y + 50))
+                    self.screen.blit(lives_text, lives_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
                 else:
                     can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
                     level = getattr(self.players[0].upgrades, f"{stat_name}_level")
                     multiplier = self.players[0].upgrades.get_multiplier(stat_name)
 
                     level_text = self.tiny_font.render(f"Level {level} (+{int((multiplier - 1) * 100)}%)", True, WHITE if can_upgrade else GRAY)
-                    self.screen.blit(level_text, (350, y + 50))
-            
+                    self.screen.blit(level_text, level_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
+
             # FIXED: Only show ONE countdown or instruction section for single player
+            instructions_y = min(SCREEN_HEIGHT - 60, start_y + len(options) * row_height + 60)
             if self.countdown_start is not None:
                 # Countdown for single player after upgrade
                 elapsed = pygame.time.get_ticks() - self.countdown_start
                 remaining = max(0, (self.countdown_duration - elapsed) / 1000.0)
                 countdown_text = self.font_large.render(f"Continuing in {remaining:.1f}s", True, GOLD)
-                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                 self.screen.blit(countdown_text, countdown_rect)
             else:
                 # Instructions (only show when NOT counting down)
                 inst_text = self.tiny_font.render("WASD/Arrows: Navigate  |  Enter/Space: Select  |  Controller: D-pad + A", True, GRAY)
-                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                 self.screen.blit(inst_text, inst_rect)
         
         # Draw floating upgrade effects
