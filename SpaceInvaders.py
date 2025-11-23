@@ -207,6 +207,13 @@ class PlayerUpgrades:
         self.fire_rate_level = 0
         self.movement_speed_level = 0
         self.powerup_duration_level = 0
+        self.pierce_level = 0
+        self.bullet_length_level = 0
+        self.barrier_phase_level = 0
+        self.powerup_spawn_level = 0
+        self.boss_damage_level = 0
+        self.ammo_capacity_level = 0
+        self.extra_bullet_level = 0
         
     def get_max_upgrade_level(self):
         """Calculate maximum upgrade level based on multiplier"""
@@ -215,8 +222,21 @@ class PlayerUpgrades:
         
     def can_upgrade(self, stat):
         """Check if a stat can be upgraded further"""
+        if stat in ["pierce", "powerup_spawn", "boss_damage", "ammo_capacity"]:
+            max_levels = 5
+        elif stat == "barrier_phase":
+            max_levels = 1
+        elif stat == "extra_bullet":
+            max_levels = 1
+        elif stat == "bullet_length":
+            max_levels = None  # Infinite scaling
+        else:
+            max_levels = self.get_max_upgrade_level()
+
         current_level = getattr(self, f"{stat}_level")
-        return current_level < self.get_max_upgrade_level()
+        if max_levels is None:
+            return True
+        return current_level < max_levels
         
     def upgrade_stat(self, stat):
         """Upgrade a specific stat"""
@@ -228,7 +248,35 @@ class PlayerUpgrades:
     def get_multiplier(self, stat):
         """Get the multiplier for a specific stat"""
         level = getattr(self, f"{stat}_level")
+        if stat == "bullet_length":
+            return 1.0 + (level * 0.10)
+        if stat == "powerup_spawn":
+            return 1.0 + (level * 0.05)
+        if stat == "boss_damage":
+            return 1.0 + (level * 0.10)
         return 1.0 + (level * UPGRADE_PERCENTAGE)
+
+    def get_pierce_hits(self):
+        return self.pierce_level
+
+    def can_phase_barriers(self):
+        return self.barrier_phase_level > 0
+
+    def get_bullet_length_multiplier(self):
+        return self.get_multiplier("bullet_length")
+
+    def get_powerup_spawn_bonus(self):
+        # Base 5% chance plus stacking 5% bonuses
+        return self.powerup_spawn_level * 5
+
+    def get_boss_damage_multiplier(self):
+        return self.get_multiplier("boss_damage")
+
+    def get_ammo_powerup_capacity(self):
+        return 1 + self.ammo_capacity_level
+
+    def has_extra_bullet(self):
+        return self.extra_bullet_level > 0
 
 class FloatingText:
     def __init__(self, x, y, text, color=YELLOW, duration=1000):
@@ -268,17 +316,34 @@ class LevelUpScreen:
         self.font_small = pygame.font.Font(None, 48)
         self.tiny_font = pygame.font.Font(None, 36)
         
-        self.upgrade_options = [
+        self.base_upgrade_options = [
             ("shot_speed", "Shot Speed", "Increase bullet travel speed"),
             ("fire_rate", "Fire Rate", "Reduce shooting cooldown"),
             ("movement_speed", "Movement Speed", "Increase player movement speed"),
             ("powerup_duration", "Power-up Duration", "Extend power-up effects")
         ]
 
-        if self.xp_level % 5 == 0:
-            self.upgrade_options.append(
-                ("extra_life", "Extra Life", "Gain +1 life instead of a stat upgrade")
-            )
+        self.permanent_upgrade_pool = [
+            ("pierce", "Piercing Shot", "Bullets pierce through +1 enemy (stacks to 5)"),
+            ("bullet_length", "Longer Bullets", "Bullet length grows by 10% (stackable)"),
+            ("barrier_phase", "Barrier Phasing", "Bullets pass through green barriers"),
+            ("powerup_spawn", "Lucky Drops", "Power-ups spawn 5% more often (up to 5)"),
+            ("boss_damage", "Boss Breaker", "Bullets deal +10% boss damage (up to 5)"),
+            ("ammo_capacity", "Ammo Belt", "Store extra ammo power-ups (up to 5)"),
+            ("extra_bullet", "Twin Shot", "Add +1 bullet to every shot (one time)")
+        ]
+
+        self.player_options = []
+        for player in self.players:
+            options = list(self.base_upgrade_options)
+            if self.xp_level % 5 == 0:
+                options.append(("extra_life", "Extra Life", "Gain +1 life instead of a stat upgrade"))
+                permanent_choice = self.get_random_permanent_option(player)
+                if permanent_choice:
+                    options.append(permanent_choice)
+            self.player_options.append(options)
+
+        self.upgrade_options = self.player_options[0] if self.player_options else []
         
         # For co-op mode, track each player's selection
         self.player1_selection = 0
@@ -329,13 +394,16 @@ class LevelUpScreen:
                     if event.key == pygame.K_UP or event.key == pygame.K_w:
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
-                        self.current_selection = (self.current_selection - 1) % len(self.upgrade_options)
+                        options = self.get_options_for_player(0)
+                        self.current_selection = (self.current_selection - 1) % len(options)
                     elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
-                        self.current_selection = (self.current_selection + 1) % len(self.upgrade_options)
+                        options = self.get_options_for_player(0)
+                        self.current_selection = (self.current_selection + 1) % len(options)
                     elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                        stat_name = self.upgrade_options[self.current_selection][0]
+                        options = self.get_options_for_player(0)
+                        stat_name = options[self.current_selection][0]
                         if stat_name == "extra_life":
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
@@ -358,13 +426,16 @@ class LevelUpScreen:
                         if event.key == pygame.K_UP or event.key == pygame.K_w:
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player1_selection = (self.player1_selection - 1) % len(self.upgrade_options)
+                            p1_options = self.get_options_for_player(0)
+                            self.player1_selection = (self.player1_selection - 1) % len(p1_options)
                         elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player1_selection = (self.player1_selection + 1) % len(self.upgrade_options)
+                            p1_options = self.get_options_for_player(0)
+                            self.player1_selection = (self.player1_selection + 1) % len(p1_options)
                         elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                            stat_name = self.upgrade_options[self.player1_selection][0]
+                            p1_options = self.get_options_for_player(0)
+                            stat_name = p1_options[self.player1_selection][0]
                             if stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -384,13 +455,16 @@ class LevelUpScreen:
                         if event.key == pygame.K_LEFT:
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player2_selection = (self.player2_selection - 1) % len(self.upgrade_options)
+                            p2_options = self.get_options_for_player(1)
+                            self.player2_selection = (self.player2_selection - 1) % len(p2_options)
                         elif event.key == pygame.K_RIGHT:
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player2_selection = (self.player2_selection + 1) % len(self.upgrade_options)
+                            p2_options = self.get_options_for_player(1)
+                            self.player2_selection = (self.player2_selection + 1) % len(p2_options)
                         elif event.key == pygame.K_RCTRL:
-                            stat_name = self.upgrade_options[self.player2_selection][0]
+                            p2_options = self.get_options_for_player(1)
+                            stat_name = p2_options[self.player2_selection][0]
                             if stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -413,7 +487,8 @@ class LevelUpScreen:
                 if not self.is_coop:
                     # Single player controller
                     if event.button == 0:  # A button
-                        stat_name = self.upgrade_options[self.current_selection][0]
+                        options = self.get_options_for_player(0)
+                        stat_name = options[self.current_selection][0]
                         if stat_name == "extra_life":
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
@@ -434,7 +509,8 @@ class LevelUpScreen:
                     # Co-op controller handling
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
                         if event.button == 0:  # A button
-                            stat_name = self.upgrade_options[self.player1_selection][0]
+                            p1_options = self.get_options_for_player(0)
+                            stat_name = p1_options[self.player1_selection][0]
                             if stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -451,7 +527,8 @@ class LevelUpScreen:
 
                     if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
                         if event.button == 0:  # A button
-                            stat_name = self.upgrade_options[self.player2_selection][0]
+                            p2_options = self.get_options_for_player(1)
+                            stat_name = p2_options[self.player2_selection][0]
                             if stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -476,32 +553,38 @@ class LevelUpScreen:
                     if event.value[1] == 1:  # Up
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
-                        self.current_selection = (self.current_selection - 1) % len(self.upgrade_options)
+                        options = self.get_options_for_player(0)
+                        self.current_selection = (self.current_selection - 1) % len(options)
                     elif event.value[1] == -1:  # Down
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
-                        self.current_selection = (self.current_selection + 1) % len(self.upgrade_options)
+                        options = self.get_options_for_player(0)
+                        self.current_selection = (self.current_selection + 1) % len(options)
                 else:
                     # Co-op controller handling
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
                         if event.value[1] == 1:  # Up
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player1_selection = (self.player1_selection - 1) % len(self.upgrade_options)
+                            p1_options = self.get_options_for_player(0)
+                            self.player1_selection = (self.player1_selection - 1) % len(p1_options)
                         elif event.value[1] == -1:  # Down
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player1_selection = (self.player1_selection + 1) % len(self.upgrade_options)
-                    
+                            p1_options = self.get_options_for_player(0)
+                            self.player1_selection = (self.player1_selection + 1) % len(p1_options)
+
                     if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
                         if event.value[1] == 1:  # Up
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player2_selection = (self.player2_selection - 1) % len(self.upgrade_options)
+                            p2_options = self.get_options_for_player(1)
+                            self.player2_selection = (self.player2_selection - 1) % len(p2_options)
                         elif event.value[1] == -1:  # Down
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
-                            self.player2_selection = (self.player2_selection + 1) % len(self.upgrade_options)
+                            p2_options = self.get_options_for_player(1)
+                            self.player2_selection = (self.player2_selection + 1) % len(p2_options)
                             
         return None
         
@@ -542,7 +625,9 @@ class LevelUpScreen:
     def get_effect_position(self, player_index, stat_name):
         """Calculate the effect position based on player and selected option"""
         stat_index = 0
-        for i, (stat, _, _) in enumerate(self.upgrade_options):
+        options = self.get_options_for_player(player_index)
+        for i, entry in enumerate(options):
+            stat, _, _ = entry
             if stat == stat_name:
                 stat_index = i
                 break
@@ -591,19 +676,26 @@ class LevelUpScreen:
             start_y = 240
             row_height = 80
             
-            for i, (stat_name, display_name, description) in enumerate(self.upgrade_options):
+            max_rows = max((len(opts) for opts in self.player_options), default=0)
+            for i in range(max_rows):
                 y = start_y + i * row_height
+                p1_option = self.get_option_at(0, i)
+                p2_option = self.get_option_at(1, i) if len(self.players) > 1 else None
+                display_option = p1_option or p2_option
+                if not display_option:
+                    continue
+                stat_name, display_name, description = display_option
                 
                 # Row background (alternating)
                 if i % 2 == 1:
                     pygame.draw.rect(self.screen, (20, 20, 20), (250, y - 5, 1200, row_height - 10))
                 
                 # Selection arrows (outside table)
-                if i == self.player1_selection and not self.player1_confirmed:
+                if p1_option and i == self.player1_selection and not self.player1_confirmed:
                     arrow_points = [(200, y + 15), (200, y + 35), (230, y + 25)]
                     pygame.draw.polygon(self.screen, GREEN, arrow_points)
-                    
-                if i == self.player2_selection and not self.player2_confirmed:
+
+                if p2_option and i == self.player2_selection and not self.player2_confirmed:
                     arrow_points = [(1520, y + 15), (1520, y + 35), (1490, y + 25)]
                     pygame.draw.polygon(self.screen, BLUE, arrow_points)
                 
@@ -616,18 +708,19 @@ class LevelUpScreen:
                 self.screen.blit(desc_text, desc_rect)
                 
                 # Left column - Player 1 stats
-                if stat_name == "extra_life":
+                p1_stat_name = p1_option[0] if p1_option else None
+                if p1_stat_name == "extra_life":
                     p1_color = WHITE
                     if self.player1_confirmed and i == self.player1_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
                         self.screen.blit(confirm_text, (350, y + 25))
-                    else:
+                    elif p1_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
                         self.screen.blit(lives_text, (350, y + 25))
-                else:
-                    p1_can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
-                    p1_level = getattr(self.players[0].upgrades, f"{stat_name}_level")
-                    p1_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
+                elif p1_option:
+                    p1_can_upgrade = self.players[0].upgrades.can_upgrade(p1_stat_name)
+                    p1_level = getattr(self.players[0].upgrades, f"{p1_stat_name}_level")
+                    p1_multiplier = self.players[0].upgrades.get_multiplier(p1_stat_name)
                     p1_color = WHITE if p1_can_upgrade else GRAY
 
                     if self.player1_confirmed and i == self.player1_selection:
@@ -640,18 +733,19 @@ class LevelUpScreen:
                         self.screen.blit(p1_bonus_text, (350, y + 35))
 
                 # Right column - Player 2 stats
-                if stat_name == "extra_life":
+                p2_stat_name = p2_option[0] if p2_option else None
+                if p2_stat_name == "extra_life":
                     p2_color = WHITE
                     if self.player2_confirmed and i == self.player2_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
                         self.screen.blit(confirm_text, (1250, y + 25))
-                    else:
+                    elif p2_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
                         self.screen.blit(lives_text, (1250, y + 25))
-                else:
-                    p2_can_upgrade = self.players[1].upgrades.can_upgrade(stat_name)
-                    p2_level = getattr(self.players[1].upgrades, f"{stat_name}_level")
-                    p2_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
+                elif p2_option:
+                    p2_can_upgrade = self.players[1].upgrades.can_upgrade(p2_stat_name)
+                    p2_level = getattr(self.players[1].upgrades, f"{p2_stat_name}_level")
+                    p2_multiplier = self.players[1].upgrades.get_multiplier(p2_stat_name)
                     p2_color = WHITE if p2_can_upgrade else GRAY
 
                     if self.player2_confirmed and i == self.player2_selection:
@@ -686,7 +780,8 @@ class LevelUpScreen:
             start_y = 240
             row_height = 80
             
-            for i, (stat_name, display_name, description) in enumerate(self.upgrade_options):
+            options = self.get_options_for_player(0)
+            for i, (stat_name, display_name, description) in enumerate(options):
                 y = start_y + i * row_height
                 
                 if i % 2 == 1:
@@ -1444,6 +1539,30 @@ class NameInputScreen:
             controller = pygame.joystick.Joystick(i)
             controller.init()
             self.controllers.append(controller)
+
+    def get_available_permanent_options(self, player):
+        available = []
+        for stat_name, display_name, description in self.permanent_upgrade_pool:
+            if player.upgrades.can_upgrade(stat_name):
+                available.append((stat_name, display_name, description))
+        return available
+
+    def get_random_permanent_option(self, player):
+        options = self.get_available_permanent_options(player)
+        if not options:
+            return None
+        return random.choice(options)
+
+    def get_options_for_player(self, player_index):
+        if 0 <= player_index < len(self.player_options):
+            return self.player_options[player_index]
+        return self.upgrade_options
+
+    def get_option_at(self, player_index, row_index):
+        options = self.get_options_for_player(player_index)
+        if 0 <= row_index < len(options):
+            return options[row_index]
+        return None
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -1704,6 +1823,8 @@ class Player:
         self.has_laser = False
         self.has_multi_shot = False
         self.multi_shot_ammo = 0
+        self.active_ammo_powerup = None
+        self.ammo_powerup_queue = []
         self.afterimage_positions = []
         self.last_afterimage_time = 0
         self.player_id = player_id
@@ -1723,6 +1844,46 @@ class Player:
         """Show level up indicator at player"""
         self.level_up_indicator = True
         self.level_up_indicator_time = pygame.time.get_ticks()
+
+    def clear_ammo_power_ups(self):
+        self.rapid_fire = False
+        self.rapid_fire_ammo = 0
+        self.has_multi_shot = False
+        self.multi_shot_ammo = 0
+        self.active_ammo_powerup = None
+        self.ammo_powerup_queue = []
+
+    def set_active_ammo_powerup(self, power_type, ammo_count):
+        self.rapid_fire = False
+        self.has_multi_shot = False
+        self.active_ammo_powerup = {'type': power_type, 'ammo': ammo_count}
+
+        if power_type == 'rapid_fire':
+            self.rapid_fire = True
+            self.rapid_fire_ammo = ammo_count
+        elif power_type == 'multi_shot':
+            self.has_multi_shot = True
+            self.multi_shot_ammo = ammo_count
+
+    def add_ammo_power_up(self, power_type, ammo_count):
+        capacity = self.upgrades.get_ammo_powerup_capacity()
+        if capacity <= 1:
+            self.clear_ammo_power_ups()
+            self.set_active_ammo_powerup(power_type, ammo_count)
+            return
+
+        if not self.active_ammo_powerup:
+            self.set_active_ammo_powerup(power_type, ammo_count)
+            return
+
+        total_slots = 1 + len(self.ammo_powerup_queue)
+        new_power = {'type': power_type, 'ammo': ammo_count}
+
+        if total_slots >= capacity:
+            if self.ammo_powerup_queue:
+                self.ammo_powerup_queue[-1] = new_power
+        else:
+            self.ammo_powerup_queue.append(new_power)
         
     def get_speed(self):
         """Get current movement speed with upgrades"""
@@ -1811,11 +1972,23 @@ class Player:
     def shoot(self, sound_manager=None):
         if not self.can_shoot():
             return []
-            
+
         self.last_shot_time = pygame.time.get_ticks()
         bullets = []
         bullet_speed = -self.get_bullet_speed()
-        
+        pierce_hits = self.upgrades.get_pierce_hits()
+        length_multiplier = self.upgrades.get_bullet_length_multiplier()
+        can_phase_barriers = self.upgrades.can_phase_barriers()
+        boss_damage_multiplier = self.upgrades.get_boss_damage_multiplier()
+        bullet_kwargs = {
+            'owner_id': self.player_id,
+            'pierce_hits': pierce_hits,
+            'length_multiplier': length_multiplier,
+            'can_phase_barriers': can_phase_barriers,
+            'boss_damage_multiplier': boss_damage_multiplier
+        }
+        base_x = self.x + self.width // 2
+
         if self.has_laser:
             # Pass the duration multiplier to the laser
             laser = LaserBeam(self.x + self.width // 2, self.player_id, self.get_powerup_duration_multiplier())
@@ -1825,10 +1998,11 @@ class Player:
             if sound_manager:
                 sound_manager.play_sound('laser')
         elif self.has_multi_shot and self.multi_shot_ammo > 0:
-            center_bullet = Bullet(self.x + self.width // 2, self.y, bullet_speed)
-            left_bullet = Bullet(self.x + self.width // 2 - 25, self.y, bullet_speed)
-            right_bullet = Bullet(self.x + self.width // 2 + 25, self.y, bullet_speed)
-            bullets.extend([('bullet', center_bullet), ('bullet', left_bullet), ('bullet', right_bullet)])
+            offsets = [-25, 0, 25]
+            if self.upgrades.has_extra_bullet():
+                offsets = [-25, -8, 8, 25]
+            for offset in offsets:
+                bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
             self.multi_shot_ammo -= 1
             if self.multi_shot_ammo <= 0:
                 self.has_multi_shot = False
@@ -1836,8 +2010,11 @@ class Player:
             if sound_manager:
                 sound_manager.play_shoot_sound(volume_override=0.4)
         elif self.rapid_fire and self.rapid_fire_ammo > 0:
-            bullet = Bullet(self.x + self.width // 2, self.y, bullet_speed)
-            bullets.append(('bullet', bullet))
+            offsets = [0]
+            if self.upgrades.has_extra_bullet():
+                offsets = [-12, 12]
+            for offset in offsets:
+                bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
             self.rapid_fire_ammo -= 1
             if self.rapid_fire_ammo <= 0:
                 self.rapid_fire = False
@@ -1845,8 +2022,11 @@ class Player:
             if sound_manager:
                 sound_manager.play_shoot_sound(volume_override=0.6)
         else:
-            bullet = Bullet(self.x + self.width // 2, self.y, bullet_speed)
-            bullets.append(('bullet', bullet))
+            offsets = [0]
+            if self.upgrades.has_extra_bullet():
+                offsets = [-12, 12]
+            for offset in offsets:
+                bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
             # Play shoot sound for normal shot
             if sound_manager:
                 sound_manager.play_sound('shoot', force_play=True)  # Always play normal shots
@@ -1870,13 +2050,20 @@ class Player:
             
         if self.multi_shot_ammo <= 0:
             self.has_multi_shot = False
+
+        if self.active_ammo_powerup:
+            if self.active_ammo_powerup['type'] == 'rapid_fire' and self.rapid_fire_ammo <= 0:
+                self.active_ammo_powerup = None
+            elif self.active_ammo_powerup['type'] == 'multi_shot' and self.multi_shot_ammo <= 0:
+                self.active_ammo_powerup = None
+
+        if not self.active_ammo_powerup and self.ammo_powerup_queue:
+            next_power = self.ammo_powerup_queue.pop(0)
+            self.set_active_ammo_powerup(next_power['type'], next_power['ammo'])
             
     def clear_all_power_ups(self):
-        self.rapid_fire = False
-        self.rapid_fire_ammo = 0
+        self.clear_ammo_power_ups()
         self.has_laser = False
-        self.has_multi_shot = False
-        self.multi_shot_ammo = 0
         
     def activate_invincibility(self):
         self.invincible = True
@@ -1884,11 +2071,10 @@ class Player:
         self.invincible_end_time = pygame.time.get_ticks() + duration
         
     def activate_rapid_fire(self):
-        self.clear_all_power_ups()
-        self.rapid_fire = True
         # Apply powerup duration multiplier to ammo count
         base_ammo = 200
-        self.rapid_fire_ammo = int(base_ammo * self.get_powerup_duration_multiplier())
+        ammo_count = int(base_ammo * self.get_powerup_duration_multiplier())
+        self.add_ammo_power_up('rapid_fire', ammo_count)
         
     def activate_laser(self):
         self.clear_all_power_ups()
@@ -1896,11 +2082,10 @@ class Player:
         # Note: Laser duration is handled in LaserBeam class, we need to pass the multiplier
         
     def activate_multi_shot(self):
-        self.clear_all_power_ups()
-        self.has_multi_shot = True
         # Apply powerup duration multiplier to ammo count
         base_ammo = 100
-        self.multi_shot_ammo = int(base_ammo * self.get_powerup_duration_multiplier())
+        ammo_count = int(base_ammo * self.get_powerup_duration_multiplier())
+        self.add_ammo_power_up('multi_shot', ammo_count)
         
     def handle_controller_input(self):
         if not self.is_alive:
@@ -2495,14 +2680,19 @@ class EnemyExplosion:
                                              int(particle['y'] - particle['size'])))
 
 class Bullet:
-    def __init__(self, x, y, speed):
+    def __init__(self, x, y, speed, owner_id=None, pierce_hits=0, length_multiplier=1.0,
+                 can_phase_barriers=False, boss_damage_multiplier=1.0):
         self.x = x
         self.y = y
         self.width = 5
-        self.height = 15
+        self.height = int(15 * length_multiplier)
         self.speed = speed
         self.rect = pygame.Rect(x, y, self.width, self.height)
-        
+        self.owner_id = owner_id
+        self.pierce_hits = pierce_hits
+        self.can_phase_barriers = can_phase_barriers
+        self.boss_damage_multiplier = boss_damage_multiplier
+
     def move(self):
         self.y += self.speed
         self.rect.y = self.y
@@ -2963,8 +3153,10 @@ class Game:
         
         return leveled_up
             
-    def spawn_power_up(self):
-        if random.randint(1, 100) <= 5:
+    def spawn_power_up(self, player=None):
+        bonus_chance = player.upgrades.get_powerup_spawn_bonus() if player else 0
+        drop_chance = 5 + bonus_chance
+        if random.randint(1, 100) <= drop_chance:
             power_types = ['rapid_fire', 'invincibility', 'laser', 'multi_shot']
             power_type = random.choice(power_types)
             x = random.randint(100, SCREEN_WIDTH - 100)
@@ -3317,6 +3509,7 @@ class Game:
     def check_collisions(self):
         # Player bullets vs enemies
         for bullet in self.player_bullets[:]:
+            owner = next((p for p in self.players if p.player_id == bullet.owner_id), None)
             if self.is_boss_level and self.current_boss and not self.current_boss.destruction_complete:
                 # Check turret collisions first
                 turret_rects = self.current_boss.get_turret_rects()
@@ -3324,9 +3517,11 @@ class Game:
                 
                 for turret_rect, turret_index in turret_rects:
                     if turret_rect and bullet.rect.colliderect(turret_rect):
-                        self.player_bullets.remove(bullet)
+                        damage = max(1, int(math.ceil(bullet.boss_damage_multiplier)))
+                        if bullet.pierce_hits <= 0:
+                            self.player_bullets.remove(bullet)
                         self.sound_manager.play_sound('ufo_hit', volume_override=0.6)
-                        if self.current_boss.take_turret_damage(turret_index):
+                        if self.current_boss.take_turret_damage(turret_index, damage):
                             # Turret destroyed
                             self.score += 100
                             self.add_xp(20, turret_rect.centerx, turret_rect.centery)
@@ -3334,16 +3529,20 @@ class Game:
                         else:
                             self.score += 5
                             self.add_xp(2, turret_rect.centerx, turret_rect.centery)
+                        if bullet.pierce_hits > 0:
+                            bullet.pierce_hits -= 1
                         hit_turret = True
                         break
-                
+
                 # Check main body collision if no turret hit
                 if not hit_turret:
                     main_body_rect = self.current_boss.get_main_body_rect()
                     if main_body_rect and bullet.rect.colliderect(main_body_rect):
-                        self.player_bullets.remove(bullet)
+                        damage = max(1, int(math.ceil(bullet.boss_damage_multiplier)))
+                        if bullet.pierce_hits <= 0:
+                            self.player_bullets.remove(bullet)
                         self.sound_manager.play_sound('ufo_hit', volume_override=0.8)
-                        if self.current_boss.take_main_damage():
+                        if self.current_boss.take_main_damage(damage):
                             # Boss completely destroyed - EPIC EXPLOSION SEQUENCE
                             self.score += 1000
                             self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
@@ -3379,11 +3578,13 @@ class Game:
                         else:
                             self.score += 10
                             self.add_xp(5, main_body_rect.centerx, main_body_rect.centery)
+                        if bullet.pierce_hits > 0:
+                            bullet.pierce_hits -= 1
             else:
                 for enemy in self.enemies[:]:
                     if bullet.rect.colliderect(enemy.rect):
-                        self.player_bullets.remove(bullet)
-
+                        if bullet.pierce_hits <= 0:
+                            self.player_bullets.remove(bullet)
                         # PLAY SMALL EXPLOSION SOUND
                         self.sound_manager.play_sound('explosion_small', volume_override=0.4)
 
@@ -3396,11 +3597,14 @@ class Game:
                         self.total_enemies_killed += 1
                         self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
                         self.update_enemy_speed()
-                        self.spawn_power_up()
+                        self.spawn_power_up(owner)
+                        if bullet.pierce_hits > 0:
+                            bullet.pierce_hits -= 1
                         break
                         
         # Laser vs enemies
         for laser in self.laser_beams:
+            owner = next((p for p in self.players if p.player_id == laser.owner_player_id), None)
             if laser.is_active():
                 if self.is_boss_level and self.current_boss and not self.current_boss.destruction_complete:
                     # Laser vs turrets
@@ -3442,14 +3646,14 @@ class Game:
                             self.score += 10
                             self.total_enemies_killed += 1
                             self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
-                            self.spawn_power_up()
+                            self.spawn_power_up(owner)
                             
         self.update_enemy_speed()
                         
         # Player bullets vs barriers
         for bullet in self.player_bullets[:]:
             for barrier in self.barriers:
-                if barrier.check_collision(bullet.rect):
+                if barrier.check_collision(bullet.rect) and not getattr(bullet, 'can_phase_barriers', False):
                     self.player_bullets.remove(bullet)
                     break
                     
