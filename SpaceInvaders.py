@@ -362,13 +362,37 @@ class LevelUpScreen:
         
         # Visual feedback for upgrades
         self.upgrade_effects = []  # Store floating upgrade indicators
-        
+
         # Controllers
         self.controllers = []
         for i in range(pygame.joystick.get_count()):
             controller = pygame.joystick.Joystick(i)
             controller.init()
-            self.controllers.append(controller)  
+            self.controllers.append(controller)
+
+    def get_available_permanent_options(self, player):
+        available = []
+        for stat_name, display_name, description in self.permanent_upgrade_pool:
+            if player.upgrades.can_upgrade(stat_name):
+                available.append((stat_name, display_name, description))
+        return available
+
+    def get_random_permanent_option(self, player):
+        options = self.get_available_permanent_options(player)
+        if not options:
+            return None
+        return random.choice(options)
+
+    def get_options_for_player(self, player_index):
+        if 0 <= player_index < len(self.player_options):
+            return self.player_options[player_index]
+        return self.upgrade_options
+
+    def get_option_at(self, player_index, row_index):
+        options = self.get_options_for_player(player_index)
+        if 0 <= row_index < len(options):
+            return options[row_index]
+        return None
           
     def handle_events(self):
         # FIXED: During input delay, consume ALL events to prevent buffering
@@ -1540,30 +1564,6 @@ class NameInputScreen:
             controller.init()
             self.controllers.append(controller)
 
-    def get_available_permanent_options(self, player):
-        available = []
-        for stat_name, display_name, description in self.permanent_upgrade_pool:
-            if player.upgrades.can_upgrade(stat_name):
-                available.append((stat_name, display_name, description))
-        return available
-
-    def get_random_permanent_option(self, player):
-        options = self.get_available_permanent_options(player)
-        if not options:
-            return None
-        return random.choice(options)
-
-    def get_options_for_player(self, player_index):
-        if 0 <= player_index < len(self.player_options):
-            return self.player_options[player_index]
-        return self.upgrade_options
-
-    def get_option_at(self, player_index, row_index):
-        options = self.get_options_for_player(player_index)
-        if 0 <= row_index < len(options):
-            return options[row_index]
-        return None
-    
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
