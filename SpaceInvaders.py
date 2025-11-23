@@ -733,6 +733,11 @@ class LevelUpScreen:
                 
                 # Left column - Player 1 stats
                 p1_stat_name = p1_option[0] if p1_option else None
+                p1_display_name = p1_option[1] if p1_option else ""
+                if p1_display_name:
+                    name_surface = self.tiny_font.render(p1_display_name, True, WHITE)
+                    self.screen.blit(name_surface, (350, y))
+
                 if p1_stat_name == "extra_life":
                     p1_color = WHITE
                     if self.player1_confirmed and i == self.player1_selection:
@@ -758,6 +763,14 @@ class LevelUpScreen:
 
                 # Right column - Player 2 stats
                 p2_stat_name = p2_option[0] if p2_option else None
+                p2_display_name = p2_option[1] if p2_option else ""
+                if p2_display_name:
+                    name_surface = self.tiny_font.render(p2_display_name, True, WHITE)
+                    name_rect = name_surface.get_rect()
+                    name_rect.right = 1400
+                    name_rect.y = y
+                    self.screen.blit(name_surface, name_rect)
+
                 if p2_stat_name == "extra_life":
                     p2_color = WHITE
                     if self.player2_confirmed and i == self.player2_selection:
@@ -2951,14 +2964,6 @@ class TitleScreen:
             info_text = self.font_small.render(info, True, color)
             self.screen.blit(info_text, (50, 850 + i * 35))
 
-        # Subtle debug hint for testers
-        debug_hint = self.font_small.render(
-            f"Debug code progress: {self.debug_index}/{len(self.debug_sequence)}",
-            True,
-            GRAY,
-        )
-        self.screen.blit(debug_hint, (SCREEN_WIDTH - 420, 980))
-
         pygame.display.flip()
 
 class DebugMenu:
@@ -2969,6 +2974,7 @@ class DebugMenu:
         self.font_medium = pygame.font.Font(None, 64)
         self.font_small = pygame.font.Font(None, 40)
         self.selected_index = 0
+        self.scroll_offset = 0
 
         self.upgrade_limits = {
             'shot_speed_level': 20,
@@ -3073,6 +3079,12 @@ class DebugMenu:
         new_pos = (current_pos + direction) % len(selectable_indices)
         self.selected_index = selectable_indices[new_pos]
 
+        visible_count = max(1, (SCREEN_HEIGHT - 160 - 220) // 40)
+        if self.selected_index < self.scroll_offset:
+            self.scroll_offset = self.selected_index
+        elif self.selected_index >= self.scroll_offset + visible_count:
+            self.scroll_offset = self.selected_index - visible_count + 1
+
     def _format_value(self, item):
         if item['type'] == 'bool':
             return 'ON' if self._get_value(item['path']) else 'OFF'
@@ -3142,8 +3154,13 @@ class DebugMenu:
 
         start_y = 160
         line_height = 40
-        for idx, item in enumerate(self.menu_items):
-            y_pos = start_y + idx * line_height
+        visible_count = max(1, (SCREEN_HEIGHT - start_y - 220) // line_height)
+        start_index = self.scroll_offset
+        end_index = min(len(self.menu_items), start_index + visible_count)
+
+        for draw_idx, idx in enumerate(range(start_index, end_index)):
+            item = self.menu_items[idx]
+            y_pos = start_y + draw_idx * line_height
             if item['type'] == 'label':
                 label_text = self.font_medium.render(item['label'], True, ORANGE)
                 self.screen.blit(label_text, (80, y_pos))
