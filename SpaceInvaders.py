@@ -687,20 +687,36 @@ class LevelUpScreen:
             
         if self.is_coop:
             # Table layout for co-op
+            table_center = SCREEN_WIDTH // 2
+            left_col_x = table_center - 420
+            right_col_x = table_center + 420
+            header_y = 170
+            table_top = header_y + 50
+            row_height = 80
+
             # Headers
             p1_header = self.font_medium.render("PLAYER 1", True, GREEN)
             desc_header = self.font_medium.render("UPGRADE", True, WHITE)
             p2_header = self.font_medium.render("PLAYER 2", True, BLUE)
-            
-            self.screen.blit(p1_header, (350, 180))
-            self.screen.blit(desc_header, (SCREEN_WIDTH // 2 - 50, 180))
-            self.screen.blit(p2_header, (1250, 180))
-            
+
+            self.screen.blit(p1_header, p1_header.get_rect(center=(left_col_x, header_y)))
+            self.screen.blit(desc_header, desc_header.get_rect(center=(table_center, header_y)))
+            self.screen.blit(p2_header, p2_header.get_rect(center=(right_col_x, header_y)))
+
             # Table rows
-            start_y = 240
-            row_height = 80
-            
+            start_y = table_top
+
             max_rows = max((len(opts) for opts in self.player_options), default=0)
+            table_height = max_rows * row_height
+
+            # Background panel behind the table for readability
+            panel_margin_x = 220
+            panel_width = SCREEN_WIDTH - (panel_margin_x * 2)
+            panel_height = table_height + 40
+            panel_rect = pygame.Rect(panel_margin_x, start_y - 20, panel_width, panel_height)
+            pygame.draw.rect(self.screen, (10, 10, 10), panel_rect, border_radius=12)
+            pygame.draw.rect(self.screen, (40, 40, 40), panel_rect, 2, border_radius=12)
+
             for i in range(max_rows):
                 y = start_y + i * row_height
                 p1_option = self.get_option_at(0, i)
@@ -709,38 +725,43 @@ class LevelUpScreen:
                 if not display_option:
                     continue
                 stat_name, display_name, description = display_option
-                
+
                 # Row background (alternating)
                 if i % 2 == 1:
-                    pygame.draw.rect(self.screen, (20, 20, 20), (250, y - 5, 1200, row_height - 10))
-                
+                    pygame.draw.rect(self.screen, (20, 20, 20), (panel_margin_x + 10, y - 5, panel_width - 20, row_height - 10), border_radius=6)
+
                 # Selection arrows (outside table)
                 if p1_option and i == self.player1_selection and not self.player1_confirmed:
-                    arrow_points = [(200, y + 15), (200, y + 35), (230, y + 25)]
+                    arrow_points = [(panel_margin_x - 25, y + 15), (panel_margin_x - 25, y + 35), (panel_margin_x + 5, y + 25)]
                     pygame.draw.polygon(self.screen, GREEN, arrow_points)
 
                 if p2_option and i == self.player2_selection and not self.player2_confirmed:
-                    arrow_points = [(1520, y + 15), (1520, y + 35), (1490, y + 25)]
+                    arrow_points = [(panel_margin_x + panel_width + 25, y + 15), (panel_margin_x + panel_width + 25, y + 35), (panel_margin_x + panel_width - 5, y + 25)]
                     pygame.draw.polygon(self.screen, BLUE, arrow_points)
-                
+
                 # Middle column - Upgrade description
                 name_text = self.tiny_font.render(display_name, True, WHITE)
                 desc_text = self.tiny_font.render(description, True, GRAY)
-                name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, y + 15))
-                desc_rect = desc_text.get_rect(center=(SCREEN_WIDTH // 2, y + 35))
+                name_rect = name_text.get_rect(center=(table_center, y + 15))
+                desc_rect = desc_text.get_rect(center=(table_center, y + 35))
                 self.screen.blit(name_text, name_rect)
                 self.screen.blit(desc_text, desc_rect)
-                
+
                 # Left column - Player 1 stats
                 p1_stat_name = p1_option[0] if p1_option else None
+                p1_display_name = p1_option[1] if p1_option else ""
+                if p1_display_name:
+                    name_surface = self.tiny_font.render(p1_display_name, True, WHITE)
+                    self.screen.blit(name_surface, name_surface.get_rect(topleft=(left_col_x - 70, y)))
+
                 if p1_stat_name == "extra_life":
                     p1_color = WHITE
                     if self.player1_confirmed and i == self.player1_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
-                        self.screen.blit(confirm_text, (350, y + 25))
+                        self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                     elif p1_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
-                        self.screen.blit(lives_text, (350, y + 25))
+                        self.screen.blit(lives_text, lives_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                 elif p1_option:
                     p1_can_upgrade = self.players[0].upgrades.can_upgrade(p1_stat_name)
                     p1_level = getattr(self.players[0].upgrades, f"{p1_stat_name}_level")
@@ -749,23 +770,33 @@ class LevelUpScreen:
 
                     if self.player1_confirmed and i == self.player1_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
-                        self.screen.blit(confirm_text, (350, y + 25))
+                        self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                     else:
                         p1_level_text = self.tiny_font.render(f"Lv {p1_level}", True, p1_color)
                         p1_bonus_text = self.tiny_font.render(f"+{int((p1_multiplier - 1) * 100)}%", True, YELLOW if p1_can_upgrade else GRAY)
-                        self.screen.blit(p1_level_text, (350, y + 15))
-                        self.screen.blit(p1_bonus_text, (350, y + 35))
+                        self.screen.blit(p1_level_text, p1_level_text.get_rect(topleft=(left_col_x - 70, y + 15)))
+                        self.screen.blit(p1_bonus_text, p1_bonus_text.get_rect(topleft=(left_col_x - 70, y + 35)))
 
                 # Right column - Player 2 stats
                 p2_stat_name = p2_option[0] if p2_option else None
+                p2_display_name = p2_option[1] if p2_option else ""
+                if p2_display_name:
+                    name_surface = self.tiny_font.render(p2_display_name, True, WHITE)
+                    name_rect = name_surface.get_rect()
+                    name_rect.right = right_col_x + 70
+                    name_rect.y = y
+                    self.screen.blit(name_surface, name_rect)
+
                 if p2_stat_name == "extra_life":
                     p2_color = WHITE
                     if self.player2_confirmed and i == self.player2_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
-                        self.screen.blit(confirm_text, (1250, y + 25))
+                        confirm_rect = confirm_text.get_rect()
+                        confirm_rect.topleft = (right_col_x - 70, y + 25)
+                        self.screen.blit(confirm_text, confirm_rect)
                     elif p2_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
-                        self.screen.blit(lives_text, (1250, y + 25))
+                        self.screen.blit(lives_text, lives_text.get_rect(topleft=(right_col_x - 70, y + 25)))
                 elif p2_option:
                     p2_can_upgrade = self.players[1].upgrades.can_upgrade(p2_stat_name)
                     p2_level = getattr(self.players[1].upgrades, f"{p2_stat_name}_level")
@@ -774,78 +805,89 @@ class LevelUpScreen:
 
                     if self.player2_confirmed and i == self.player2_selection:
                         confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
-                        self.screen.blit(confirm_text, (1250, y + 25))
+                        confirm_rect = confirm_text.get_rect()
+                        confirm_rect.topleft = (right_col_x - 70, y + 25)
+                        self.screen.blit(confirm_text, confirm_rect)
                     else:
                         p2_level_text = self.tiny_font.render(f"Lv {p2_level}", True, p2_color)
                         p2_bonus_text = self.tiny_font.render(f"+{int((p2_multiplier - 1) * 100)}%", True, YELLOW if p2_can_upgrade else GRAY)
-                        self.screen.blit(p2_level_text, (1250, y + 15))
-                        self.screen.blit(p2_bonus_text, (1250, y + 35))
-            
+                        self.screen.blit(p2_level_text, p2_level_text.get_rect(topleft=(right_col_x - 70, y + 15)))
+                        self.screen.blit(p2_bonus_text, p2_bonus_text.get_rect(topleft=(right_col_x - 70, y + 35)))
+
             # FIXED: Only show ONE countdown or instruction section
+            instructions_y = min(SCREEN_HEIGHT - 60, start_y + table_height + 60)
             if self.countdown_start is not None:
                 # Countdown when both players ready
                 elapsed = pygame.time.get_ticks() - self.countdown_start
                 remaining = max(0, (self.countdown_duration - elapsed) / 1000.0)
                 countdown_text = self.font_large.render(f"Next level in {remaining:.1f}s", True, GOLD)
-                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                 self.screen.blit(countdown_text, countdown_rect)
             else:
                 # Instructions (only show when NOT counting down)
                 if not self.player1_confirmed or not self.player2_confirmed:
                     inst_text = self.tiny_font.render("P1: WASD + Enter  |  P2: Arrows + Right Ctrl  |  Controllers: D-pad + A", True, GRAY)
-                    inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                    inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                     self.screen.blit(inst_text, inst_rect)
         
         else:
             # Single player layout
             desc_header = self.font_medium.render("UPGRADES", True, WHITE)
-            self.screen.blit(desc_header, (SCREEN_WIDTH // 2 - 50, 180))
-            
-            start_y = 240
+            self.screen.blit(desc_header, desc_header.get_rect(center=(SCREEN_WIDTH // 2, 170)))
+
+            start_y = 230
             row_height = 80
-            
+
             options = self.get_options_for_player(0)
+            panel_margin_x = 300
+            panel_width = SCREEN_WIDTH - (panel_margin_x * 2)
+            panel_height = len(options) * row_height + 40
+            panel_rect = pygame.Rect(panel_margin_x, start_y - 20, panel_width, panel_height)
+            pygame.draw.rect(self.screen, (10, 10, 10), panel_rect, border_radius=12)
+            pygame.draw.rect(self.screen, (40, 40, 40), panel_rect, 2, border_radius=12)
+
             for i, (stat_name, display_name, description) in enumerate(options):
                 y = start_y + i * row_height
-                
+
                 if i % 2 == 1:
-                    pygame.draw.rect(self.screen, (20, 20, 20), (300, y - 5, 800, row_height - 10))
-                
+                    pygame.draw.rect(self.screen, (20, 20, 20), (panel_margin_x + 10, y - 5, panel_width - 20, row_height - 10), border_radius=6)
+
                 # Selection arrow
                 if i == self.current_selection:
-                    arrow_points = [(250, y + 15), (250, y + 35), (280, y + 25)]
+                    arrow_points = [(panel_margin_x - 30, y + 15), (panel_margin_x - 30, y + 35), (panel_margin_x, y + 25)]
                     pygame.draw.polygon(self.screen, GREEN, arrow_points)
-                
+
                 # Upgrade info
                 name_text = self.tiny_font.render(display_name, True, WHITE)
                 desc_text = self.tiny_font.render(description, True, GRAY)
-                self.screen.blit(name_text, (350, y + 10))
-                self.screen.blit(desc_text, (350, y + 30))
-                
+                self.screen.blit(name_text, name_text.get_rect(topleft=(panel_margin_x + 40, y + 10)))
+                self.screen.blit(desc_text, desc_text.get_rect(topleft=(panel_margin_x + 40, y + 30)))
+
                 # Stats
                 if stat_name == "extra_life":
                     lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
-                    self.screen.blit(lives_text, (350, y + 50))
+                    self.screen.blit(lives_text, lives_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
                 else:
                     can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
                     level = getattr(self.players[0].upgrades, f"{stat_name}_level")
                     multiplier = self.players[0].upgrades.get_multiplier(stat_name)
 
                     level_text = self.tiny_font.render(f"Level {level} (+{int((multiplier - 1) * 100)}%)", True, WHITE if can_upgrade else GRAY)
-                    self.screen.blit(level_text, (350, y + 50))
-            
+                    self.screen.blit(level_text, level_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
+
             # FIXED: Only show ONE countdown or instruction section for single player
+            instructions_y = min(SCREEN_HEIGHT - 60, start_y + len(options) * row_height + 60)
             if self.countdown_start is not None:
                 # Countdown for single player after upgrade
                 elapsed = pygame.time.get_ticks() - self.countdown_start
                 remaining = max(0, (self.countdown_duration - elapsed) / 1000.0)
                 countdown_text = self.font_large.render(f"Continuing in {remaining:.1f}s", True, GOLD)
-                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                countdown_rect = countdown_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                 self.screen.blit(countdown_text, countdown_rect)
             else:
                 # Instructions (only show when NOT counting down)
                 inst_text = self.tiny_font.render("WASD/Arrows: Navigate  |  Enter/Space: Select  |  Controller: D-pad + A", True, GRAY)
-                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, instructions_y))
                 self.screen.blit(inst_text, inst_rect)
         
         # Draw floating upgrade effects
@@ -2817,6 +2859,10 @@ class TitleScreen:
         self.options = ["Single Player", "Co-op", "High Scores", "Quit"]
         self.controllers = []
         self.scan_controllers()
+
+        # Debug code detection (up, down, left, right, right, left, down, up)
+        self.debug_sequence = ["up", "down", "left", "right", "right", "left", "down", "up"]
+        self.debug_index = 0
         
     def scan_controllers(self):
         self.controllers = []
@@ -2824,6 +2870,17 @@ class TitleScreen:
             controller = pygame.joystick.Joystick(i)
             controller.init()
             self.controllers.append(controller)
+
+    def _register_debug_input(self, direction):
+        expected = self.debug_sequence[self.debug_index]
+        if direction == expected:
+            self.debug_index += 1
+            if self.debug_index == len(self.debug_sequence):
+                self.debug_index = 0
+                return True
+        else:
+            self.debug_index = 1 if direction == self.debug_sequence[0] else 0
+        return False
             
     def handle_events(self):
         for event in pygame.event.get():
@@ -2831,9 +2888,13 @@ class TitleScreen:
                 return "quit"
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
+                    if self._register_debug_input("up"):
+                        return "debug_menu"
                     self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option - 1) % len(self.options)
                 elif event.key == pygame.K_DOWN:
+                    if self._register_debug_input("down"):
+                        return "debug_menu"
                     self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option + 1) % len(self.options)
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
@@ -2846,6 +2907,12 @@ class TitleScreen:
                         return "highscores"
                     elif self.selected_option == 3:
                         return "quit"
+                elif event.key == pygame.K_LEFT:
+                    if self._register_debug_input("left"):
+                        return "debug_menu"
+                elif event.key == pygame.K_RIGHT:
+                    if self._register_debug_input("right"):
+                        return "debug_menu"
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.button == 0:
                     self.sound_manager.play_sound('menu_select')
@@ -2859,11 +2926,21 @@ class TitleScreen:
                         return "quit"
             elif event.type == pygame.JOYHATMOTION:
                 if event.value[1] == 1:
+                    if self._register_debug_input("up"):
+                        return "debug_menu"
                     self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option - 1) % len(self.options)
                 elif event.value[1] == -1:
+                    if self._register_debug_input("down"):
+                        return "debug_menu"
                     self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option + 1) % len(self.options)
+                elif event.value[0] == -1:
+                    if self._register_debug_input("left"):
+                        return "debug_menu"
+                elif event.value[0] == 1:
+                    if self._register_debug_input("right"):
+                        return "debug_menu"
                     
         return None
         
@@ -2915,8 +2992,238 @@ class TitleScreen:
             color = WHITE if i == 0 else CYAN
             info_text = self.font_small.render(info, True, color)
             self.screen.blit(info_text, (50, 850 + i * 35))
-        
+
         pygame.display.flip()
+
+class DebugMenu:
+    def __init__(self, screen, sound_manager):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.font_large = pygame.font.Font(None, 96)
+        self.font_medium = pygame.font.Font(None, 64)
+        self.font_small = pygame.font.Font(None, 40)
+        self.selected_index = 0
+        self.scroll_offset = 0
+
+        self.upgrade_limits = {
+            'shot_speed_level': 20,
+            'fire_rate_level': 20,
+            'movement_speed_level': 20,
+            'powerup_duration_level': 20,
+            'pierce_level': 5,
+            'bullet_length_level': 50,
+            'barrier_phase_level': 1,
+            'powerup_spawn_level': 5,
+            'boss_damage_level': 5,
+            'ammo_capacity_level': 5,
+            'extra_bullet_level': 1,
+        }
+
+        self.config = {
+            'mode': 'single',
+            'start_level': 1,
+            'start_score': 0,
+            'xp_level': 1,
+            'xp_current': 0,
+            'players': [self._default_player_config(), self._default_player_config(player_id=2)],
+        }
+
+        self.menu_items = []
+        self._build_menu_items()
+        self._move_selection(0)  # Ensure first selectable item is highlighted
+
+    def _default_player_config(self, player_id=1):
+        upgrades = {key: 0 for key in self.upgrade_limits.keys()}
+        return {
+            'player_id': player_id,
+            'lives': 3,
+            'invincible': False,
+            'rapid_fire_ammo': 0,
+            'multi_shot_ammo': 0,
+            'laser': False,
+            'upgrades': upgrades,
+        }
+
+    def _build_menu_items(self):
+        self.menu_items = [
+            {'type': 'label', 'label': 'Debug Mode'},
+            {'type': 'choice', 'label': 'Mode', 'choices': ['single', 'coop'], 'path': ('mode',)},
+            {'type': 'int', 'label': 'Start Level', 'path': ('start_level',), 'min': 1, 'max': 99, 'step': 1},
+            {'type': 'int', 'label': 'Start Score', 'path': ('start_score',), 'min': 0, 'max': 9999999, 'step': 250},
+            {'type': 'int', 'label': 'XP Level', 'path': ('xp_level',), 'min': 1, 'max': 99, 'step': 1},
+            {'type': 'int', 'label': 'XP Current', 'path': ('xp_current',), 'min': 0, 'max': 50000, 'step': 250},
+        ]
+
+        for idx in range(2):
+            player_label = f"Player {idx + 1} Overrides"
+            self.menu_items.append({'type': 'label', 'label': player_label})
+            self.menu_items.extend([
+                {'type': 'int', 'label': f'P{idx + 1} Lives', 'path': ('players', idx, 'lives'), 'min': 1, 'max': 99, 'step': 1},
+                {'type': 'bool', 'label': f'P{idx + 1} Invincible', 'path': ('players', idx, 'invincible')},
+                {'type': 'int', 'label': f'P{idx + 1} Rapid Fire Ammo', 'path': ('players', idx, 'rapid_fire_ammo'), 'min': 0, 'max': 1000, 'step': 25},
+                {'type': 'int', 'label': f'P{idx + 1} Multi-Shot Ammo', 'path': ('players', idx, 'multi_shot_ammo'), 'min': 0, 'max': 1000, 'step': 25},
+                {'type': 'bool', 'label': f'P{idx + 1} Laser', 'path': ('players', idx, 'laser')},
+            ])
+
+            for upgrade_key, max_level in self.upgrade_limits.items():
+                pretty_name = upgrade_key.replace('_', ' ').title()
+                self.menu_items.append(
+                    {
+                        'type': 'int',
+                        'label': f'P{idx + 1} {pretty_name}',
+                        'path': ('players', idx, 'upgrades', upgrade_key),
+                        'min': 0,
+                        'max': max_level,
+                        'step': 1,
+                    }
+                )
+
+        self.menu_items.extend([
+            {'type': 'action', 'label': 'Start Debug Game', 'action': 'start'},
+            {'type': 'action', 'label': 'Back to Title', 'action': 'back'},
+        ])
+
+    def _get_value(self, path):
+        ref = self.config
+        for key in path[:-1]:
+            ref = ref[key]
+        return ref[path[-1]]
+
+    def _set_value(self, path, value):
+        ref = self.config
+        for key in path[:-1]:
+            ref = ref[key]
+        ref[path[-1]] = value
+
+    def _move_selection(self, direction):
+        selectable_indices = [i for i, item in enumerate(self.menu_items) if item['type'] != 'label']
+        if not selectable_indices:
+            return
+
+        if self.selected_index not in selectable_indices:
+            self.selected_index = selectable_indices[0]
+            return
+
+        current_pos = selectable_indices.index(self.selected_index)
+        new_pos = (current_pos + direction) % len(selectable_indices)
+        self.selected_index = selectable_indices[new_pos]
+
+        visible_count = max(1, (SCREEN_HEIGHT - 160 - 220) // 40)
+        if self.selected_index < self.scroll_offset:
+            self.scroll_offset = self.selected_index
+        elif self.selected_index >= self.scroll_offset + visible_count:
+            self.scroll_offset = self.selected_index - visible_count + 1
+
+    def _format_value(self, item):
+        if item['type'] == 'bool':
+            return 'ON' if self._get_value(item['path']) else 'OFF'
+        if item['type'] == 'choice':
+            return self._get_value(item['path'])
+        if item['type'] == 'int':
+            return str(self._get_value(item['path']))
+        return ''
+
+    def _adjust_value(self, item, delta):
+        if item['type'] == 'bool':
+            self._set_value(item['path'], not self._get_value(item['path']))
+        elif item['type'] == 'choice':
+            choices = item['choices']
+            current = self._get_value(item['path'])
+            idx = choices.index(current)
+            new_idx = (idx + delta) % len(choices)
+            self._set_value(item['path'], choices[new_idx])
+        elif item['type'] == 'int':
+            value = self._get_value(item['path']) + (item.get('step', 1) * delta)
+            value = max(item.get('min', value), min(item.get('max', value), value))
+            self._set_value(item['path'], value)
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return 'quit', None
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return 'back', None
+                if event.key == pygame.K_UP:
+                    self._move_selection(-1)
+                elif event.key == pygame.K_DOWN:
+                    self._move_selection(1)
+                elif event.key == pygame.K_LEFT:
+                    self._adjust_value(self.menu_items[self.selected_index], -1)
+                elif event.key == pygame.K_RIGHT:
+                    self._adjust_value(self.menu_items[self.selected_index], 1)
+                elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                    selected_item = self.menu_items[self.selected_index]
+                    if selected_item['type'] == 'action':
+                        return selected_item['action'], self.config
+            elif event.type == pygame.JOYHATMOTION:
+                if event.value[1] == 1:
+                    self._move_selection(-1)
+                elif event.value[1] == -1:
+                    self._move_selection(1)
+                elif event.value[0] == -1:
+                    self._adjust_value(self.menu_items[self.selected_index], -1)
+                elif event.value[0] == 1:
+                    self._adjust_value(self.menu_items[self.selected_index], 1)
+            elif event.type == pygame.JOYBUTTONDOWN:
+                if event.button == 1:  # B button - back
+                    return 'back', None
+                elif event.button == 0:  # A button - select
+                    selected_item = self.menu_items[self.selected_index]
+                    if selected_item['type'] == 'action':
+                        return selected_item['action'], self.config
+        return None, None
+
+    def draw(self):
+        self.screen.fill((10, 10, 20))
+
+        title_text = self.font_large.render('Debug Menu', True, CYAN)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 80))
+        self.screen.blit(title_text, title_rect)
+
+        start_y = 160
+        line_height = 40
+        visible_count = max(1, (SCREEN_HEIGHT - start_y - 220) // line_height)
+        start_index = self.scroll_offset
+        end_index = min(len(self.menu_items), start_index + visible_count)
+
+        for draw_idx, idx in enumerate(range(start_index, end_index)):
+            item = self.menu_items[idx]
+            y_pos = start_y + draw_idx * line_height
+            if item['type'] == 'label':
+                label_text = self.font_medium.render(item['label'], True, ORANGE)
+                self.screen.blit(label_text, (80, y_pos))
+                continue
+
+            value_text = self._format_value(item)
+            color = YELLOW if idx == self.selected_index else WHITE
+            label_surface = self.font_small.render(item['label'], True, color)
+            value_surface = self.font_small.render(value_text, True, color)
+
+            self.screen.blit(label_surface, (80, y_pos))
+            self.screen.blit(value_surface, (SCREEN_WIDTH - 300, y_pos))
+
+        instructions = [
+            'Arrows/D-pad: Navigate',
+            'Left/Right: Adjust values',
+            'Enter/A: Activate action',
+            'Esc/B: Back to title',
+        ]
+
+        for i, text in enumerate(instructions):
+            info = self.font_small.render(text, True, GRAY)
+            self.screen.blit(info, (80, SCREEN_HEIGHT - 180 + i * 35))
+
+        pygame.display.flip()
+
+    def run(self):
+        clock = pygame.time.Clock()
+        while True:
+            action, config = self.handle_events()
+            if action in ['start', 'back', 'quit']:
+                return action, config
+            self.draw()
+            clock.tick(60)
 
 class UFOWarningScreen:
     def __init__(self, screen, level):
@@ -3031,7 +3338,7 @@ class Game:
             controller.init()
             self.controllers.append(controller)
             
-    def setup_game(self, mode):
+    def setup_game(self, mode, debug_config=None):
         self.coop_mode = (mode == "coop")
         self.players = []
         
@@ -3053,8 +3360,53 @@ class Game:
             player_upgrades = PlayerUpgrades()
             self.players.append(Player(SCREEN_WIDTH // 2 - 30, SCREEN_HEIGHT - 80, 1, controller, player_upgrades))
             
+        if debug_config:
+            self.apply_debug_config(debug_config)
+
         self.create_barriers()
         self.setup_level()
+
+    def apply_debug_config(self, debug_config):
+        self.level = max(1, debug_config.get('start_level', self.level))
+        self.score = max(0, debug_config.get('start_score', self.score))
+
+        xp_level = max(1, debug_config.get('xp_level', self.xp_system.level))
+        self.xp_system.level = xp_level
+        self.xp_system.current_xp = max(0, debug_config.get('xp_current', 0))
+        self.xp_system.xp_for_next_level = int(
+            XP_BASE_REQUIREMENT * (1 + XP_INCREASE_RATE) ** (self.xp_system.level - 1)
+        )
+
+        player_configs = debug_config.get('players', [])
+        for idx, player in enumerate(self.players):
+            if idx >= len(player_configs):
+                continue
+
+            config = player_configs[idx]
+            player.lives = max(1, config.get('lives', player.lives))
+            player.is_alive = True
+
+            player.invincible = config.get('invincible', False)
+            player.invincible_end_time = pygame.time.get_ticks() + 10_000_000 if player.invincible else 0
+
+            upgrades = config.get('upgrades', {})
+            for key, value in upgrades.items():
+                setattr(player.upgrades, key, max(0, value))
+
+            player.clear_all_power_ups()
+
+            rapid_ammo = config.get('rapid_fire_ammo', 0)
+            if rapid_ammo > 0:
+                player.add_ammo_power_up('rapid_fire', rapid_ammo)
+
+            multi_ammo = config.get('multi_shot_ammo', 0)
+            if multi_ammo > 0:
+                player.add_ammo_power_up('multi_shot', multi_ammo)
+
+            if config.get('laser'):
+                player.activate_laser()
+
+            player.reset_position()
         
     def calculate_enemy_speed_for_level(self, level):
         # Enemy speed only increases every 5 levels now
@@ -3980,6 +4332,26 @@ def main():
                     high_score_screen.draw()
                     clock.tick(60)
                 break
+            elif action == "debug_menu":
+                debug_menu = DebugMenu(screen, sound_manager)
+                debug_action, debug_config = debug_menu.run()
+
+                if debug_action == "quit":
+                    pygame.quit()
+                    sys.exit()
+                elif debug_action == "start":
+                    game_mode = debug_config.get('mode', 'single')
+                    game = Game(score_manager, sound_manager)
+                    game.setup_game(game_mode, debug_config)
+                    result = game.run()
+
+                    if result == "title":
+                        break  # Go back to title screen
+                    elif not result:
+                        pygame.quit()
+                        sys.exit()
+                else:
+                    break
             elif action in ["single", "coop"]:
                 game = Game(score_manager, sound_manager)
                 game.setup_game(action)
