@@ -3652,6 +3652,9 @@ class Game:
                         
         # Player bullets vs barriers
         for bullet in self.player_bullets[:]:
+            # Barrier phasing bullets should ignore barrier collisions entirely
+            if getattr(bullet, 'can_phase_barriers', False):
+                continue
             for barrier in self.barriers:
                 if barrier.check_collision(bullet.rect) and not getattr(bullet, 'can_phase_barriers', False):
                     self.player_bullets.remove(bullet)
