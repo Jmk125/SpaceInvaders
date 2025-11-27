@@ -1877,6 +1877,10 @@ class Player:
         self.respawn_immunity_end_time = 0
         self.is_alive = True
         self.upgrades = upgrades or PlayerUpgrades()
+
+        # Boss reward shield
+        self.boss_shield_active = False
+        self.boss_shield_flash_time = 0
         
         # ADDED: Level up indicator
         self.level_up_indicator = False
@@ -1961,16 +1965,31 @@ class Player:
         self.respawn_immunity = True
         self.respawn_immunity_end_time = pygame.time.get_ticks() + RESPAWN_IMMUNITY_DURATION
         self.clear_all_power_ups()
+
+    def activate_boss_shield(self):
+        """Grant a one-hit shield after defeating a boss"""
+        self.boss_shield_active = True
+        self.boss_shield_flash_time = pygame.time.get_ticks()
+
+    def clear_boss_shield(self):
+        """Remove boss shield (e.g., at the start of a boss fight or when consumed)"""
+        self.boss_shield_active = False
         
     def take_damage(self, sound_manager=None):
         """Player takes damage"""
         if self.respawn_immunity or self.invincible:
             return False
 
+        if self.boss_shield_active:
+            self.clear_boss_shield()
+            if sound_manager:
+                sound_manager.play_sound('powerup', volume_override=0.5)
+            return True
+
         # Play player explosion sound
         if sound_manager:
             sound_manager.play_sound('player_explosion', volume_override=0.8)
-        
+
         self.lives -= 1
         if self.lives <= 0:
             self.is_alive = False
@@ -2183,6 +2202,21 @@ class Player:
                 screen.blit(ring_surface, (self.x - 20, self.y - 20))
             else:
                 self.level_up_indicator = False
+
+        # Boss shield visual
+        if self.boss_shield_active:
+            pulse = abs(math.sin(pygame.time.get_ticks() * 0.01))
+            glow_alpha = int(120 + 80 * pulse)
+            ring_alpha = int(180 + 60 * pulse)
+            shield_surface = pygame.Surface((self.width + 50, self.height + 50), pygame.SRCALPHA)
+            center = (self.width // 2 + 25, self.height // 2 + 25)
+            radius = self.width // 2 + 20
+
+            # Outer glow
+            pygame.draw.circle(shield_surface, (150, 220, 255, glow_alpha), center, radius + 4)
+            # Main ring
+            pygame.draw.circle(shield_surface, (120, 200, 255, ring_alpha), center, radius, 4)
+            screen.blit(shield_surface, (self.x - 25, self.y - 25))
         
         # Draw player
         points = [
@@ -3306,6 +3340,7 @@ class Game:
         # Boss system
         self.current_boss = None
         self.is_boss_level = False
+        self.boss_shield_granted = False
         
         self.controllers = []
         self.scan_controllers()
@@ -3417,6 +3452,7 @@ class Game:
     def setup_level(self):
         """Setup current level - either boss or regular enemies"""
         self.is_boss_level = (self.level % 5 == 0)
+        self.boss_shield_granted = False
 
         if self.is_boss_level:
             # ADDED: Show UFO warning before boss level
@@ -3424,6 +3460,8 @@ class Game:
             self.ufo_warning_screen = UFOWarningScreen(self.screen, self.level)
             self.current_boss = None  # Don't create boss until warning is done
             self.enemies = []
+            for player in self.players:
+                player.clear_boss_shield()
         else:
             self.showing_ufo_warning = False
             self.ufo_warning_screen = None
@@ -3479,7 +3517,24 @@ class Game:
                 
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
-                
+
+    def grant_post_boss_shield(self):
+        """Give each player a one-hit shield after defeating a boss"""
+        if self.boss_shield_granted:
+            return
+
+        for player in self.players:
+            player.activate_boss_shield()
+
+        self.boss_shield_granted = True
+        self.floating_texts.append(FloatingText(
+            "Shield Ready!",
+            SCREEN_WIDTH // 2,
+            SCREEN_HEIGHT // 2,
+            color=CYAN,
+            lifetime=1500
+        ))
+
     def add_xp(self, amount, source_x=None, source_y=None):
         """Add XP and handle level up"""
         old_level = self.xp_system.level
@@ -3901,9 +3956,12 @@ class Game:
 
                             # PLAY LARGE EXPLOSION SOUND
                             self.sound_manager.play_sound('explosion_large')
-                            
+
                             # CREATE MASSIVE BOSS EXPLOSION
                             self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+
+                            # Grant post-boss shield reward
+                            self.grant_post_boss_shield()
                             
                             # SCREEN EFFECTS
                             self.screen_shake_intensity = 25  # Strong shake
@@ -3982,6 +4040,7 @@ class Game:
                         if self.current_boss.take_main_damage(3):  # Laser does lots of damage to main body
                             self.score += 1000
                             self.add_xp(200, main_body_rect.centerx, main_body_rect.centery)
+                            self.grant_post_boss_shield()
                         else:
                             self.score += 15
                             self.add_xp(8, main_body_rect.centerx, main_body_rect.centery)
@@ -4053,6 +4112,7 @@ class Game:
         self.total_enemies_killed = 0
         self.current_boss = None
         self.is_boss_level = False
+        self.boss_shield_granted = False
         
         # Reset XP system
         self.xp_system = XPSystem()
