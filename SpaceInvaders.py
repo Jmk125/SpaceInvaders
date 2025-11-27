@@ -3072,6 +3072,7 @@ class DebugMenu:
             'player_id': player_id,
             'lives': 3,
             'invincible': False,
+            'boss_shield': False,
             'rapid_fire_ammo': 0,
             'multi_shot_ammo': 0,
             'laser': False,
@@ -3094,6 +3095,7 @@ class DebugMenu:
             self.menu_items.extend([
                 {'type': 'int', 'label': f'P{idx + 1} Lives', 'path': ('players', idx, 'lives'), 'min': 1, 'max': 99, 'step': 1},
                 {'type': 'bool', 'label': f'P{idx + 1} Invincible', 'path': ('players', idx, 'invincible')},
+                {'type': 'bool', 'label': f'P{idx + 1} Boss Shield', 'path': ('players', idx, 'boss_shield')},
                 {'type': 'int', 'label': f'P{idx + 1} Rapid Fire Ammo', 'path': ('players', idx, 'rapid_fire_ammo'), 'min': 0, 'max': 1000, 'step': 25},
                 {'type': 'int', 'label': f'P{idx + 1} Multi-Shot Ammo', 'path': ('players', idx, 'multi_shot_ammo'), 'min': 0, 'max': 1000, 'step': 25},
                 {'type': 'bool', 'label': f'P{idx + 1} Laser', 'path': ('players', idx, 'laser')},
@@ -3423,6 +3425,11 @@ class Game:
 
             player.invincible = config.get('invincible', False)
             player.invincible_end_time = pygame.time.get_ticks() + 10_000_000 if player.invincible else 0
+
+            if config.get('boss_shield', False):
+                player.activate_boss_shield()
+            else:
+                player.clear_boss_shield()
 
             upgrades = config.get('upgrades', {})
             for key, value in upgrades.items():
