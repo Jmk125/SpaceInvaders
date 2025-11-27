@@ -2921,12 +2921,12 @@ class TitleScreen:
             if event.type == pygame.QUIT:
                 return "quit"
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
+                if event.key in (pygame.K_UP, pygame.K_w):
                     if self._register_debug_input("up"):
                         return "debug_menu"
                     self.sound_manager.play_sound('menu_change')
                     self.selected_option = (self.selected_option - 1) % len(self.options)
-                elif event.key == pygame.K_DOWN:
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
                     if self._register_debug_input("down"):
                         return "debug_menu"
                     self.sound_manager.play_sound('menu_change')
@@ -2941,10 +2941,10 @@ class TitleScreen:
                         return "highscores"
                     elif self.selected_option == 3:
                         return "quit"
-                elif event.key == pygame.K_LEFT:
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
                     if self._register_debug_input("left"):
                         return "debug_menu"
-                elif event.key == pygame.K_RIGHT:
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
                     if self._register_debug_input("right"):
                         return "debug_menu"
             elif event.type == pygame.JOYBUTTONDOWN:
@@ -3178,13 +3178,13 @@ class DebugMenu:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return 'back', None
-                if event.key == pygame.K_UP:
+                if event.key in (pygame.K_UP, pygame.K_w):
                     self._move_selection(-1)
-                elif event.key == pygame.K_DOWN:
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
                     self._move_selection(1)
-                elif event.key == pygame.K_LEFT:
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
                     self._adjust_value(self.menu_items[self.selected_index], -1)
-                elif event.key == pygame.K_RIGHT:
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
                     self._adjust_value(self.menu_items[self.selected_index], 1)
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                     selected_item = self.menu_items[self.selected_index]
