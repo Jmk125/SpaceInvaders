@@ -1983,7 +1983,7 @@ class Player:
         if self.boss_shield_active:
             self.clear_boss_shield()
             if sound_manager:
-                sound_manager.play_sound('powerup', volume_override=0.5)
+                sound_manager.play_sound('explosion_small', volume_override=0.5)
             return True
 
         # Play player explosion sound
@@ -2205,18 +2205,24 @@ class Player:
 
         # Boss shield visual
         if self.boss_shield_active:
-            pulse = abs(math.sin(pygame.time.get_ticks() * 0.01))
-            glow_alpha = int(120 + 80 * pulse)
-            ring_alpha = int(180 + 60 * pulse)
-            shield_surface = pygame.Surface((self.width + 50, self.height + 50), pygame.SRCALPHA)
-            center = (self.width // 2 + 25, self.height // 2 + 25)
-            radius = self.width // 2 + 20
+            pulse = abs(math.sin(pygame.time.get_ticks() * 0.006))
+            ring_alpha = int(130 + 100 * pulse)
+            steady_alpha = 140
 
-            # Outer glow
-            pygame.draw.circle(shield_surface, (150, 220, 255, glow_alpha), center, radius + 4)
-            # Main ring
-            pygame.draw.circle(shield_surface, (120, 200, 255, ring_alpha), center, radius, 4)
-            screen.blit(shield_surface, (self.x - 25, self.y - 25))
+            # Larger square surface with independent offsets to keep the outline fully visible
+            surface_size = max(self.width, self.height) + 120
+            shield_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+            center = (surface_size // 2, surface_size // 2)
+            radius = max(self.width, self.height) // 2 + 24
+
+            # Steady outline
+            pygame.draw.circle(shield_surface, (120, 200, 255, steady_alpha), center, radius, 2)
+            # Flashing outline
+            pygame.draw.circle(shield_surface, (80, 170, 255, ring_alpha), center, radius + 2, 6)
+
+            offset_x = (surface_size - self.width) // 2
+            offset_y = (surface_size - self.height) // 2
+            screen.blit(shield_surface, (self.x - offset_x, self.y - offset_y))
         
         # Draw player
         points = [
