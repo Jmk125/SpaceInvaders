@@ -2209,16 +2209,19 @@ class Player:
             ring_alpha = int(130 + 100 * pulse)
             steady_alpha = 140
 
-            # Slightly larger surface and centered circle to avoid clipping at the top
-            shield_surface = pygame.Surface((self.width + 70, self.height + 70), pygame.SRCALPHA)
-            center = (shield_surface.get_width() // 2, shield_surface.get_height() // 2)
+            # Slightly larger square surface and centered circle to avoid clipping at the top
+            surface_size = max(self.width, self.height) + 80
+            shield_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+            center = (surface_size // 2, surface_size // 2)
             radius = max(self.width, self.height) // 2 + 30
 
             # Steady outline
             pygame.draw.circle(shield_surface, (120, 200, 255, steady_alpha), center, radius, 2)
             # Flashing outline
             pygame.draw.circle(shield_surface, (80, 170, 255, ring_alpha), center, radius + 2, 6)
-            screen.blit(shield_surface, (self.x - 35, self.y - 35))
+
+            offset = (surface_size - self.width) // 2
+            screen.blit(shield_surface, (self.x - offset, self.y - offset))
         
         # Draw player
         points = [
