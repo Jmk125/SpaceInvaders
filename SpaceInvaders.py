@@ -3473,8 +3473,6 @@ class Game:
             self.ufo_warning_screen = UFOWarningScreen(self.screen, self.level)
             self.current_boss = None  # Don't create boss until warning is done
             self.enemies = []
-            for player in self.players:
-                player.clear_boss_shield()
         else:
             self.showing_ufo_warning = False
             self.ufo_warning_screen = None
@@ -3541,11 +3539,11 @@ class Game:
 
         self.boss_shield_granted = True
         self.floating_texts.append(FloatingText(
-            "Shield Ready!",
             SCREEN_WIDTH // 2,
             SCREEN_HEIGHT // 2,
+            "Shield Ready!",
             color=CYAN,
-            lifetime=1500
+            duration=1500
         ))
 
     def add_xp(self, amount, source_x=None, source_y=None):
