@@ -3539,11 +3539,11 @@ class Game:
 
         self.boss_shield_granted = True
         self.floating_texts.append(FloatingText(
-            "Shield Ready!",
             SCREEN_WIDTH // 2,
             SCREEN_HEIGHT // 2,
+            "Shield Ready!",
             color=CYAN,
-            lifetime=1500
+            duration=1500
         ))
 
     def add_xp(self, amount, source_x=None, source_y=None):
