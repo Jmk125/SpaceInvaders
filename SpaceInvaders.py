@@ -3473,8 +3473,6 @@ class Game:
             self.ufo_warning_screen = UFOWarningScreen(self.screen, self.level)
             self.current_boss = None  # Don't create boss until warning is done
             self.enemies = []
-            for player in self.players:
-                player.clear_boss_shield()
         else:
             self.showing_ufo_warning = False
             self.ufo_warning_screen = None
