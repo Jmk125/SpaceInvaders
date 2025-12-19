@@ -65,11 +65,11 @@ ALIEN_BOSS_FIREBALL_COOLDOWN_SCALE = 0.88
 # Bullet Hell Boss Configuration
 BULLET_HELL_BOSS_HEALTH_BASE = 70  # Base health
 BULLET_HELL_BOSS_HEALTH_PER_LEVEL = 12  # Health increase per encounter
-BULLET_HELL_BOSS_SPEED_BASE = 5.5  # Base movement speed (fast!)
+BULLET_HELL_BOSS_SPEED_BASE = 6  # Base movement speed (fast!)
 BULLET_HELL_BOSS_SPEED_GROWTH = 0.4  # Speed increase per encounter
-BULLET_HELL_BOSS_SHOT_COOLDOWN_BASE = 180  # ms between shots (very rapid!)
+BULLET_HELL_BOSS_SHOT_COOLDOWN_BASE = 350  # ms between shots (very rapid!)
 BULLET_HELL_BOSS_SHOT_COOLDOWN_SCALE = 0.92  # Multiplier applied each encounter (gets faster)
-BULLET_HELL_BOSS_BULLET_SPEED = 3.5  # Speed of falling bullets (slow)
+BULLET_HELL_BOSS_BULLET_SPEED = 1.8  # Speed of falling bullets (slow)
 BULLET_HELL_BOSS_MOVEMENT_ZONE_TOP = 100  # Top of movement zone
 BULLET_HELL_BOSS_MOVEMENT_ZONE_BOTTOM = 540  # Bottom of movement zone (half screen at 1080p)
 
