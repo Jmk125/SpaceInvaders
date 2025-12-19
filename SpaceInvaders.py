@@ -62,6 +62,17 @@ ALIEN_BOSS_DROP_COOLDOWN_SCALE = 0.9  # Multiplier applied each encounter
 ALIEN_BOSS_FIREBALL_COOLDOWN_BASE = 3100  # ms between fireballs
 ALIEN_BOSS_FIREBALL_COOLDOWN_SCALE = 0.88
 
+# Bullet Hell Boss Configuration
+BULLET_HELL_BOSS_HEALTH_BASE = 70  # Base health
+BULLET_HELL_BOSS_HEALTH_PER_LEVEL = 12  # Health increase per encounter
+BULLET_HELL_BOSS_SPEED_BASE = 5.5  # Base movement speed (fast!)
+BULLET_HELL_BOSS_SPEED_GROWTH = 0.4  # Speed increase per encounter
+BULLET_HELL_BOSS_SHOT_COOLDOWN_BASE = 180  # ms between shots (very rapid!)
+BULLET_HELL_BOSS_SHOT_COOLDOWN_SCALE = 0.92  # Multiplier applied each encounter (gets faster)
+BULLET_HELL_BOSS_BULLET_SPEED = 3.5  # Speed of falling bullets (slow)
+BULLET_HELL_BOSS_MOVEMENT_ZONE_TOP = 100  # Top of movement zone
+BULLET_HELL_BOSS_MOVEMENT_ZONE_BOTTOM = 540  # Bottom of movement zone (half screen at 1080p)
+
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
@@ -1068,6 +1079,36 @@ class FireballProjectile:
         pygame.draw.circle(screen, (255, 90, 0), center, 14)
         pygame.draw.circle(screen, (255, 140, 0), center, 10)
         pygame.draw.circle(screen, (255, 220, 120), center, 6)
+
+class SlowFallingBullet:
+    """Slow-falling bullet for the Bullet Hell Boss"""
+    def __init__(self, x, y, speed):
+        self.x = x
+        self.y = y
+        self.width = 12
+        self.height = 16
+        self.speed = speed  # Slow downward speed
+        self.rect = pygame.Rect(int(self.x - self.width // 2), int(self.y - self.height // 2), self.width, self.height)
+
+    def move(self):
+        self.y += self.speed  # Only moves downward
+        self.rect.x = int(self.x - self.width // 2)
+        self.rect.y = int(self.y - self.height // 2)
+
+    def is_off_screen(self):
+        return self.y > SCREEN_HEIGHT + 30
+
+    def draw(self, screen):
+        # Draw as a glowing cyan/purple bullet
+        center = (int(self.x), int(self.y))
+        # Outer glow
+        pygame.draw.circle(screen, (150, 100, 255), center, 8)
+        # Middle layer
+        pygame.draw.circle(screen, (200, 150, 255), center, 6)
+        # Inner core
+        pygame.draw.circle(screen, (255, 200, 255), center, 4)
+        # Bright center
+        pygame.draw.circle(screen, WHITE, center, 2)
 
 class Boss:
     def __init__(self, encounter):
@@ -2629,6 +2670,277 @@ class AlienOverlordBoss:
             screen.blit(text, text_rect)
 
 
+class BulletHellBoss:
+    """Third boss - Fast-moving bullet hell boss that creates a field of slow-falling projectiles"""
+    def __init__(self, encounter):
+        self.encounter = max(1, encounter)
+
+        # Size - 5x the size of a normal alien
+        self.base_width = 45 * 5
+        self.base_height = 30 * 5
+        self.width = self.base_width
+        self.height = self.base_height
+
+        # Starting position
+        self.x = SCREEN_WIDTH // 2 - self.width // 2
+        self.y = BULLET_HELL_BOSS_MOVEMENT_ZONE_TOP + 50
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+
+        # Health system
+        self.max_health = BULLET_HELL_BOSS_HEALTH_BASE + (self.encounter - 1) * BULLET_HELL_BOSS_HEALTH_PER_LEVEL
+        self.health = self.max_health
+
+        # Movement system - random patterns in top half of screen
+        self.speed = BULLET_HELL_BOSS_SPEED_BASE + (self.encounter - 1) * BULLET_HELL_BOSS_SPEED_GROWTH
+        self.movement_zone_top = BULLET_HELL_BOSS_MOVEMENT_ZONE_TOP
+        self.movement_zone_bottom = BULLET_HELL_BOSS_MOVEMENT_ZONE_BOTTOM
+        self.target_x = self.x
+        self.target_y = self.y
+        self.last_target_change = pygame.time.get_ticks()
+        self.target_change_cooldown = random.randint(800, 1500)  # Change direction frequently
+
+        # Shooting system - rapid fire, slow falling bullets
+        self.shot_cooldown = int(BULLET_HELL_BOSS_SHOT_COOLDOWN_BASE * (BULLET_HELL_BOSS_SHOT_COOLDOWN_SCALE ** (self.encounter - 1)))
+        self.last_shot = pygame.time.get_ticks() - random.randint(0, 200)
+        self.bullet_speed = BULLET_HELL_BOSS_BULLET_SPEED
+
+        # Visual effects
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        self.explosion_effects = []
+
+        # Choose initial random target
+        self._pick_new_target()
+
+    def _pick_new_target(self):
+        """Pick a new random target position within the movement zone"""
+        margin = 100  # Keep away from edges
+        self.target_x = random.randint(margin, SCREEN_WIDTH - margin - self.width)
+        self.target_y = random.randint(self.movement_zone_top, self.movement_zone_bottom - self.height)
+
+    def update(self, players=None, sound_manager=None):
+        """Update boss position and behavior"""
+        if self.destruction_complete:
+            # Update explosion effects during destruction
+            self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+            for explosion in self.explosion_effects:
+                explosion['radius'] += explosion['growth']
+                explosion['life'] -= 1
+            return
+
+        current_time = pygame.time.get_ticks()
+
+        # Check if it's time to pick a new target
+        if current_time - self.last_target_change > self.target_change_cooldown:
+            self._pick_new_target()
+            self.last_target_change = current_time
+            self.target_change_cooldown = random.randint(800, 1500)
+
+        # Move towards target with smooth movement
+        dx = self.target_x - self.x
+        dy = self.target_y - self.y
+        distance = math.sqrt(dx*dx + dy*dy)
+
+        if distance > self.speed:
+            # Normalize and apply speed
+            self.x += (dx / distance) * self.speed
+            self.y += (dy / distance) * self.speed
+        else:
+            # Reached target, pick a new one
+            self.x = self.target_x
+            self.y = self.target_y
+            self._pick_new_target()
+            self.last_target_change = current_time
+
+        # Keep within bounds (safety check)
+        self.x = max(0, min(SCREEN_WIDTH - self.width, self.x))
+        self.y = max(self.movement_zone_top, min(self.movement_zone_bottom - self.height, self.y))
+
+        # Update rect
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+
+        # Update explosion effects
+        self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+        for explosion in self.explosion_effects:
+            explosion['radius'] += explosion['growth']
+            explosion['life'] -= 1
+
+    def shoot(self, players, sound_manager=None):
+        """Rapid-fire shooting that creates a bullet hell effect"""
+        if self.destruction_complete:
+            return []
+
+        bullets = []
+        current_time = pygame.time.get_ticks()
+
+        # Check if it's time to shoot
+        if current_time - self.last_shot > self.shot_cooldown:
+            # Fire from bottom center of boss
+            center_x = self.x + self.width // 2
+            bottom_y = self.y + self.height
+
+            # Create a slow-falling bullet
+            bullet = SlowFallingBullet(center_x, bottom_y, self.bullet_speed)
+            bullets.append(bullet)
+
+            self.last_shot = current_time
+
+            # Play sound
+            if sound_manager:
+                sound_manager.play_sound('enemy_shoot', volume_override=0.35)
+
+        return bullets
+
+    def take_turret_damage(self, turret_index, damage=1):
+        """This boss has no turrets, but we need this method for compatibility"""
+        return False
+
+    def take_main_damage(self, damage=1):
+        """Take damage to the main body"""
+        self.health -= damage
+
+        if self.health <= 0:
+            self.health = 0
+            self.start_destruction_sequence()
+            return True  # Boss destroyed
+
+        return False
+
+    def start_destruction_sequence(self):
+        """Start the dramatic destruction sequence"""
+        self.destruction_complete = True
+        self.destruction_start_time = pygame.time.get_ticks()
+
+        # Create massive explosions
+        for _ in range(25):
+            explosion = {
+                'x': self.x + random.randint(-50, self.width + 50),
+                'y': self.y + random.randint(-30, self.height + 30),
+                'radius': 0,
+                'growth': random.uniform(6, 12),
+                'color': random.choice([ORANGE, RED, YELLOW, WHITE, (255, 100, 0), CYAN]),
+                'life': random.randint(80, 150),
+                'max_radius': random.randint(60, 120)
+            }
+            self.explosion_effects.append(explosion)
+
+    def is_destruction_complete(self):
+        """Check if destruction sequence is finished"""
+        if not self.destruction_complete:
+            return False
+        return pygame.time.get_ticks() - self.destruction_start_time > 2000
+
+    def create_final_explosion(self):
+        """Create a massive particle explosion when boss is completely destroyed"""
+        explosion_particles = []
+
+        for _ in range(70):
+            particle = {
+                'x': self.x + random.randint(-100, self.width + 100),
+                'y': self.y + random.randint(-50, self.height + 50),
+                'vel_x': random.uniform(-8, 8),
+                'vel_y': random.uniform(-8, 3),
+                'color': random.choice([
+                    (255, 150, 0),   # Bright Orange
+                    (255, 80, 80),   # Bright Red
+                    (255, 255, 100), # Bright Yellow
+                    (255, 255, 255), # White
+                    (100, 255, 255), # Bright Cyan
+                    (255, 200, 0),   # Gold
+                ]),
+                'size': random.randint(4, 12),
+                'life': random.randint(1000, 1800),
+                'gravity': random.uniform(0.1, 0.3)
+            }
+            explosion_particles.append(particle)
+
+        return explosion_particles
+
+    def get_turret_rects(self):
+        """This boss has no turrets, return empty list for compatibility"""
+        return []
+
+    def get_main_body_rect(self):
+        """Get collision rectangle for the main body (always active)"""
+        if self.destruction_complete:
+            return None
+        return self.rect
+
+    def draw(self, screen):
+        """Draw the boss - giant squid alien (5x scale)"""
+        if self.destruction_complete:
+            # Draw explosion effects during destruction
+            for explosion in self.explosion_effects:
+                if explosion['radius'] > 0:
+                    alpha = int(255 * (explosion['life'] / 150))
+                    explosion_surface = pygame.Surface((explosion['radius']*2, explosion['radius']*2), pygame.SRCALPHA)
+                    pygame.draw.circle(explosion_surface, explosion['color'], (explosion['radius'], explosion['radius']), explosion['radius'])
+                    explosion_surface.set_alpha(alpha)
+                    screen.blit(explosion_surface, (explosion['x'] - explosion['radius'], explosion['y'] - explosion['radius']))
+            return
+
+        # Color changes based on health (green to red)
+        health_ratio = self.health / self.max_health
+        if health_ratio > 0.6:
+            body_color = (0, 200, 0)
+            dark_color = (0, 150, 0)
+        elif health_ratio > 0.3:
+            body_color = (200, 200, 0)  # Yellow
+            dark_color = (150, 150, 0)
+        else:
+            body_color = (200, 50, 0)  # Orange-red
+            dark_color = (150, 0, 0)
+
+        # Scale factor is 5x
+        scale = 5
+
+        # Draw giant squid alien (based on draw_squid_enemy but 5x larger)
+        x = int(self.x)
+        y = int(self.y)
+
+        # Main body outline - scaled
+        pygame.draw.rect(screen, body_color, (x + 3*scale, y + 2*scale, 39*scale, 26*scale))
+
+        # Head bumps - scaled
+        pygame.draw.rect(screen, body_color, (x - 2*scale, y + 5*scale, 12*scale, 12*scale))
+        pygame.draw.rect(screen, body_color, (x + 35*scale, y + 5*scale, 12*scale, 12*scale))
+
+        # Eyes (white with black pupils) - scaled
+        pygame.draw.rect(screen, WHITE, (x + 8*scale, y + 6*scale, 10*scale, 10*scale))
+        pygame.draw.rect(screen, WHITE, (x + 27*scale, y + 6*scale, 10*scale, 10*scale))
+        pygame.draw.rect(screen, BLACK, (x + 10*scale, y + 8*scale, 6*scale, 6*scale))
+        pygame.draw.rect(screen, BLACK, (x + 29*scale, y + 8*scale, 6*scale, 6*scale))
+
+        # Tentacles - scaled
+        pygame.draw.rect(screen, dark_color, (x + 3*scale, y + 24*scale, 5*scale, 10*scale))
+        pygame.draw.rect(screen, dark_color, (x + 10*scale, y + 26*scale, 5*scale, 8*scale))
+        pygame.draw.rect(screen, dark_color, (x + 17*scale, y + 24*scale, 5*scale, 10*scale))
+        pygame.draw.rect(screen, dark_color, (x + 24*scale, y + 26*scale, 5*scale, 8*scale))
+        pygame.draw.rect(screen, dark_color, (x + 31*scale, y + 24*scale, 5*scale, 10*scale))
+        pygame.draw.rect(screen, dark_color, (x + 38*scale, y + 26*scale, 5*scale, 8*scale))
+
+        # Add glowing effect around the boss to make it more menacing
+        glow_surface = pygame.Surface((self.width + 40, self.height + 40), pygame.SRCALPHA)
+        glow_color = (*body_color, 60)  # Semi-transparent
+        pygame.draw.rect(glow_surface, glow_color, glow_surface.get_rect(), border_radius=20)
+        screen.blit(glow_surface, (x - 20, y - 20))
+
+        # Draw health bar
+        self._draw_health_bar(screen, x, y - 40, self.width, 15, health_ratio, label='ALIEN DESTROYER')
+
+    def _draw_health_bar(self, screen, x, y, width, height, ratio, label=None):
+        """Draw a health bar"""
+        pygame.draw.rect(screen, RED, (x, y, width, height))
+        pygame.draw.rect(screen, GREEN, (x, y, int(width * ratio), height))
+        pygame.draw.rect(screen, WHITE, (x, y, width, height), 2)
+        if label:
+            font = pygame.font.Font(None, 36)
+            text = font.render(f"{label}: {int(ratio * 100)}%", True, WHITE)
+            text_rect = text.get_rect(center=(x + width // 2, y - 20))
+            screen.blit(text, text_rect)
+
+
 class Enemy:
     def __init__(self, x, y, enemy_type=0):
         self.x = x
@@ -3440,7 +3752,7 @@ class Game:
         self.current_boss = None
         self.is_boss_level = False
         self.boss_shield_granted = False
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0}
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0}
         
         self.controllers = []
         self.scan_controllers()
@@ -3460,7 +3772,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss]
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss]
 
         self.font = pygame.font.Font(None, 72)
         self.small_font = pygame.font.Font(None, 48)
@@ -4243,8 +4555,8 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss]
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0}
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss]
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0}
 
         # Reset all players with new individual upgrades
         for player in self.players:
