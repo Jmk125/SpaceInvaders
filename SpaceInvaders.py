@@ -423,7 +423,24 @@ class LevelUpScreen:
         if 0 <= row_index < len(options):
             return options[row_index]
         return None
-          
+
+    def all_options_maxed(self, player_index):
+        """Check if all available options for a player are maxed out"""
+        if player_index >= len(self.players):
+            return False
+        player = self.players[player_index]
+        options = self.get_options_for_player(player_index)
+
+        for stat_name, _, _ in options:
+            # Extra life and boss_shield are always available when shown
+            if stat_name in ["extra_life", "boss_shield"]:
+                return False
+            # If any stat can be upgraded, not all maxed
+            if player.upgrades.can_upgrade(stat_name):
+                return False
+        # All stats are maxed
+        return True
+
     def handle_events(self):
         # FIXED: During input delay, consume ALL events to prevent buffering
         if pygame.time.get_ticks() - self.start_time < self.input_delay:
@@ -480,6 +497,12 @@ class LevelUpScreen:
                             # Start a brief countdown for single player too
                             self.countdown_start = pygame.time.get_ticks()
                             self.countdown_duration = 2000  # 2 seconds to see the effect
+                        elif self.all_options_maxed(0):
+                            # All options are maxed - allow player to continue
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000
                 else:
                     # Co-op keyboard controls (Player 1)
                     if not self.player1_confirmed:
@@ -513,6 +536,11 @@ class LevelUpScreen:
                                 self.players[0].upgrades.upgrade_stat(stat_name)
                                 new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
                                 self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
+                                self.player1_confirmed = True
+                            elif self.all_options_maxed(0):
+                                # All options are maxed - allow player to continue
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
                                 self.player1_confirmed = True
 
                     # Player 2 controls (Right Ctrl for confirm, arrows for selection)
@@ -548,6 +576,11 @@ class LevelUpScreen:
                                 new_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
                                 self.create_upgrade_effect(1, stat_name, old_multiplier, new_multiplier)
                                 self.player2_confirmed = True
+                            elif self.all_options_maxed(1):
+                                # All options are maxed - allow player to continue
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.player2_confirmed = True
                     
                     # Check if both players confirmed - start countdown
                     if self.player1_confirmed and self.player2_confirmed and self.countdown_start is None:
@@ -581,6 +614,12 @@ class LevelUpScreen:
                             # Start a brief countdown for single player too
                             self.countdown_start = pygame.time.get_ticks()
                             self.countdown_duration = 2000  # 2 seconds to see the effect
+                        elif self.all_options_maxed(0):
+                            # All options are maxed - allow player to continue
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000
                 else:
                     # Co-op controller handling
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
@@ -605,6 +644,11 @@ class LevelUpScreen:
                                 new_multiplier = self.players[0].upgrades.get_multiplier(stat_name)
                                 self.create_upgrade_effect(0, stat_name, old_multiplier, new_multiplier)
                                 self.player1_confirmed = True
+                            elif self.all_options_maxed(0):
+                                # All options are maxed - allow player to continue
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.player1_confirmed = True
 
                     if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
                         if event.button == 0:  # A button
@@ -627,6 +671,11 @@ class LevelUpScreen:
                                 self.players[1].upgrades.upgrade_stat(stat_name)
                                 new_multiplier = self.players[1].upgrades.get_multiplier(stat_name)
                                 self.create_upgrade_effect(1, stat_name, old_multiplier, new_multiplier)
+                                self.player2_confirmed = True
+                            elif self.all_options_maxed(1):
+                                # All options are maxed - allow player to continue
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
                                 self.player2_confirmed = True
                     
                     # Check if both players confirmed - start countdown
@@ -2977,6 +3026,17 @@ class Asteroid:
         self.rotation = random.randint(0, 360)
         self.rotation_speed = random.uniform(-2, 2)
 
+        # Randomized crater properties for visual variety
+        self.num_craters = random.randint(2, 5)
+        self.craters = []
+        for i in range(self.num_craters):
+            crater = {
+                'angle_offset': random.uniform(0, 360),  # Random angle position
+                'distance_factor': random.uniform(0.2, 0.5),  # How far from center (0-50% of radius)
+                'size_factor': random.uniform(0.15, 0.35)  # Size relative to asteroid radius
+            }
+            self.craters.append(crater)
+
     def move(self):
         self.y += self.speed
         self.rotation += self.rotation_speed
@@ -2985,6 +3045,14 @@ class Asteroid:
 
     def is_off_screen(self):
         return self.y - self.size // 2 > SCREEN_HEIGHT
+
+    def collides_with_circle(self, other_x, other_y, other_radius):
+        """Check circular collision with another circular object"""
+        radius = self.size // 2
+        dx = self.x - other_x
+        dy = self.y - other_y
+        distance = math.sqrt(dx * dx + dy * dy)
+        return distance < (radius + other_radius)
 
     def draw(self, screen):
         # Draw irregular asteroid shape
@@ -3003,14 +3071,13 @@ class Asteroid:
             bump_size = radius // 3
             pygame.draw.circle(screen, self.color, (bump_x, bump_y), bump_size)
 
-        # Add some crater details (darker spots)
+        # Add randomized crater details (darker spots)
         darker_color = (max(0, self.color[0] - 30), max(0, self.color[1] - 30), max(0, self.color[2] - 30))
-        num_craters = 3
-        for i in range(num_craters):
-            angle = (self.rotation + i * 120 + 30) * math.pi / 180
-            crater_x = center[0] + int(math.cos(angle) * radius * 0.4)
-            crater_y = center[1] + int(math.sin(angle) * radius * 0.4)
-            crater_size = radius // 4
+        for crater in self.craters:
+            angle = (self.rotation + crater['angle_offset']) * math.pi / 180
+            crater_x = center[0] + int(math.cos(angle) * radius * crater['distance_factor'])
+            crater_y = center[1] + int(math.sin(angle) * radius * crater['distance_factor'])
+            crater_size = int(radius * crater['size_factor'])
             pygame.draw.circle(screen, darker_color, (crater_x, crater_y), crater_size)
 
         # Outline
@@ -4779,11 +4846,17 @@ class Game:
         if self.is_boss_level and self.current_boss and isinstance(self.current_boss, AsteroidFieldBoss):
             for asteroid in self.current_boss.asteroids[:]:
                 for player in self.players:
-                    if player.is_alive and asteroid.rect.colliderect(player.rect):
-                        if player.take_damage(self.sound_manager):
-                            self.current_boss.remove_asteroid(asteroid)
-                            self.sound_manager.play_sound('explosion_small', volume_override=0.5)
-                            break
+                    if player.is_alive:
+                        # Use circular collision detection for more accurate asteroid hits
+                        player_center_x = player.x + player.width // 2
+                        player_center_y = player.y + player.height // 2
+                        player_radius = min(player.width, player.height) // 2
+
+                        if asteroid.collides_with_circle(player_center_x, player_center_y, player_radius):
+                            if player.take_damage(self.sound_manager):
+                                self.current_boss.remove_asteroid(asteroid)
+                                self.sound_manager.play_sound('explosion_small', volume_override=0.5)
+                                break
 
     def restart_game(self):
         self.game_over = False
