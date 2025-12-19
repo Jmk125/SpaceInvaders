@@ -76,11 +76,11 @@ BULLET_HELL_BOSS_MOVEMENT_ZONE_BOTTOM = 540  # Bottom of movement zone (half scr
 # Asteroid Field Boss Configuration
 ASTEROID_BOSS_HEALTH_BASE = 100  # Base health (asteroids that need to reach bottom)
 ASTEROID_BOSS_HEALTH_PER_LEVEL = 20  # Health increase per encounter
-ASTEROID_BOSS_SPAWN_COOLDOWN_BASE = 800  # ms between asteroid spawns (rapid!)
+ASTEROID_BOSS_SPAWN_COOLDOWN_BASE = 700  # ms between asteroid spawns (rapid!)
 ASTEROID_BOSS_SPAWN_COOLDOWN_SCALE = 0.88  # Multiplier per encounter (spawns faster)
-ASTEROID_BOSS_SPEED_BASE = 4.0  # Base falling speed
+ASTEROID_BOSS_SPEED_BASE = 5.0  # Base falling speed
 ASTEROID_BOSS_SPEED_GROWTH = 0.5  # Speed increase per encounter
-ASTEROID_BOSS_SIZE_MULTIPLIER = 1.0  # Global size scale for all asteroids (tweak this!)
+ASTEROID_BOSS_SIZE_MULTIPLIER = 4.0  # Global size scale for all asteroids (tweak this!)
 ASTEROID_BOSS_SIZE_MIN = 30  # Minimum asteroid size (before multiplier)
 ASTEROID_BOSS_SIZE_MAX = 80  # Maximum asteroid size (before multiplier)
 ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches bottom
