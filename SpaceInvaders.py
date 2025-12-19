@@ -3111,11 +3111,7 @@ class AsteroidFieldBoss:
         return []
 
     def take_turret_damage(self, turret_index, damage=1):
-        """Hitting an asteroid destroys it"""
-        if 0 <= turret_index < len(self.asteroids):
-            asteroid = self.asteroids[turret_index]
-            self.remove_asteroid(asteroid)
-            return True  # Asteroid destroyed
+        """Asteroids cannot be destroyed by shooting"""
         return False
 
     def take_main_damage(self, damage=1):
@@ -3123,27 +3119,15 @@ class AsteroidFieldBoss:
         return False
 
     def get_turret_rects(self):
-        """Return asteroid rects for collision detection"""
-        rects = []
-        for i, asteroid in enumerate(self.asteroids):
-            rects.append((asteroid.rect, i))
-        return rects
+        """Return empty list - asteroids cannot be destroyed by shooting"""
+        return []
 
     def get_main_body_rect(self):
         """No main body to hit"""
         return None
 
-    def check_asteroid_hits(self, bullets):
-        """Check if player bullets hit asteroids"""
-        hits = []
-        for bullet in bullets[:]:
-            for asteroid in self.asteroids[:]:
-                if bullet.rect.colliderect(asteroid.rect):
-                    hits.append((bullet, asteroid))
-        return hits
-
     def remove_asteroid(self, asteroid):
-        """Remove an asteroid when destroyed by player"""
+        """Remove an asteroid (when it collides with player)"""
         if asteroid in self.asteroids:
             self.asteroids.remove(asteroid)
 
