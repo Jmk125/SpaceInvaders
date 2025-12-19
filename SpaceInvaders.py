@@ -34,7 +34,7 @@ BASE_SHOOT_COOLDOWN = 300
 ENEMY_DROP_SPEED = 30
 RAPID_FIRE_COOLDOWN = 100
 AFTERIMAGE_INTERVAL = 80
-RESPAWN_IMMUNITY_DURATION = 1000
+RESPAWN_IMMUNITY_DURATION = 3000
 
 # XP and Leveling System Configuration
 XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
@@ -214,6 +214,7 @@ class PlayerUpgrades:
         self.boss_damage_level = 0
         self.ammo_capacity_level = 0
         self.extra_bullet_level = 0
+        self.boss_shield_level = 0
         
     def get_max_upgrade_level(self):
         """Calculate maximum upgrade level based on multiplier"""
@@ -227,6 +228,8 @@ class PlayerUpgrades:
         elif stat == "barrier_phase":
             max_levels = 1
         elif stat == "extra_bullet":
+            max_levels = 1
+        elif stat == "boss_shield":
             max_levels = 1
         elif stat == "bullet_length":
             max_levels = None  # Infinite scaling
@@ -254,6 +257,8 @@ class PlayerUpgrades:
             return 1.0 + (level * 0.05)
         if stat == "boss_damage":
             return 1.0 + (level * 0.10)
+        if stat == "boss_shield":
+            return 1.0
         return 1.0 + (level * UPGRADE_PERCENTAGE)
 
     def get_pierce_hits(self):
@@ -338,6 +343,8 @@ class LevelUpScreen:
             options = list(self.base_upgrade_options)
             if self.xp_level % 5 == 0:
                 options.append(("extra_life", "Extra Life", "Gain +1 life instead of a stat upgrade"))
+                if not getattr(player, 'has_boss_shield_upgrade', False):
+                    options.append(("boss_shield", "Boss Shield", "Regenerate a shield after each boss"))
                 permanent_choice = self.get_random_permanent_option(player)
                 if permanent_choice:
                     options.append(permanent_choice)
@@ -434,6 +441,12 @@ class LevelUpScreen:
                             self.grant_extra_life(0, stat_name)
                             self.countdown_start = pygame.time.get_ticks()
                             self.countdown_duration = 2000
+                        elif stat_name == "boss_shield":
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            self.grant_boss_shield_upgrade(0, stat_name)
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000
                         elif self.players[0].upgrades.can_upgrade(stat_name):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
@@ -465,6 +478,11 @@ class LevelUpScreen:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(0, stat_name)
                                 self.player1_confirmed = True
+                            elif stat_name == "boss_shield":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_boss_shield_upgrade(0, stat_name)
+                                self.player1_confirmed = True
                             elif self.players[0].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -494,6 +512,11 @@ class LevelUpScreen:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(1, stat_name)
                                 self.player2_confirmed = True
+                            elif stat_name == "boss_shield":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_boss_shield_upgrade(1, stat_name)
+                                self.player2_confirmed = True
                             elif self.players[1].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -519,6 +542,12 @@ class LevelUpScreen:
                             self.grant_extra_life(0, stat_name)
                             self.countdown_start = pygame.time.get_ticks()
                             self.countdown_duration = 2000
+                        elif stat_name == "boss_shield":
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            self.grant_boss_shield_upgrade(0, stat_name)
+                            self.countdown_start = pygame.time.get_ticks()
+                            self.countdown_duration = 2000
                         elif self.players[0].upgrades.can_upgrade(stat_name):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
@@ -540,6 +569,11 @@ class LevelUpScreen:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(0, stat_name)
                                 self.player1_confirmed = True
+                            elif stat_name == "boss_shield":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_boss_shield_upgrade(0, stat_name)
+                                self.player1_confirmed = True
                             elif self.players[0].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
@@ -557,6 +591,11 @@ class LevelUpScreen:
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(1, stat_name)
+                                self.player2_confirmed = True
+                            elif stat_name == "boss_shield":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.grant_boss_shield_upgrade(1, stat_name)
                                 self.player2_confirmed = True
                             elif self.players[1].upgrades.can_upgrade(stat_name):
                                 if self.sound_manager:
@@ -641,6 +680,23 @@ class LevelUpScreen:
             'y': y,
             'text': "+1 LIFE",
             'color': GOLD,
+            'start_time': pygame.time.get_ticks(),
+            'duration': 2000
+        }
+        self.upgrade_effects.append(effect)
+
+    def grant_boss_shield_upgrade(self, player_index, stat_name):
+        """Unlock the post-boss shield reward"""
+        player = self.players[player_index]
+        player.unlock_boss_shield()
+        player.upgrades.boss_shield_level = 1
+        x, y = self.get_effect_position(player_index, stat_name)
+
+        effect = {
+            'x': x,
+            'y': y,
+            'text': "BOSS SHIELD",
+            'color': CYAN,
             'start_time': pygame.time.get_ticks(),
             'duration': 2000
         }
@@ -763,6 +819,16 @@ class LevelUpScreen:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
                         self.screen.blit(lives_text, lives_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                 elif p1_option:
+                    if p1_stat_name == "boss_shield":
+                        p1_color = WHITE if self.players[0].upgrades.can_upgrade(p1_stat_name) else GRAY
+                        p1_status = "Unlocked" if self.players[0].upgrades.boss_shield_level > 0 else "Locked"
+                        if self.player1_confirmed and i == self.player1_selection:
+                            confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
+                            self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
+                        else:
+                            p1_status_text = self.tiny_font.render(p1_status, True, p1_color)
+                            self.screen.blit(p1_status_text, p1_status_text.get_rect(topleft=(left_col_x - 70, y + 25)))
+                        continue
                     p1_can_upgrade = self.players[0].upgrades.can_upgrade(p1_stat_name)
                     p1_level = getattr(self.players[0].upgrades, f"{p1_stat_name}_level")
                     p1_multiplier = self.players[0].upgrades.get_multiplier(p1_stat_name)
@@ -798,6 +864,18 @@ class LevelUpScreen:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
                         self.screen.blit(lives_text, lives_text.get_rect(topleft=(right_col_x - 70, y + 25)))
                 elif p2_option:
+                    if p2_stat_name == "boss_shield":
+                        p2_color = WHITE if self.players[1].upgrades.can_upgrade(p2_stat_name) else GRAY
+                        p2_status = "Unlocked" if self.players[1].upgrades.boss_shield_level > 0 else "Locked"
+                        if self.player2_confirmed and i == self.player2_selection:
+                            confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
+                            confirm_rect = confirm_text.get_rect()
+                            confirm_rect.topleft = (right_col_x - 70, y + 25)
+                            self.screen.blit(confirm_text, confirm_rect)
+                        else:
+                            p2_status_text = self.tiny_font.render(p2_status, True, p2_color)
+                            self.screen.blit(p2_status_text, p2_status_text.get_rect(topleft=(right_col_x - 70, y + 25)))
+                        continue
                     p2_can_upgrade = self.players[1].upgrades.can_upgrade(p2_stat_name)
                     p2_level = getattr(self.players[1].upgrades, f"{p2_stat_name}_level")
                     p2_multiplier = self.players[1].upgrades.get_multiplier(p2_stat_name)
@@ -868,6 +946,12 @@ class LevelUpScreen:
                     lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
                     self.screen.blit(lives_text, lives_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
                 else:
+                    if stat_name == "boss_shield":
+                        can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
+                        status = "Unlocked" if self.players[0].upgrades.boss_shield_level > 0 else "Locked"
+                        status_text = self.tiny_font.render(status, True, WHITE if can_upgrade else GRAY)
+                        self.screen.blit(status_text, status_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
+                        continue
                     can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
                     level = getattr(self.players[0].upgrades, f"{stat_name}_level")
                     multiplier = self.players[0].upgrades.get_multiplier(stat_name)
@@ -986,7 +1070,7 @@ class FireballProjectile:
         pygame.draw.circle(screen, (255, 220, 120), center, 6)
 
 class Boss:
-    def __init__(self, level):
+    def __init__(self, encounter):
         # Boss configuration
         self.width = SCREEN_WIDTH // 3  # One third of screen width
         self.height = int(self.width * 0.6)  # Proportional height
@@ -994,7 +1078,8 @@ class Boss:
         self.y = 150
         
         # Health system
-        self.max_health = BOSS_HEALTH_BASE + (level // 5 - 1) * BOSS_HEALTH_PER_LEVEL
+        self.encounter = max(1, encounter)
+        self.max_health = BOSS_HEALTH_BASE + (self.encounter - 1) * BOSS_HEALTH_PER_LEVEL
         self.health = self.max_health
         self.turret_health_percentage = 0.20  # Configurable: 20% of main body health
         self.max_turret_health = int(self.max_health * self.turret_health_percentage)
@@ -1881,6 +1966,7 @@ class Player:
         # Boss reward shield
         self.boss_shield_active = False
         self.boss_shield_flash_time = 0
+        self.has_boss_shield_upgrade = False
         
         # ADDED: Level up indicator
         self.level_up_indicator = False
@@ -1974,6 +2060,11 @@ class Player:
     def clear_boss_shield(self):
         """Remove boss shield (e.g., at the start of a boss fight or when consumed)"""
         self.boss_shield_active = False
+
+    def unlock_boss_shield(self):
+        """Permanently unlock boss shield rewards"""
+        self.has_boss_shield_upgrade = True
+        self.activate_boss_shield()
         
     def take_damage(self, sound_manager=None):
         """Player takes damage"""
@@ -2246,8 +2337,8 @@ class Player:
         pygame.draw.polygon(screen, color, points)
 
 class AlienOverlordBoss:
-    def __init__(self, level):
-        self.encounter = max(1, level // 5)
+    def __init__(self, encounter):
+        self.encounter = max(1, encounter)
         self.width = SCREEN_WIDTH // 4
         self.height = int(self.width * 1.3)
         self.head_height = int(self.height * 0.55)
@@ -3349,6 +3440,7 @@ class Game:
         self.current_boss = None
         self.is_boss_level = False
         self.boss_shield_granted = False
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0}
         
         self.controllers = []
         self.scan_controllers()
@@ -3433,9 +3525,13 @@ class Game:
             player.invincible_end_time = pygame.time.get_ticks() + 10_000_000 if player.invincible else 0
 
             if config.get('boss_shield', False):
+                player.has_boss_shield_upgrade = True
                 player.activate_boss_shield()
+                player.upgrades.boss_shield_level = 1
             else:
+                player.has_boss_shield_upgrade = False
                 player.clear_boss_shield()
+                player.upgrades.boss_shield_level = 0
 
             upgrades = config.get('upgrades', {})
             for key, value in upgrades.items():
@@ -3481,7 +3577,9 @@ class Game:
 
     def create_boss_instance(self):
         boss_class = random.choice(self.available_bosses)
-        return boss_class(self.level)
+        self.boss_encounters[boss_class] = self.boss_encounters.get(boss_class, 0) + 1
+        encounter_number = self.boss_encounters[boss_class]
+        return boss_class(encounter_number)
         
     def create_barriers(self):
         self.barriers = []
@@ -3534,17 +3632,21 @@ class Game:
         if self.boss_shield_granted:
             return
 
+        granted_any = False
         for player in self.players:
-            player.activate_boss_shield()
+            if player.has_boss_shield_upgrade:
+                player.activate_boss_shield()
+                granted_any = True
 
         self.boss_shield_granted = True
-        self.floating_texts.append(FloatingText(
-            SCREEN_WIDTH // 2,
-            SCREEN_HEIGHT // 2,
-            "Shield Ready!",
-            color=CYAN,
-            duration=1500
-        ))
+        if granted_any:
+            self.floating_texts.append(FloatingText(
+                SCREEN_WIDTH // 2,
+                SCREEN_HEIGHT // 2,
+                "Shield Ready!",
+                color=CYAN,
+                duration=1500
+            ))
 
     def add_xp(self, amount, source_x=None, source_y=None):
         """Add XP and handle level up"""
@@ -4142,7 +4244,8 @@ class Game:
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
         self.available_bosses = [Boss, AlienOverlordBoss]
-        
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0}
+
         # Reset all players with new individual upgrades
         for player in self.players:
             player.lives = 3
@@ -4152,6 +4255,7 @@ class Game:
             player.clear_all_power_ups()
             player.invincible = False
             player.respawn_immunity = False
+            player.has_boss_shield_upgrade = False
             player.afterimage_positions = []
         
         self.create_barriers()
