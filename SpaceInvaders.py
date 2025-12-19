@@ -4100,10 +4100,26 @@ class Game:
         speed_level = ((level - 1) // 5) + 1
         speed_increase = (speed_level - 1) * ENEMY_SPEED_PROGRESSION
         return BASE_ENEMY_SPEED + speed_increase
-        
+
+    def is_level_a_boss_level(self, level):
+        """Determine if this level is a boss level using progressive spacing.
+        First boss at level 4, then each subsequent boss requires one additional level.
+        Boss levels: 4, 9 (4+5), 15 (9+6), 22 (15+7), 30 (22+8), etc.
+        """
+        boss_level = 4  # First boss at level 4
+        gap = 4  # Initial gap to first boss
+
+        while boss_level <= level:
+            if boss_level == level:
+                return True
+            gap += 1  # Each subsequent boss requires one more level
+            boss_level += gap
+
+        return False
+
     def setup_level(self):
         """Setup current level - either boss or regular enemies"""
-        self.is_boss_level = (self.level % 5 == 0)
+        self.is_boss_level = self.is_level_a_boss_level(self.level)
         self.boss_shield_granted = False
 
         if self.is_boss_level:
