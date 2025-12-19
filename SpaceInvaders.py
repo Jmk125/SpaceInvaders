@@ -50,6 +50,12 @@ BOSS_SPEED_BASE = 2.0  # Base boss speed
 BOSS_SHOOT_FREQUENCY = 50  # Lower = more frequent shooting
 ENEMY_SPEED_PROGRESSION = 0.15  # Speed increase per boss level (every 5 levels)
 
+# Enemy In-Combat Speed Progression (as enemies are destroyed)
+ENEMY_GRID_TOTAL = 60  # Total enemies in a standard grid (5 rows × 12 columns)
+ENEMY_SPEED_MULTIPLIER_MAX = 14  # Max speed multiplier when most enemies destroyed
+ENEMY_SPEED_FINAL_THRESHOLD = 5  # Number of remaining enemies to trigger extra speed boost
+ENEMY_SPEED_FINAL_MULTIPLIER = 2  # Per-enemy multiplier when below threshold
+
 # Alien Overlord Boss Configuration
 ALIEN_BOSS_HEAD_HEALTH_BASE = 65
 ALIEN_BOSS_HEAD_HEALTH_PER_LEVEL = 15
@@ -4240,16 +4246,16 @@ class Game:
         
     def update_enemy_speed(self):
         # More aggressive speed increase as enemies are eliminated
-        total_enemies = 60
+        total_enemies = ENEMY_GRID_TOTAL
         remaining_enemies = len(self.enemies)
         if remaining_enemies > 0:
             destroyed_ratio = (total_enemies - remaining_enemies) / total_enemies
-            speed_multiplier = 1 + destroyed_ratio * 14
-            
-            if remaining_enemies <= 5:
-                extra_multiplier = (5 - remaining_enemies + 1) * 2
+            speed_multiplier = 1 + destroyed_ratio * ENEMY_SPEED_MULTIPLIER_MAX
+
+            if remaining_enemies <= ENEMY_SPEED_FINAL_THRESHOLD:
+                extra_multiplier = (ENEMY_SPEED_FINAL_THRESHOLD - remaining_enemies + 1) * ENEMY_SPEED_FINAL_MULTIPLIER
                 speed_multiplier += extra_multiplier
-                
+
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
 
