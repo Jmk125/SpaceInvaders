@@ -4161,11 +4161,14 @@ class Game:
                 print("Showing level up screen...")  # Debug
                 self.awaiting_level_up = True
                 return False  # Don't advance game level yet, wait for upgrade selection
-            
+
             # No level up pending, advance to next level
             self.level += 1
             print(f"Advanced to game level {self.level}")  # Debug
-            
+
+            # Clear all enemy bullets to prevent them from carrying over to the next level
+            self.enemy_bullets.clear()
+
             # Respawn dead players with 1 life if their partner survived
             if self.coop_mode and len(self.players) == 2:
                 if not self.players[0].is_alive and self.players[1].is_alive:
@@ -4174,7 +4177,7 @@ class Game:
                 elif not self.players[1].is_alive and self.players[0].is_alive:
                     self.players[1].lives = 1
                     self.players[1].respawn()
-            
+
             self.setup_level()
             self.create_barriers()
             return True
