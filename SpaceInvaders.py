@@ -73,6 +73,18 @@ BULLET_HELL_BOSS_BULLET_SPEED = 3.5  # Speed of falling bullets (slow)
 BULLET_HELL_BOSS_MOVEMENT_ZONE_TOP = 100  # Top of movement zone
 BULLET_HELL_BOSS_MOVEMENT_ZONE_BOTTOM = 540  # Bottom of movement zone (half screen at 1080p)
 
+# Asteroid Field Boss Configuration
+ASTEROID_BOSS_HEALTH_BASE = 100  # Base health (asteroids that need to reach bottom)
+ASTEROID_BOSS_HEALTH_PER_LEVEL = 20  # Health increase per encounter
+ASTEROID_BOSS_SPAWN_COOLDOWN_BASE = 800  # ms between asteroid spawns (rapid!)
+ASTEROID_BOSS_SPAWN_COOLDOWN_SCALE = 0.88  # Multiplier per encounter (spawns faster)
+ASTEROID_BOSS_SPEED_BASE = 4.0  # Base falling speed
+ASTEROID_BOSS_SPEED_GROWTH = 0.5  # Speed increase per encounter
+ASTEROID_BOSS_SIZE_MULTIPLIER = 1.0  # Global size scale for all asteroids (tweak this!)
+ASTEROID_BOSS_SIZE_MIN = 30  # Minimum asteroid size (before multiplier)
+ASTEROID_BOSS_SIZE_MAX = 80  # Maximum asteroid size (before multiplier)
+ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches bottom
+
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
@@ -2941,6 +2953,239 @@ class BulletHellBoss:
             screen.blit(text, text_rect)
 
 
+class Asteroid:
+    """Falling asteroid for the Asteroid Field Boss"""
+    def __init__(self, x, speed, size_multiplier):
+        # Random size within range, scaled by multiplier
+        base_size = random.randint(ASTEROID_BOSS_SIZE_MIN, ASTEROID_BOSS_SIZE_MAX)
+        self.size = int(base_size * size_multiplier)
+
+        self.x = x
+        self.y = -self.size  # Start above screen
+        self.speed = speed
+        self.width = self.size
+        self.height = self.size
+        self.rect = pygame.Rect(int(self.x - self.size // 2), int(self.y - self.size // 2), self.size, self.size)
+
+        # Visual properties for variety
+        self.color = random.choice([
+            (120, 120, 120),  # Gray
+            (100, 100, 100),  # Dark gray
+            (140, 140, 140),  # Light gray
+            (100, 80, 70),    # Brown-gray
+        ])
+        self.rotation = random.randint(0, 360)
+        self.rotation_speed = random.uniform(-2, 2)
+
+    def move(self):
+        self.y += self.speed
+        self.rotation += self.rotation_speed
+        self.rect.x = int(self.x - self.size // 2)
+        self.rect.y = int(self.y - self.size // 2)
+
+    def is_off_screen(self):
+        return self.y - self.size // 2 > SCREEN_HEIGHT
+
+    def draw(self, screen):
+        # Draw irregular asteroid shape
+        center = (int(self.x), int(self.y))
+        radius = self.size // 2
+
+        # Draw main body
+        pygame.draw.circle(screen, self.color, center, radius)
+
+        # Add some irregular edges (simple approach - draw smaller circles around perimeter)
+        num_bumps = 6
+        for i in range(num_bumps):
+            angle = (self.rotation + i * 60) * math.pi / 180
+            bump_x = center[0] + int(math.cos(angle) * radius * 0.7)
+            bump_y = center[1] + int(math.sin(angle) * radius * 0.7)
+            bump_size = radius // 3
+            pygame.draw.circle(screen, self.color, (bump_x, bump_y), bump_size)
+
+        # Add some crater details (darker spots)
+        darker_color = (max(0, self.color[0] - 30), max(0, self.color[1] - 30), max(0, self.color[2] - 30))
+        num_craters = 3
+        for i in range(num_craters):
+            angle = (self.rotation + i * 120 + 30) * math.pi / 180
+            crater_x = center[0] + int(math.cos(angle) * radius * 0.4)
+            crater_y = center[1] + int(math.sin(angle) * radius * 0.4)
+            crater_size = radius // 4
+            pygame.draw.circle(screen, darker_color, (crater_x, crater_y), crater_size)
+
+        # Outline
+        pygame.draw.circle(screen, (80, 80, 80), center, radius, 2)
+
+
+class AsteroidFieldBoss:
+    """Fourth boss - Navigate through an asteroid field"""
+    def __init__(self, encounter):
+        self.encounter = max(1, encounter)
+
+        # Health system - represents asteroids that need to reach bottom
+        self.max_health = ASTEROID_BOSS_HEALTH_BASE + (self.encounter - 1) * ASTEROID_BOSS_HEALTH_PER_LEVEL
+        self.health = self.max_health
+
+        # Asteroid spawning system
+        self.spawn_cooldown = int(ASTEROID_BOSS_SPAWN_COOLDOWN_BASE * (ASTEROID_BOSS_SPAWN_COOLDOWN_SCALE ** (self.encounter - 1)))
+        self.last_spawn = pygame.time.get_ticks()
+
+        # Asteroid speed
+        self.asteroid_speed = ASTEROID_BOSS_SPEED_BASE + (self.encounter - 1) * ASTEROID_BOSS_SPEED_GROWTH
+
+        # Size multiplier for all asteroids
+        self.size_multiplier = ASTEROID_BOSS_SIZE_MULTIPLIER
+
+        # Track active asteroids
+        self.asteroids = []
+
+        # Completion state
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        self.completion_message_duration = 3000  # Show message for 3 seconds
+
+        # For compatibility with other bosses
+        self.x = SCREEN_WIDTH // 2
+        self.y = 50
+        self.width = 200
+        self.height = 100
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        self.explosion_effects = []
+
+    def update(self, players=None, sound_manager=None):
+        """Update asteroid field"""
+        if self.destruction_complete:
+            return
+
+        current_time = pygame.time.get_ticks()
+
+        # Spawn new asteroids
+        if current_time - self.last_spawn > self.spawn_cooldown:
+            # Random X position across screen
+            x = random.randint(50, SCREEN_WIDTH - 50)
+            # Add some speed variation
+            speed_variation = random.uniform(0.8, 1.2)
+            asteroid = Asteroid(x, self.asteroid_speed * speed_variation, self.size_multiplier)
+            self.asteroids.append(asteroid)
+            self.last_spawn = current_time
+
+        # Update all asteroids
+        asteroids_to_remove = []
+        for asteroid in self.asteroids:
+            asteroid.move()
+
+            # Check if asteroid reached bottom (player missed it)
+            if asteroid.is_off_screen():
+                asteroids_to_remove.append(asteroid)
+                # Boss loses health
+                self.health -= ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID
+                if self.health <= 0:
+                    self.health = 0
+                    self.start_completion_sequence()
+
+        # Remove asteroids that reached bottom
+        for asteroid in asteroids_to_remove:
+            self.asteroids.remove(asteroid)
+
+    def shoot(self, players, sound_manager=None):
+        """This boss doesn't shoot bullets - asteroids are the hazard"""
+        return []
+
+    def start_completion_sequence(self):
+        """Start completion sequence (no explosion, just message)"""
+        self.destruction_complete = True
+        self.destruction_start_time = pygame.time.get_ticks()
+        # Clear remaining asteroids
+        self.asteroids.clear()
+
+    def is_destruction_complete(self):
+        """Check if completion sequence is finished"""
+        if not self.destruction_complete:
+            return False
+        return pygame.time.get_ticks() - self.destruction_start_time > self.completion_message_duration
+
+    def create_final_explosion(self):
+        """No explosion for asteroid field - return empty list"""
+        return []
+
+    def take_turret_damage(self, turret_index, damage=1):
+        """Hitting an asteroid destroys it"""
+        if 0 <= turret_index < len(self.asteroids):
+            asteroid = self.asteroids[turret_index]
+            self.remove_asteroid(asteroid)
+            return True  # Asteroid destroyed
+        return False
+
+    def take_main_damage(self, damage=1):
+        """Player shooting asteroids doesn't damage the boss"""
+        return False
+
+    def get_turret_rects(self):
+        """Return asteroid rects for collision detection"""
+        rects = []
+        for i, asteroid in enumerate(self.asteroids):
+            rects.append((asteroid.rect, i))
+        return rects
+
+    def get_main_body_rect(self):
+        """No main body to hit"""
+        return None
+
+    def check_asteroid_hits(self, bullets):
+        """Check if player bullets hit asteroids"""
+        hits = []
+        for bullet in bullets[:]:
+            for asteroid in self.asteroids[:]:
+                if bullet.rect.colliderect(asteroid.rect):
+                    hits.append((bullet, asteroid))
+        return hits
+
+    def remove_asteroid(self, asteroid):
+        """Remove an asteroid when destroyed by player"""
+        if asteroid in self.asteroids:
+            self.asteroids.remove(asteroid)
+
+    def draw(self, screen):
+        """Draw the asteroid field"""
+        if self.destruction_complete:
+            # Show completion message
+            font = pygame.font.Font(None, 80)
+            text = font.render("ASTEROID FIELD CLEARED!", True, GREEN)
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
+
+            # Draw background box for text
+            padding = 40
+            box_rect = text_rect.inflate(padding * 2, padding * 2)
+            pygame.draw.rect(screen, BLACK, box_rect)
+            pygame.draw.rect(screen, GREEN, box_rect, 4)
+
+            screen.blit(text, text_rect)
+            return
+
+        # Draw all asteroids
+        for asteroid in self.asteroids:
+            asteroid.draw(screen)
+
+        # Draw health bar at top of screen
+        bar_width = 600
+        bar_height = 30
+        bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+        bar_y = 20
+
+        health_ratio = self.health / self.max_health
+
+        pygame.draw.rect(screen, RED, (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(screen, GREEN, (bar_x, bar_y, int(bar_width * health_ratio), bar_height))
+        pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 3)
+
+        # Label
+        font = pygame.font.Font(None, 32)
+        label = f"ASTEROID FIELD: {int(health_ratio * 100)}%"
+        text = font.render(label, True, WHITE)
+        text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, bar_y - 20))
+        screen.blit(text, text_rect)
+
+
 class Enemy:
     def __init__(self, x, y, enemy_type=0):
         self.x = x
@@ -3752,7 +3997,7 @@ class Game:
         self.current_boss = None
         self.is_boss_level = False
         self.boss_shield_granted = False
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0}
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0}
         
         self.controllers = []
         self.scan_controllers()
@@ -3772,7 +4017,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss]
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss]
 
         self.font = pygame.font.Font(None, 72)
         self.small_font = pygame.font.Font(None, 48)
@@ -3895,6 +4140,9 @@ class Game:
         
     def create_barriers(self):
         self.barriers = []
+        # Don't create barriers during Asteroid Field boss
+        if self.is_boss_level and self.current_boss and isinstance(self.current_boss, AsteroidFieldBoss):
+            return
         barrier_count = 5
         barrier_spacing = SCREEN_WIDTH // (barrier_count + 1)
         for i in range(barrier_count):
@@ -4524,7 +4772,17 @@ class Game:
                     if player.take_damage(self.sound_manager):
                         self.enemy_bullets.remove(bullet)
                         break
-                    
+
+        # Asteroids vs players (for Asteroid Field Boss)
+        if self.is_boss_level and self.current_boss and isinstance(self.current_boss, AsteroidFieldBoss):
+            for asteroid in self.current_boss.asteroids[:]:
+                for player in self.players:
+                    if player.is_alive and asteroid.rect.colliderect(player.rect):
+                        if player.take_damage(self.sound_manager):
+                            self.current_boss.remove_asteroid(asteroid)
+                            self.sound_manager.play_sound('explosion_small', volume_override=0.5)
+                            break
+
     def restart_game(self):
         self.game_over = False
         self.awaiting_name_input = False
@@ -4558,8 +4816,8 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss]
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0}
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss]
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0}
 
         # Reset all players with new individual upgrades
         for player in self.players:
