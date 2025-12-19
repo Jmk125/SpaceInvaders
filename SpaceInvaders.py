@@ -3082,10 +3082,12 @@ class AsteroidFieldBoss:
                 if self.health <= 0:
                     self.health = 0
                     self.start_completion_sequence()
+                    return  # Exit early, asteroids already cleared
 
         # Remove asteroids that reached bottom
         for asteroid in asteroids_to_remove:
-            self.asteroids.remove(asteroid)
+            if asteroid in self.asteroids:  # Safety check
+                self.asteroids.remove(asteroid)
 
     def shoot(self, players, sound_manager=None):
         """This boss doesn't shoot bullets - asteroids are the hazard"""
@@ -4140,9 +4142,6 @@ class Game:
         
     def create_barriers(self):
         self.barriers = []
-        # Don't create barriers during Asteroid Field boss
-        if self.is_boss_level and self.current_boss and isinstance(self.current_boss, AsteroidFieldBoss):
-            return
         barrier_count = 5
         barrier_spacing = SCREEN_WIDTH // (barrier_count + 1)
         for i in range(barrier_count):
@@ -4453,6 +4452,9 @@ class Game:
             if self.ufo_warning_screen.is_finished():
                 self.showing_ufo_warning = False
                 self.current_boss = self.create_boss_instance()
+                # Clear barriers for Asteroid Field Boss
+                if isinstance(self.current_boss, AsteroidFieldBoss):
+                    self.barriers.clear()
                 self.ufo_warning_screen = None
             return  # Don't update game during warning
             
