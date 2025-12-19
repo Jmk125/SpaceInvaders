@@ -214,6 +214,7 @@ class PlayerUpgrades:
         self.boss_damage_level = 0
         self.ammo_capacity_level = 0
         self.extra_bullet_level = 0
+        self.boss_shield_level = 0
         
     def get_max_upgrade_level(self):
         """Calculate maximum upgrade level based on multiplier"""
@@ -227,6 +228,8 @@ class PlayerUpgrades:
         elif stat == "barrier_phase":
             max_levels = 1
         elif stat == "extra_bullet":
+            max_levels = 1
+        elif stat == "boss_shield":
             max_levels = 1
         elif stat == "bullet_length":
             max_levels = None  # Infinite scaling
@@ -254,6 +257,8 @@ class PlayerUpgrades:
             return 1.0 + (level * 0.05)
         if stat == "boss_damage":
             return 1.0 + (level * 0.10)
+        if stat == "boss_shield":
+            return 1.0
         return 1.0 + (level * UPGRADE_PERCENTAGE)
 
     def get_pierce_hits(self):
@@ -684,6 +689,7 @@ class LevelUpScreen:
         """Unlock the post-boss shield reward"""
         player = self.players[player_index]
         player.unlock_boss_shield()
+        player.upgrades.boss_shield_level = 1
         x, y = self.get_effect_position(player_index, stat_name)
 
         effect = {
@@ -813,6 +819,16 @@ class LevelUpScreen:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
                         self.screen.blit(lives_text, lives_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                 elif p1_option:
+                    if p1_stat_name == "boss_shield":
+                        p1_color = WHITE if self.players[0].upgrades.can_upgrade(p1_stat_name) else GRAY
+                        p1_status = "Unlocked" if self.players[0].upgrades.boss_shield_level > 0 else "Locked"
+                        if self.player1_confirmed and i == self.player1_selection:
+                            confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
+                            self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
+                        else:
+                            p1_status_text = self.tiny_font.render(p1_status, True, p1_color)
+                            self.screen.blit(p1_status_text, p1_status_text.get_rect(topleft=(left_col_x - 70, y + 25)))
+                        continue
                     p1_can_upgrade = self.players[0].upgrades.can_upgrade(p1_stat_name)
                     p1_level = getattr(self.players[0].upgrades, f"{p1_stat_name}_level")
                     p1_multiplier = self.players[0].upgrades.get_multiplier(p1_stat_name)
@@ -848,6 +864,18 @@ class LevelUpScreen:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
                         self.screen.blit(lives_text, lives_text.get_rect(topleft=(right_col_x - 70, y + 25)))
                 elif p2_option:
+                    if p2_stat_name == "boss_shield":
+                        p2_color = WHITE if self.players[1].upgrades.can_upgrade(p2_stat_name) else GRAY
+                        p2_status = "Unlocked" if self.players[1].upgrades.boss_shield_level > 0 else "Locked"
+                        if self.player2_confirmed and i == self.player2_selection:
+                            confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
+                            confirm_rect = confirm_text.get_rect()
+                            confirm_rect.topleft = (right_col_x - 70, y + 25)
+                            self.screen.blit(confirm_text, confirm_rect)
+                        else:
+                            p2_status_text = self.tiny_font.render(p2_status, True, p2_color)
+                            self.screen.blit(p2_status_text, p2_status_text.get_rect(topleft=(right_col_x - 70, y + 25)))
+                        continue
                     p2_can_upgrade = self.players[1].upgrades.can_upgrade(p2_stat_name)
                     p2_level = getattr(self.players[1].upgrades, f"{p2_stat_name}_level")
                     p2_multiplier = self.players[1].upgrades.get_multiplier(p2_stat_name)
@@ -918,6 +946,12 @@ class LevelUpScreen:
                     lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
                     self.screen.blit(lives_text, lives_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
                 else:
+                    if stat_name == "boss_shield":
+                        can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
+                        status = "Unlocked" if self.players[0].upgrades.boss_shield_level > 0 else "Locked"
+                        status_text = self.tiny_font.render(status, True, WHITE if can_upgrade else GRAY)
+                        self.screen.blit(status_text, status_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
+                        continue
                     can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
                     level = getattr(self.players[0].upgrades, f"{stat_name}_level")
                     multiplier = self.players[0].upgrades.get_multiplier(stat_name)
@@ -3493,9 +3527,11 @@ class Game:
             if config.get('boss_shield', False):
                 player.has_boss_shield_upgrade = True
                 player.activate_boss_shield()
+                player.upgrades.boss_shield_level = 1
             else:
                 player.has_boss_shield_upgrade = False
                 player.clear_boss_shield()
+                player.upgrades.boss_shield_level = 0
 
             upgrades = config.get('upgrades', {})
             for key, value in upgrades.items():
