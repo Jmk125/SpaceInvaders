@@ -48,11 +48,11 @@ BOSS_HEALTH_BASE = 50  # Base boss health
 BOSS_HEALTH_PER_LEVEL = 10  # Additional health per boss level
 BOSS_SPEED_BASE = 2.0  # Base boss speed
 BOSS_SHOOT_FREQUENCY = 50  # Lower = more frequent shooting
-ENEMY_SPEED_PROGRESSION = 0.15  # Speed increase per boss level (every 5 levels)
+ENEMY_SPEED_PROGRESSION = 0.10  # Speed increase per boss level (every 5 levels) -.15 default
 
 # Enemy In-Combat Speed Progression (as enemies are destroyed)
 ENEMY_GRID_TOTAL = 60  # Total enemies in a standard grid (5 rows × 12 columns)
-ENEMY_SPEED_MULTIPLIER_MAX = 14  # Max speed multiplier when most enemies destroyed
+ENEMY_SPEED_MULTIPLIER_MAX = 10  # Max speed multiplier when most enemies destroyed - 14 default
 ENEMY_SPEED_FINAL_THRESHOLD = 5  # Number of remaining enemies to trigger extra speed boost
 ENEMY_SPEED_FINAL_MULTIPLIER = 2  # Per-enemy multiplier when below threshold
 
