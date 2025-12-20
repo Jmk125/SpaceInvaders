@@ -312,6 +312,108 @@ class PlayerUpgrades:
     def has_extra_bullet(self):
         return self.extra_bullet_level > 0
 
+
+class PlayerStats:
+    """Track detailed player statistics for game over screen"""
+    def __init__(self, player_id=1):
+        self.player_id = player_id
+
+        # Combat stats
+        self.enemies_killed = 0
+        self.shots_fired_total = 0
+        self.shots_fired_normal = 0
+        self.shots_fired_rapid = 0
+        self.shots_fired_laser = 0
+        self.shots_fired_multi = 0
+
+        # Power-up stats
+        self.invincibility_time = 0  # Total time in milliseconds
+        self.invincibility_start_time = None  # Track when invincibility started
+
+        # Permanent upgrades used (list of upgrade names)
+        self.permanent_upgrades_used = []
+
+        # Survival stats
+        self.deaths = 0
+
+        # Boss stats
+        self.boss_damage_dealt = 0
+        self.bosses_fought_count = 0
+        self.bosses_fought_names = []  # List of boss names
+
+        # Score and XP
+        self.final_score = 0
+        self.final_xp_level = 0
+        self.final_xp = 0
+
+    def record_shot(self, shot_type='normal'):
+        """Record a shot fired"""
+        self.shots_fired_total += 1
+        if shot_type == 'rapid':
+            self.shots_fired_rapid += 1
+        elif shot_type == 'laser':
+            self.shots_fired_laser += 1
+        elif shot_type == 'multi':
+            self.shots_fired_multi += 1
+        else:
+            self.shots_fired_normal += 1
+
+    def record_enemy_kill(self):
+        """Record an enemy killed"""
+        self.enemies_killed += 1
+
+    def start_invincibility(self):
+        """Start tracking invincibility time"""
+        if self.invincibility_start_time is None:
+            self.invincibility_start_time = pygame.time.get_ticks()
+
+    def end_invincibility(self):
+        """End tracking invincibility time"""
+        if self.invincibility_start_time is not None:
+            duration = pygame.time.get_ticks() - self.invincibility_start_time
+            self.invincibility_time += duration
+            self.invincibility_start_time = None
+
+    def record_death(self):
+        """Record a player death"""
+        self.deaths += 1
+        # If player dies while invincible, end the tracking
+        if self.invincibility_start_time is not None:
+            self.end_invincibility()
+
+    def record_boss_damage(self, damage):
+        """Record damage dealt to boss"""
+        self.boss_damage_dealt += damage
+
+    def record_boss_encounter(self, boss_name):
+        """Record a boss encounter"""
+        if boss_name not in self.bosses_fought_names:
+            self.bosses_fought_names.append(boss_name)
+            self.bosses_fought_count = len(self.bosses_fought_names)
+
+    def add_permanent_upgrade(self, upgrade_name):
+        """Add a permanent upgrade to the list"""
+        if upgrade_name not in self.permanent_upgrades_used:
+            self.permanent_upgrades_used.append(upgrade_name)
+
+    def set_final_stats(self, score, xp_level, xp):
+        """Set final score and XP stats"""
+        self.final_score = score
+        self.final_xp_level = xp_level
+        self.final_xp = xp
+        # End invincibility tracking if still active
+        if self.invincibility_start_time is not None:
+            self.end_invincibility()
+
+    def get_invincibility_seconds(self):
+        """Get total invincibility time in seconds"""
+        total_time = self.invincibility_time
+        # Add current invincibility session if active
+        if self.invincibility_start_time is not None:
+            total_time += pygame.time.get_ticks() - self.invincibility_start_time
+        return total_time / 1000.0
+
+
 class FloatingText:
     def __init__(self, x, y, text, color=YELLOW, duration=1000):
         self.x = x
@@ -3064,6 +3166,9 @@ class Asteroid:
         self.rotation = random.randint(0, 360)
         self.rotation_speed = random.uniform(-2, 2)
 
+        # Near-miss XP tracking (one time per asteroid)
+        self.near_miss_triggered = False
+
         # Randomized crater properties for visual variety
         self.num_craters = random.randint(2, 5)
         self.craters = []
@@ -4080,7 +4185,10 @@ class Game:
         
         # XP and upgrade system
         self.xp_system = XPSystem()
-        
+
+        # Player statistics tracking
+        self.player_stats = []  # Will be populated when players are created
+
         # Visual feedback
         self.floating_texts = []
         
@@ -4125,7 +4233,8 @@ class Game:
     def setup_game(self, mode, debug_config=None):
         self.coop_mode = (mode == "coop")
         self.players = []
-        
+        self.player_stats = []  # Reset stats
+
         if self.coop_mode:
             controller1 = self.controllers[0] if len(self.controllers) > 0 else None
             # Create individual upgrades for each player
@@ -4133,16 +4242,19 @@ class Game:
             player1 = Player(SCREEN_WIDTH // 2 - 90, SCREEN_HEIGHT - 80, 1, controller1, player1_upgrades)
             player1.coop_mode = True
             self.players.append(player1)
-            
+            self.player_stats.append(PlayerStats(player_id=1))
+
             controller2 = self.controllers[1] if len(self.controllers) > 1 else None
             player2_upgrades = PlayerUpgrades()
             player2 = Player(SCREEN_WIDTH // 2 + 30, SCREEN_HEIGHT - 80, 2, controller2, player2_upgrades)
             player2.coop_mode = True
             self.players.append(player2)
+            self.player_stats.append(PlayerStats(player_id=2))
         else:
             controller = self.controllers[0] if len(self.controllers) > 0 else None
             player_upgrades = PlayerUpgrades()
             self.players.append(Player(SCREEN_WIDTH // 2 - 30, SCREEN_HEIGHT - 80, 1, controller, player_upgrades))
+            self.player_stats.append(PlayerStats(player_id=1))
             
         if debug_config:
             self.apply_debug_config(debug_config)
@@ -4360,24 +4472,58 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and not self.game_over:
                     if len(self.players) > 0 and self.players[0].is_alive:
-                        shots = self.players[0].shoot(self.sound_manager)
+                        player = self.players[0]
+                        # Determine shot type for stats tracking
+                        if player.has_laser:
+                            shot_stat_type = 'laser'
+                        elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                            shot_stat_type = 'multi'
+                        elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                            shot_stat_type = 'rapid'
+                        else:
+                            shot_stat_type = 'normal'
+
+                        shots = player.shoot(self.sound_manager)
                         for shot_type, shot in shots:
                             if shot_type == 'bullet':
                                 self.sound_manager.play_sound('shoot')
                                 self.player_bullets.append(shot)
+                                # Track shot in stats
+                                if len(self.player_stats) > 0:
+                                    self.player_stats[0].record_shot(shot_stat_type)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
+                                # Track laser shot in stats
+                                if len(self.player_stats) > 0:
+                                    self.player_stats[0].record_shot(shot_stat_type)
                 elif event.key == pygame.K_RCTRL and not self.game_over and self.coop_mode:
                     if len(self.players) > 1 and self.players[1].is_alive:
-                        shots = self.players[1].shoot(self.sound_manager)
+                        player = self.players[1]
+                        # Determine shot type for stats tracking
+                        if player.has_laser:
+                            shot_stat_type = 'laser'
+                        elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                            shot_stat_type = 'multi'
+                        elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                            shot_stat_type = 'rapid'
+                        else:
+                            shot_stat_type = 'normal'
+
+                        shots = player.shoot(self.sound_manager)
                         for shot_type, shot in shots:
                             if shot_type == 'bullet':
                                 self.sound_manager.play_sound('shoot')
                                 self.player_bullets.append(shot)
+                                # Track shot in stats
+                                if len(self.player_stats) > 1:
+                                    self.player_stats[1].record_shot(shot_stat_type)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
+                                # Track laser shot in stats
+                                if len(self.player_stats) > 1:
+                                    self.player_stats[1].record_shot(shot_stat_type)
                 elif event.key == pygame.K_r and self.game_over and not self.awaiting_name_input:
                     # FIXED: Check input delay before allowing restart
                     if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
@@ -4402,14 +4548,30 @@ class Game:
                     for i, player in enumerate(self.players):
                         if player.controller and event.joy == player.controller.get_instance_id() and player.is_alive:
                             if event.button == 0:
+                                # Determine shot type for stats tracking
+                                if player.has_laser:
+                                    shot_stat_type = 'laser'
+                                elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                                    shot_stat_type = 'multi'
+                                elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                                    shot_stat_type = 'rapid'
+                                else:
+                                    shot_stat_type = 'normal'
+
                                 shots = player.shoot(self.sound_manager)
                                 for shot_type, shot in shots:
                                     if shot_type == 'bullet':
                                         self.sound_manager.play_sound('shoot')
                                         self.player_bullets.append(shot)
+                                        # Track shot in stats
+                                        if i < len(self.player_stats):
+                                            self.player_stats[i].record_shot(shot_stat_type)
                                     elif shot_type == 'laser':
                                         self.sound_manager.play_sound('laser')
                                         self.laser_beams.append(shot)
+                                        # Track laser shot in stats
+                                        if i < len(self.player_stats):
+                                            self.player_stats[i].record_shot(shot_stat_type)
                                         
         return None
     
@@ -4487,6 +4649,10 @@ class Game:
             player.activate_rapid_fire()
         elif power_type == 'invincibility':
             player.activate_invincibility()
+            # Track start of invincibility in stats
+            player_idx = player.player_id - 1
+            if player_idx < len(self.player_stats):
+                self.player_stats[player_idx].start_invincibility()
         elif power_type == 'laser':
             player.activate_laser()
         elif power_type == 'multi_shot':
@@ -4546,6 +4712,16 @@ class Game:
         if game_over and not self.game_over:
             self.game_over = True
             self.game_over_time = pygame.time.get_ticks()  # ADDED: Record when game over occurred
+
+            # Set final stats for all players
+            for i, stats in enumerate(self.player_stats):
+                if self.coop_mode:
+                    # In coop, each player gets their own score (we'll use total score / 2 for simplicity)
+                    player_score = self.score // 2
+                else:
+                    player_score = self.score
+                stats.set_final_stats(player_score, self.xp_system.level, self.xp_system.current_xp)
+
             if self.score_manager.is_high_score(self.score, self.coop_mode):
                 self.awaiting_name_input = True
                 self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode)
@@ -4558,6 +4734,12 @@ class Game:
             if self.ufo_warning_screen.is_finished():
                 self.showing_ufo_warning = False
                 self.current_boss = self.create_boss_instance()
+
+                # Track boss encounter in player stats
+                boss_name = self.current_boss.__class__.__name__
+                for stat in self.player_stats:
+                    stat.record_boss_encounter(boss_name)
+
                 # Clear barriers for Asteroid Field Boss
                 if isinstance(self.current_boss, AsteroidFieldBoss):
                     self.barriers.clear()
@@ -4733,6 +4915,11 @@ class Game:
                         if bullet.pierce_hits <= 0:
                             self.player_bullets.remove(bullet)
                         self.sound_manager.play_sound('ufo_hit', volume_override=0.8)
+
+                        # Track boss damage in player stats
+                        if bullet.owner_id and bullet.owner_id <= len(self.player_stats):
+                            self.player_stats[bullet.owner_id - 1].record_boss_damage(damage)
+
                         if self.current_boss.take_main_damage(damage):
                             # Boss completely destroyed - EPIC EXPLOSION SEQUENCE
                             self.score += 1000
@@ -4795,6 +4982,10 @@ class Game:
                         self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
                         self.update_enemy_speed()
                         self.spawn_power_up(owner)
+
+                        # Track enemy kill in player stats
+                        if bullet.owner_id and bullet.owner_id <= len(self.player_stats):
+                            self.player_stats[bullet.owner_id - 1].record_enemy_kill()
                         if bullet.pierce_hits > 0:
                             bullet.pierce_hits -= 1
                         break
@@ -4824,6 +5015,11 @@ class Game:
                         # Play UFO hit sound for laser main body hits (but limit frequency)
                         if pygame.time.get_ticks() % 200 == 0:  # Only every 200ms to avoid spam
                             self.sound_manager.play_sound('ufo_hit', volume_override=0.6)
+
+                        # Track boss damage in player stats (laser does 3 damage)
+                        if laser.owner_player_id and laser.owner_player_id <= len(self.player_stats):
+                            self.player_stats[laser.owner_player_id - 1].record_boss_damage(3)
+
                         if self.current_boss.take_main_damage(3):  # Laser does lots of damage to main body
                             self.score += 1000
                             self.add_xp(200, main_body_rect.centerx, main_body_rect.centery)
@@ -4849,6 +5045,10 @@ class Game:
                             self.total_enemies_killed += 1
                             self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
                             self.spawn_power_up(owner)
+
+                            # Track enemy kill in player stats
+                            if laser.owner_player_id and laser.owner_player_id <= len(self.player_stats):
+                                self.player_stats[laser.owner_player_id - 1].record_enemy_kill()
                             
         self.update_enemy_speed()
                         
@@ -4882,24 +5082,49 @@ class Game:
                     
         # Enemy bullets vs players
         for bullet in self.enemy_bullets[:]:
-            for player in self.players:
+            for i, player in enumerate(self.players):
                 if player.is_alive and bullet.rect.colliderect(player.rect):
+                    was_alive = player.lives > 0
                     if player.take_damage(self.sound_manager):
+                        # Track death if player died
+                        if was_alive and player.lives <= 0 and i < len(self.player_stats):
+                            self.player_stats[i].record_death()
                         self.enemy_bullets.remove(bullet)
                         break
 
         # Asteroids vs players (for Asteroid Field Boss)
         if self.is_boss_level and self.current_boss and isinstance(self.current_boss, AsteroidFieldBoss):
             for asteroid in self.current_boss.asteroids[:]:
-                for player in self.players:
+                for i, player in enumerate(self.players):
                     if player.is_alive:
                         # Use circular collision detection for more accurate asteroid hits
                         player_center_x = player.x + player.width // 2
                         player_center_y = player.y + player.height // 2
                         player_radius = min(player.width, player.height) // 2
 
+                        # Calculate distance between asteroid center and player center
+                        asteroid_radius = asteroid.size // 2
+                        dx = asteroid.x - player_center_x
+                        dy = asteroid.y - player_center_y
+                        distance = math.sqrt(dx * dx + dy * dy)
+
+                        # Near-miss XP: Award XP if within half ship width (30 pixels) but not colliding
+                        # Half ship width = 30 pixels
+                        near_miss_threshold = asteroid_radius + player_radius + 30
+                        collision_threshold = asteroid_radius + player_radius
+
+                        if not asteroid.near_miss_triggered and distance <= near_miss_threshold and distance > collision_threshold:
+                            # Award near-miss XP
+                            asteroid.near_miss_triggered = True
+                            self.add_xp(10, player_center_x, player_center_y)
+                            self.sound_manager.play_sound('levelup')
+
                         if asteroid.collides_with_circle(player_center_x, player_center_y, player_radius):
+                            was_alive = player.lives > 0
                             if player.take_damage(self.sound_manager):
+                                # Track death if player died
+                                if was_alive and player.lives <= 0 and i < len(self.player_stats):
+                                    self.player_stats[i].record_death()
                                 self.current_boss.remove_asteroid(asteroid)
                                 self.sound_manager.play_sound('explosion_small', volume_override=0.5)
                                 break
@@ -5075,31 +5300,86 @@ class Game:
         
         # Power-up status is now displayed below each player's ship (see Player.draw())
         
-        # Game over screen
+        # Game over screen with comprehensive player stats
         if self.game_over and not self.awaiting_name_input:
+            # Draw semi-transparent background
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            overlay.set_alpha(200)
+            overlay.fill(BLACK)
+            self.screen.blit(overlay, (0, 0))
+
+            # Title
             game_over_text = self.font.render("GAME OVER", True, RED)
-            final_score_text = self.small_font.render(f"Final Score: {self.score:,}", True, WHITE)
-            level_reached_text = self.small_font.render(f"Level Reached: {self.level}", True, WHITE)
-            xp_level_text = self.small_font.render(f"XP Level Reached: {self.xp_system.level}", True, GOLD)
-            
-            # FIXED: Show input delay message or controls
+            text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH//2, 50))
+            self.screen.blit(game_over_text, text_rect)
+
+            # Draw stats for each player
+            stats_font = pygame.font.Font(None, 28)
+            header_font = pygame.font.Font(None, 32)
+
+            num_players = len(self.player_stats)
+            if num_players == 1:
+                # Single player - center column
+                self.draw_player_stats(self.player_stats[0], stats_font, header_font, SCREEN_WIDTH//2 - 200, 120, self.players[0])
+            else:
+                # Coop - two columns
+                col_width = SCREEN_WIDTH // 2
+                for i, stats in enumerate(self.player_stats):
+                    x_offset = i * col_width + (col_width // 2) - 200
+                    player = self.players[i] if i < len(self.players) else None
+                    self.draw_player_stats(stats, stats_font, header_font, x_offset, 120, player)
+
+            # Controls
             if pygame.time.get_ticks() - self.game_over_time < self.input_delay_duration:
                 remaining = (self.input_delay_duration - (pygame.time.get_ticks() - self.game_over_time)) / 1000.0
                 controls_text = self.small_font.render(f"Controls unlocking in {remaining:.1f}s...", True, YELLOW)
             else:
                 controls_text = self.small_font.render("R/A: Restart | ESC/B: Title Menu", True, WHITE)
-            
-            text_rect = game_over_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 100))
-            score_rect = final_score_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 - 40))
-            level_rect = level_reached_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
-            xp_rect = xp_level_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 40))
-            controls_rect = controls_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 100))
-            
-            self.screen.blit(game_over_text, text_rect)
-            self.screen.blit(final_score_text, score_rect)
-            self.screen.blit(level_reached_text, level_rect)
-            self.screen.blit(xp_level_text, xp_rect)
+
+            controls_rect = controls_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 40))
             self.screen.blit(controls_text, controls_rect)
+
+    def draw_player_stats(self, stats, stats_font, header_font, x, y, player):
+        """Draw comprehensive stats for a single player"""
+        # Player header
+        player_color = GREEN if stats.player_id == 1 else BLUE
+        header_text = header_font.render(f"PLAYER {stats.player_id}", True, player_color)
+        self.screen.blit(header_text, (x, y))
+        y += 40
+
+        # Stats list
+        stat_lines = [
+            f"Score: {stats.final_score:,}",
+            f"XP Level: {stats.final_xp_level}",
+            f"",
+            f"Enemies Killed: {stats.enemies_killed}",
+            f"",
+            f"Shots Fired: {stats.shots_fired_total}",
+            f"  Normal: {stats.shots_fired_normal}",
+            f"  Rapid: {stats.shots_fired_rapid}",
+            f"  Multi: {stats.shots_fired_multi}",
+            f"  Laser: {stats.shots_fired_laser}",
+            f"",
+            f"Invincibility: {stats.get_invincibility_seconds():.1f}s",
+            f"Deaths: {stats.deaths}",
+            f"",
+            f"Boss Damage: {stats.boss_damage_dealt}",
+            f"Bosses Fought: {stats.bosses_fought_count}",
+        ]
+
+        # Add boss names if any
+        if stats.bosses_fought_names:
+            for boss_name in stats.bosses_fought_names:
+                # Simplify boss names
+                simple_name = boss_name.replace("Boss", "").replace("Alien", "").replace("Overlord", "Ovl.")
+                stat_lines.append(f"  {simple_name}")
+
+        # Draw all stats
+        for line in stat_lines:
+            if line:  # Skip empty lines
+                text = stats_font.render(line, True, WHITE)
+                self.screen.blit(text, (x, y))
+            y += 25
             
         # FIXED: Instructions moved below XP bar to avoid overlap
         if not self.game_over:
