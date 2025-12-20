@@ -466,7 +466,8 @@ class LevelUpScreen:
             ("powerup_spawn", "Lucky Drops", "Power-ups spawn 5% more often (up to 5)"),
             ("boss_damage", "Boss Breaker", "Bullets deal +10% boss damage (up to 5)"),
             ("ammo_capacity", "Ammo Belt", "Store extra ammo power-ups (up to 5)"),
-            ("extra_bullet", "Twin Shot", "Add +1 bullet to every shot (one time)")
+            ("extra_bullet", "Twin Shot", "Add +1 bullet to every shot (one time)"),
+            ("boss_shield", "Boss Shield", "Regenerate a shield after each boss")
         ]
 
         self.player_options = []
@@ -474,8 +475,6 @@ class LevelUpScreen:
             options = list(self.base_upgrade_options)
             if self.xp_level % 5 == 0:
                 options.append(("extra_life", "Extra Life", "Gain +1 life instead of a stat upgrade"))
-                if not getattr(player, 'has_boss_shield_upgrade', False):
-                    options.append(("boss_shield", "Boss Shield", "Regenerate a shield after each boss"))
                 permanent_choice = self.get_random_permanent_option(player)
                 if permanent_choice:
                     options.append(permanent_choice)
