@@ -2359,7 +2359,7 @@ class Player:
             elif hat[0] == 1 or axis_x > 0.3:
                 self.move_right()
                 
-    def draw(self, screen):
+    def draw(self, screen, font=None):
         if not self.is_alive:
             return
             
@@ -2436,13 +2436,45 @@ class Player:
         # Flashing effects
         flash_interval = 100
         current_time = pygame.time.get_ticks()
-        
+
         if self.invincible and (current_time // flash_interval) % 2:
             color = PURPLE
         elif self.respawn_immunity and (current_time // flash_interval) % 2:
             color = WHITE
-            
+        elif self.has_laser and (current_time // flash_interval) % 2:
+            # Flash blue when player has laser powerup
+            color = (100, 150, 255)  # Light blue
+
         pygame.draw.polygon(screen, color, points)
+
+        # Draw powerup indicators below the player ship
+        if font:
+            powerup_texts = []
+
+            # Rapid fire ammo
+            if self.rapid_fire and self.rapid_fire_ammo > 0:
+                powerup_texts.append(f"R:{self.rapid_fire_ammo}")
+
+            # Multi-shot ammo
+            if self.has_multi_shot and self.multi_shot_ammo > 0:
+                powerup_texts.append(f"M:{self.multi_shot_ammo}")
+
+            # Invincibility timer (in seconds)
+            if self.invincible:
+                time_left = (self.invincible_end_time - pygame.time.get_ticks()) / 1000
+                powerup_texts.append(f"I:{time_left:.0f}")
+
+            # Combine all powerup texts
+            if powerup_texts:
+                combined_text = " ".join(powerup_texts)
+                text_surface = font.render(combined_text, True, ORANGE)
+                text_rect = text_surface.get_rect()
+
+                # Position text below the ship, centered
+                text_x = self.x + (self.width - text_rect.width) // 2
+                text_y = self.y + self.height + 5
+
+                screen.blit(text_surface, (text_x, text_y))
 
 class AlienOverlordBoss:
     def __init__(self, encounter):
@@ -4081,6 +4113,7 @@ class Game:
         self.font = pygame.font.Font(None, 72)
         self.small_font = pygame.font.Font(None, 48)
         self.tiny_font = pygame.font.Font(None, 36)
+        self.powerup_font = pygame.font.Font(None, 24)  # Small font for powerup indicators below ships
         
     def scan_controllers(self):
         self.controllers = []
@@ -4961,7 +4994,7 @@ class Game:
                 laser.draw(self.screen)
                 
             for player in self.players:
-                player.draw(self.screen)
+                player.draw(self.screen, self.powerup_font)
             
             for bullet in self.player_bullets:
                 bullet.draw(self.screen)
@@ -5040,26 +5073,7 @@ class Game:
                 lives_text = self.small_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
                 self.screen.blit(lives_text, (20, 120))
         
-        # Power-up status - very compact, right side
-        active_powerups = []
-        for player in self.players:
-            if not player.is_alive:
-                continue
-            prefix = f"P{player.player_id}:" if self.coop_mode else ""
-            if player.rapid_fire and player.rapid_fire_ammo > 0:
-                active_powerups.append(f"{prefix}Rapid({player.rapid_fire_ammo})")
-            if player.has_laser:
-                active_powerups.append(f"{prefix}Laser")
-            if player.has_multi_shot and player.multi_shot_ammo > 0:
-                active_powerups.append(f"{prefix}Multi({player.multi_shot_ammo})")
-            if player.invincible:
-                time_left = (player.invincible_end_time - pygame.time.get_ticks()) / 1000
-                active_powerups.append(f"{prefix}Invincible({time_left:.1f}s)")
-        
-        if active_powerups:
-            powerup_text = " | ".join(active_powerups)
-            text = self.tiny_font.render(powerup_text, True, ORANGE)
-            self.screen.blit(text, (20, 200))
+        # Power-up status is now displayed below each player's ship (see Player.draw())
         
         # Game over screen
         if self.game_over and not self.awaiting_name_input:
