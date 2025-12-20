@@ -5339,6 +5339,9 @@ class Game:
             controls_rect = controls_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 40))
             self.screen.blit(controls_text, controls_rect)
 
+        # Draw instructions and screen flash, then update display
+        self.update_display()
+
     def draw_player_stats(self, stats, stats_font, header_font, x, y, player):
         """Draw comprehensive stats for a single player"""
         # Player header
@@ -5380,8 +5383,10 @@ class Game:
                 text = stats_font.render(line, True, WHITE)
                 self.screen.blit(text, (x, y))
             y += 25
-            
-        # FIXED: Instructions moved below XP bar to avoid overlap
+
+    def update_display(self):
+        """Update the display"""
+        # Draw instructions (only during gameplay, not game over)
         if not self.game_over:
             instructions = [
                 "P1: WASD/Arrows + Space",
@@ -5389,19 +5394,20 @@ class Game:
             ]
             if self.coop_mode:
                 instructions.insert(1, "P2: Right Ctrl (or controller)")
-                
+
             # Add boss level indicator
             if self.is_boss_level:
                 instructions.append("BOSS LEVEL!")
-                
+
             # Position instructions below the XP bar instead of overlapping it
+            bar_y = 20  # Match the XP bar y position
+            bar_height = 20
             start_y = bar_y + bar_height + 50  # Start below XP level text
             for i, instruction in enumerate(instructions):
                 color = RED if instruction == "BOSS LEVEL!" else WHITE
                 text = self.small_font.render(instruction, True, color)
                 # Position on right side but below XP bar
                 self.screen.blit(text, (SCREEN_WIDTH - 400, start_y + i * 35))
-        
 
             # INTENSE WHITE FLASH OVERLAY - This goes over everything for maximum effect
             if self.screen_flash_intensity > 0:
@@ -5409,7 +5415,7 @@ class Game:
                 flash_surface.fill((255, 255, 255))
                 flash_surface.set_alpha(self.screen_flash_intensity)
                 self.screen.blit(flash_surface, (0, 0))
-        
+
         pygame.display.flip()
         
     def run(self):
