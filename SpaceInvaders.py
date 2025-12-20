@@ -3229,7 +3229,7 @@ class AsteroidFieldBoss:
         bar_width = 600
         bar_height = 30
         bar_x = SCREEN_WIDTH // 2 - bar_width // 2
-        bar_y = 20
+        bar_y = 60
 
         health_ratio = self.health / self.max_health
 
@@ -4705,6 +4705,9 @@ class Game:
                             self.score += 1000
                             self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
 
+                            # Clear all enemy bullets immediately when boss is destroyed
+                            self.enemy_bullets.clear()
+
                             # PLAY LARGE EXPLOSION SOUND
                             self.sound_manager.play_sound('explosion_large')
 
@@ -4791,6 +4794,10 @@ class Game:
                         if self.current_boss.take_main_damage(3):  # Laser does lots of damage to main body
                             self.score += 1000
                             self.add_xp(200, main_body_rect.centerx, main_body_rect.centery)
+
+                            # Clear all enemy bullets immediately when boss is destroyed
+                            self.enemy_bullets.clear()
+
                             self.grant_post_boss_shield()
                         else:
                             self.score += 15
