@@ -2047,7 +2047,7 @@ class NameInputScreen:
         pygame.display.flip()
 
 class HighScoreScreen:
-    def __init__(self, screen, score_manager, sound_manager):
+    def __init__(self, screen, score_manager, sound_manager, player_stats=None, players=None):
         self.screen = screen
         self.score_manager = score_manager
         self.sound_manager = sound_manager
@@ -2055,6 +2055,8 @@ class HighScoreScreen:
         self.font_medium = pygame.font.Font(None, 64)
         self.font_small = pygame.font.Font(None, 48)
         self.viewing_coop = False
+        self.player_stats = player_stats  # Optional stats to display
+        self.players = players  # Optional player objects for colors
     
     def handle_events(self):
         for event in pygame.event.get():
@@ -2076,72 +2078,199 @@ class HighScoreScreen:
                     self.sound_manager.play_sound('menu_change')
                     self.viewing_coop = not self.viewing_coop
         return None
-    
+
+    def draw_player_stats(self, stats, x, y):
+        """Draw comprehensive stats for a single player"""
+        stats_font = pygame.font.Font(None, 28)
+        header_font = pygame.font.Font(None, 36)
+
+        # Player header
+        player_color = GREEN if stats.player_id == 1 else BLUE
+        header_text = header_font.render(f"PLAYER {stats.player_id} STATS", True, player_color)
+        self.screen.blit(header_text, (x, y))
+        y += 45
+
+        # Stats list
+        stat_lines = [
+            f"Score: {stats.final_score:,}",
+            f"XP Level: {stats.final_xp_level}",
+            f"",
+            f"Enemies Killed: {stats.enemies_killed}",
+            f"",
+            f"Shots Fired: {stats.shots_fired_total}",
+            f"  Normal: {stats.shots_fired_normal}",
+            f"  Rapid: {stats.shots_fired_rapid}",
+            f"  Multi: {stats.shots_fired_multi}",
+            f"  Laser: {stats.shots_fired_laser}",
+            f"",
+            f"Invincibility: {stats.get_invincibility_seconds():.1f}s",
+            f"Deaths: {stats.deaths}",
+            f"",
+            f"Boss Damage: {stats.boss_damage_dealt}",
+            f"Bosses Fought: {stats.bosses_fought_count}",
+        ]
+
+        # Add boss names if any
+        if stats.bosses_fought_names:
+            for boss_name in stats.bosses_fought_names:
+                # Simplify boss names
+                simple_name = boss_name.replace("Boss", "").replace("Alien", "").replace("Overlord", "Ovl.")
+                stat_lines.append(f"  {simple_name}")
+
+        # Draw all stats
+        for line in stat_lines:
+            if line:  # Skip empty lines
+                text = stats_font.render(line, True, WHITE)
+                self.screen.blit(text, (x, y))
+            y += 25
+
     def draw(self):
         self.screen.fill(BLACK)
-        
+
+        # Check if we're showing stats along with high scores
+        if self.player_stats:
+            self.draw_with_stats()
+        else:
+            self.draw_normal()
+
+        pygame.display.flip()
+
+    def draw_normal(self):
+        """Draw the normal high scores screen without player stats"""
         # Title
         mode_text = "CO-OP" if self.viewing_coop else "SINGLE PLAYER"
         title_text = self.font_large.render(f"{mode_text} HIGH SCORES", True, YELLOW)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 120))
         self.screen.blit(title_text, title_rect)
-        
+
         # Mode toggle instruction
         toggle_text = self.font_small.render("Press TAB or Left/Right to switch modes", True, CYAN)
         toggle_rect = toggle_text.get_rect(center=(SCREEN_WIDTH // 2, 180))
         self.screen.blit(toggle_text, toggle_rect)
-        
+
         # Headers
         rank_header = self.font_medium.render("RANK", True, WHITE)
         name_header = self.font_medium.render("NAME", True, WHITE)
         score_header = self.font_medium.render("SCORE", True, WHITE)
         level_header = self.font_medium.render("LEVEL", True, WHITE)
         date_header = self.font_medium.render("DATE", True, WHITE)
-        
+
         header_y = 250
         self.screen.blit(rank_header, (200, header_y))
         self.screen.blit(name_header, (400, header_y))
         self.screen.blit(score_header, (700, header_y))
         self.screen.blit(level_header, (1000, header_y))
         self.screen.blit(date_header, (1300, header_y))
-        
+
         pygame.draw.line(self.screen, WHITE, (150, header_y + 60), (SCREEN_WIDTH - 150, header_y + 60), 2)
-        
+
         # High scores list
         scores = self.score_manager.coop_scores if self.viewing_coop else self.score_manager.single_scores
         start_y = 350
         for i, score_entry in enumerate(scores):
             y = start_y + i * 60
-            
+
             if i % 2 == 1:
                 row_rect = pygame.Rect(150, y - 10, SCREEN_WIDTH - 300, 50)
                 pygame.draw.rect(self.screen, (20, 20, 20), row_rect)
-            
+
             rank_text = self.font_small.render(f"{i + 1}.", True, YELLOW if i < 3 else WHITE)
             self.screen.blit(rank_text, (200, y))
-            
+
             name_text = self.font_small.render(score_entry['name'], True, WHITE)
             self.screen.blit(name_text, (400, y))
-            
+
             score_text = self.font_small.render(f"{score_entry['score']:,}", True, WHITE)
             self.screen.blit(score_text, (700, y))
-            
+
             level_text = self.font_small.render(f"{score_entry['level']}", True, WHITE)
             self.screen.blit(level_text, (1000, y))
-            
+
             date_text = self.font_small.render(score_entry['date'][:10], True, GRAY)
             self.screen.blit(date_text, (1300, y))
-        
+
         if not scores:
             no_scores_text = self.font_medium.render(f"No {mode_text.lower()} high scores yet!", True, GRAY)
             no_scores_rect = no_scores_text.get_rect(center=(SCREEN_WIDTH // 2, 500))
             self.screen.blit(no_scores_text, no_scores_rect)
-        
+
         instruction_text = self.font_small.render("Press ESC, ENTER, or controller button to return", True, GRAY)
         instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80))
         self.screen.blit(instruction_text, instruction_rect)
-        
-        pygame.display.flip()
+
+    def draw_with_stats(self):
+        """Draw the high scores screen with player stats displayed"""
+        # Title (smaller)
+        title_text = self.font_medium.render("NEW HIGH SCORE!", True, YELLOW)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 40))
+        self.screen.blit(title_text, title_rect)
+
+        # Draw player stats
+        num_players = len(self.player_stats)
+        if num_players == 1:
+            # Single player - show stats on left, high scores on right
+            self.draw_player_stats(self.player_stats[0], 50, 100)
+            self.draw_compact_high_scores(1000, 100)
+        else:
+            # Co-op - show player 1 on left, player 2 on right, high scores in center
+            self.draw_player_stats(self.player_stats[0], 50, 100)
+            if num_players > 1:
+                self.draw_player_stats(self.player_stats[1], 1400, 100)
+            self.draw_compact_high_scores(640, 100)
+
+        # Instructions at bottom
+        instruction_text = self.font_small.render("Press ESC, ENTER, or controller button to return", True, GRAY)
+        instruction_rect = instruction_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 40))
+        self.screen.blit(instruction_text, instruction_rect)
+
+    def draw_compact_high_scores(self, x, y):
+        """Draw a compact version of the high scores table"""
+        header_font = pygame.font.Font(None, 32)
+        compact_font = pygame.font.Font(None, 24)
+
+        # Determine which scores to show based on game mode
+        is_coop = len(self.player_stats) > 1 if self.player_stats else False
+        scores = self.score_manager.coop_scores if is_coop else self.score_manager.single_scores
+
+        # Header
+        mode_text = "CO-OP" if is_coop else "SINGLE"
+        header_text = header_font.render(f"{mode_text} HIGH SCORES", True, CYAN)
+        header_rect = header_text.get_rect(centerx=x + 200)
+        header_rect.y = y
+        self.screen.blit(header_text, header_rect)
+        y += 50
+
+        # Column headers
+        rank_text = compact_font.render("RANK", True, GRAY)
+        name_text = compact_font.render("NAME", True, GRAY)
+        score_text = compact_font.render("SCORE", True, GRAY)
+
+        self.screen.blit(rank_text, (x, y))
+        self.screen.blit(name_text, (x + 80, y))
+        self.screen.blit(score_text, (x + 200, y))
+        y += 35
+
+        # Draw separator line
+        pygame.draw.line(self.screen, WHITE, (x, y - 5), (x + 380, y - 5), 1)
+
+        # Show top 10 scores
+        for i, score_entry in enumerate(scores[:10]):
+            color = YELLOW if i < 3 else WHITE
+
+            rank_line = compact_font.render(f"{i + 1}.", True, color)
+            name_line = compact_font.render(score_entry['name'], True, color)
+            score_line = compact_font.render(f"{score_entry['score']:,}", True, color)
+
+            self.screen.blit(rank_line, (x, y))
+            self.screen.blit(name_line, (x + 80, y))
+            self.screen.blit(score_line, (x + 200, y))
+            y += 30
+
+        if not scores:
+            no_scores = compact_font.render("No scores yet!", True, GRAY)
+            no_scores_rect = no_scores.get_rect(centerx=x + 200)
+            no_scores_rect.y = y
+            self.screen.blit(no_scores, no_scores_rect)
         
 class Player:
     def __init__(self, x, y, player_id=1, controller=None, upgrades=None):
@@ -4177,6 +4306,8 @@ class Game:
         self.player_xp_level = 1  # Track player's XP level separately from game level
         self.showing_ufo_warning = False
         self.ufo_warning_screen = None
+        self.showing_stats_screen = False  # Flag for showing stats on high score screen
+        self.stats_screen = None  # Will hold the HighScoreScreen with stats
         
         # ADDED: Game over timing and input delay
         self.game_over_time = 0
@@ -4460,11 +4591,13 @@ class Game:
             self.power_ups.append(PowerUp(x, y, power_type))
         
     def handle_events(self):
-        if self.awaiting_name_input:
+        if self.showing_stats_screen:
+            return self.handle_stats_screen_events()
+        elif self.awaiting_name_input:
             return self.handle_name_input_events()
         elif self.awaiting_level_up:
             return self.handle_level_up_events()
-            
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
@@ -4579,7 +4712,7 @@ class Game:
         # ADDED: Input delay after game over
         if pygame.time.get_ticks() - self.game_over_time < self.input_delay_duration:
             return None
-            
+
         if hasattr(self, 'name_input_screen'):
             name = self.name_input_screen.handle_events()
             if name == "quit":
@@ -4589,7 +4722,16 @@ class Game:
                 self.score_manager.add_score(name, self.score, self.level, self.coop_mode)
                 self.awaiting_name_input = False
                 del self.name_input_screen
-                return "title"
+
+                # Show high score screen with stats
+                self.stats_screen = HighScoreScreen(
+                    self.screen,
+                    self.score_manager,
+                    self.sound_manager,
+                    player_stats=self.player_stats,
+                    players=self.players
+                )
+                self.showing_stats_screen = True
         return None
     
     def handle_level_up_events(self):
@@ -4621,7 +4763,20 @@ class Game:
                 self.setup_level()
                 self.create_barriers()
         return None
-                    
+
+    def handle_stats_screen_events(self):
+        """Handle events during stats screen display"""
+        if hasattr(self, 'stats_screen'):
+            result = self.stats_screen.handle_events()
+            if result == "quit":
+                self.running = False
+                return None
+            elif result == "back":
+                self.showing_stats_screen = False
+                del self.stats_screen
+                return "title"
+        return None
+
     def handle_input(self):
         if not self.game_over and not self.awaiting_level_up:
             keys = pygame.key.get_pressed()
@@ -5205,7 +5360,12 @@ class Game:
         if self.awaiting_name_input and hasattr(self, 'name_input_screen'):
             self.name_input_screen.draw()
             return
-        
+
+        # Handle stats screen (shown after high score name entry)
+        if self.showing_stats_screen and hasattr(self, 'stats_screen'):
+            self.stats_screen.draw()
+            return
+
         if not self.game_over:
             # Simple screen shake - just use a random background color pulse
             if self.screen_shake_intensity > 0:
