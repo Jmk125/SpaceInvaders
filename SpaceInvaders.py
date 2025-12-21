@@ -478,6 +478,8 @@ class LevelUpScreen:
                 permanent_choice = self.get_random_permanent_option(player)
                 if permanent_choice:
                     options.append(permanent_choice)
+            # Always add Save & Quit option
+            options.append(("save_and_quit", "Save & Quit", "Save your progress and return to title screen"))
             self.player_options.append(options)
 
         self.upgrade_options = self.player_options[0] if self.player_options else []
@@ -582,7 +584,11 @@ class LevelUpScreen:
                     elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                         options = self.get_options_for_player(0)
                         stat_name = options[self.current_selection][0]
-                        if stat_name == "extra_life":
+                        if stat_name == "save_and_quit":
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            return "save_and_quit"
+                        elif stat_name == "extra_life":
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
                             self.grant_extra_life(0, stat_name)
@@ -626,7 +632,11 @@ class LevelUpScreen:
                         elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                             p1_options = self.get_options_for_player(0)
                             stat_name = p1_options[self.player1_selection][0]
-                            if stat_name == "extra_life":
+                            if stat_name == "save_and_quit":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                return "save_and_quit"
+                            elif stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(0, stat_name)
@@ -665,7 +675,11 @@ class LevelUpScreen:
                         elif event.key == pygame.K_RCTRL:
                             p2_options = self.get_options_for_player(1)
                             stat_name = p2_options[self.player2_selection][0]
-                            if stat_name == "extra_life":
+                            if stat_name == "save_and_quit":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                return "save_and_quit"
+                            elif stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(1, stat_name)
@@ -699,7 +713,11 @@ class LevelUpScreen:
                     if event.button == 0:  # A button
                         options = self.get_options_for_player(0)
                         stat_name = options[self.current_selection][0]
-                        if stat_name == "extra_life":
+                        if stat_name == "save_and_quit":
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_select')
+                            return "save_and_quit"
+                        elif stat_name == "extra_life":
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_select')
                             self.grant_extra_life(0, stat_name)
@@ -733,7 +751,11 @@ class LevelUpScreen:
                         if event.button == 0:  # A button
                             p1_options = self.get_options_for_player(0)
                             stat_name = p1_options[self.player1_selection][0]
-                            if stat_name == "extra_life":
+                            if stat_name == "save_and_quit":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                return "save_and_quit"
+                            elif stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(0, stat_name)
@@ -761,7 +783,11 @@ class LevelUpScreen:
                         if event.button == 0:  # A button
                             p2_options = self.get_options_for_player(1)
                             stat_name = p2_options[self.player2_selection][0]
-                            if stat_name == "extra_life":
+                            if stat_name == "save_and_quit":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                return "save_and_quit"
+                            elif stat_name == "extra_life":
                                 if self.sound_manager:
                                     self.sound_manager.play_sound('menu_select')
                                 self.grant_extra_life(1, stat_name)
@@ -3868,7 +3894,14 @@ class TitleScreen:
         self.font_medium = pygame.font.Font(None, 72)
         self.font_small = pygame.font.Font(None, 48)
         self.selected_option = 0
-        self.options = ["Single Player", "Co-op", "High Scores", "Quit"]
+
+        # Check if save file exists and add Continue option if it does
+        self.has_save_file = os.path.exists("savegame.json")
+        if self.has_save_file:
+            self.options = ["Continue", "Single Player", "Co-op", "High Scores", "Quit"]
+        else:
+            self.options = ["Single Player", "Co-op", "High Scores", "Quit"]
+
         self.controllers = []
         self.scan_controllers()
 
@@ -3911,13 +3944,16 @@ class TitleScreen:
                     self.selected_option = (self.selected_option + 1) % len(self.options)
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                     self.sound_manager.play_sound('menu_select')
-                    if self.selected_option == 0:
+                    selected_text = self.options[self.selected_option]
+                    if selected_text == "Continue":
+                        return "continue"
+                    elif selected_text == "Single Player":
                         return "single"
-                    elif self.selected_option == 1:
+                    elif selected_text == "Co-op":
                         return "coop"
-                    elif self.selected_option == 2:
+                    elif selected_text == "High Scores":
                         return "highscores"
-                    elif self.selected_option == 3:
+                    elif selected_text == "Quit":
                         return "quit"
                 elif event.key in (pygame.K_LEFT, pygame.K_a):
                     if self._register_debug_input("left"):
@@ -3928,13 +3964,16 @@ class TitleScreen:
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.button == 0:
                     self.sound_manager.play_sound('menu_select')
-                    if self.selected_option == 0:
+                    selected_text = self.options[self.selected_option]
+                    if selected_text == "Continue":
+                        return "continue"
+                    elif selected_text == "Single Player":
                         return "single"
-                    elif self.selected_option == 1:
+                    elif selected_text == "Co-op":
                         return "coop"
-                    elif self.selected_option == 2:
+                    elif selected_text == "High Scores":
                         return "highscores"
-                    elif self.selected_option == 3:
+                    elif selected_text == "Quit":
                         return "quit"
             elif event.type == pygame.JOYHATMOTION:
                 if event.value[1] == 1:
@@ -4365,6 +4404,10 @@ class Game:
         self.players = []
         self.player_stats = []  # Reset stats
 
+        # Delete any existing save file when starting a new game
+        if os.path.exists("savegame.json"):
+            os.remove("savegame.json")
+
         if self.coop_mode:
             controller1 = self.controllers[0] if len(self.controllers) > 0 else None
             # Create individual upgrades for each player
@@ -4442,7 +4485,180 @@ class Game:
                 player.activate_laser()
 
             player.reset_position()
-        
+
+    def save_game(self, filename="savegame.json"):
+        """Save the current game state to a file"""
+        save_data = {
+            'coop_mode': self.coop_mode,
+            'level': self.level,
+            'score': self.score,
+            'total_enemies_killed': self.total_enemies_killed,
+            'xp_system': {
+                'current_xp': self.xp_system.current_xp,
+                'level': self.xp_system.level,
+                'xp_for_next_level': self.xp_system.xp_for_next_level
+            },
+            'boss_encounters': {boss_class.__name__: count for boss_class, count in self.boss_encounters.items()},
+            'players': [],
+            'player_stats': []
+        }
+
+        # Save player data
+        for player in self.players:
+            player_data = {
+                'player_id': player.player_id,
+                'lives': player.lives,
+                'is_alive': player.is_alive,
+                'has_boss_shield_upgrade': player.has_boss_shield_upgrade,
+                'boss_shield_active': player.boss_shield_active,
+                'rapid_fire_ammo': player.rapid_fire_ammo,
+                'multi_shot_ammo': player.multi_shot_ammo,
+                'has_laser': player.has_laser,
+                'active_ammo_powerup': player.active_ammo_powerup,
+                'ammo_powerup_queue': player.ammo_powerup_queue,
+                'upgrades': {
+                    'shot_speed_level': player.upgrades.shot_speed_level,
+                    'fire_rate_level': player.upgrades.fire_rate_level,
+                    'movement_speed_level': player.upgrades.movement_speed_level,
+                    'powerup_duration_level': player.upgrades.powerup_duration_level,
+                    'pierce_level': player.upgrades.pierce_level,
+                    'bullet_length_level': player.upgrades.bullet_length_level,
+                    'barrier_phase_level': player.upgrades.barrier_phase_level,
+                    'powerup_spawn_level': player.upgrades.powerup_spawn_level,
+                    'boss_damage_level': player.upgrades.boss_damage_level,
+                    'ammo_capacity_level': player.upgrades.ammo_capacity_level,
+                    'extra_bullet_level': player.upgrades.extra_bullet_level,
+                    'boss_shield_level': player.upgrades.boss_shield_level
+                }
+            }
+            save_data['players'].append(player_data)
+
+        # Save player stats
+        for stats in self.player_stats:
+            stats_data = {
+                'player_id': stats.player_id,
+                'enemies_killed': stats.enemies_killed,
+                'shots_fired_total': stats.shots_fired_total,
+                'shots_fired_normal': stats.shots_fired_normal,
+                'shots_fired_rapid': stats.shots_fired_rapid,
+                'shots_fired_laser': stats.shots_fired_laser,
+                'shots_fired_multi': stats.shots_fired_multi,
+                'invincibility_time': stats.invincibility_time,
+                'permanent_upgrades_used': stats.permanent_upgrades_used,
+                'deaths': stats.deaths,
+                'boss_damage_dealt': stats.boss_damage_dealt,
+                'bosses_fought_count': stats.bosses_fought_count,
+                'bosses_fought_names': stats.bosses_fought_names,
+                'final_score': stats.final_score,
+                'final_xp_level': stats.final_xp_level,
+                'final_xp': stats.final_xp
+            }
+            save_data['player_stats'].append(stats_data)
+
+        # Write to file
+        with open(filename, 'w') as f:
+            json.dump(save_data, f, indent=2)
+
+    def load_game(self, filename="savegame.json"):
+        """Load game state from a file and setup the game"""
+        with open(filename, 'r') as f:
+            save_data = json.load(f)
+
+        # Restore basic game state
+        self.coop_mode = save_data['coop_mode']
+        self.level = save_data['level']
+        self.score = save_data['score']
+        self.total_enemies_killed = save_data['total_enemies_killed']
+
+        # Restore XP system
+        self.xp_system.current_xp = save_data['xp_system']['current_xp']
+        self.xp_system.level = save_data['xp_system']['level']
+        self.xp_system.xp_for_next_level = save_data['xp_system']['xp_for_next_level']
+
+        # Restore boss encounters
+        from types import SimpleNamespace
+        boss_class_map = {
+            'Boss': Boss,
+            'AlienOverlordBoss': AlienOverlordBoss,
+            'BulletHellBoss': BulletHellBoss,
+            'AsteroidFieldBoss': AsteroidFieldBoss
+        }
+        self.boss_encounters = {}
+        for boss_name, count in save_data['boss_encounters'].items():
+            if boss_name in boss_class_map:
+                self.boss_encounters[boss_class_map[boss_name]] = count
+
+        # Create players with saved state
+        self.players = []
+        self.player_stats = []
+
+        for player_data in save_data['players']:
+            player_id = player_data['player_id']
+            controller = self.controllers[player_id - 1] if player_id - 1 < len(self.controllers) else None
+
+            # Create player upgrades from saved data
+            player_upgrades = PlayerUpgrades()
+            for key, value in player_data['upgrades'].items():
+                setattr(player_upgrades, key, value)
+
+            # Determine player position based on mode
+            if self.coop_mode:
+                if player_id == 1:
+                    x_pos = SCREEN_WIDTH // 2 - 90
+                else:
+                    x_pos = SCREEN_WIDTH // 2 + 30
+            else:
+                x_pos = SCREEN_WIDTH // 2 - 30
+
+            player = Player(x_pos, SCREEN_HEIGHT - 80, player_id, controller, player_upgrades)
+            player.coop_mode = self.coop_mode
+            player.lives = player_data['lives']
+            player.is_alive = player_data['is_alive']
+            player.has_boss_shield_upgrade = player_data['has_boss_shield_upgrade']
+            player.boss_shield_active = player_data['boss_shield_active']
+            player.rapid_fire_ammo = player_data['rapid_fire_ammo']
+            player.multi_shot_ammo = player_data['multi_shot_ammo']
+            player.has_laser = player_data['has_laser']
+
+            # Restore ammo power-ups
+            if player_data.get('active_ammo_powerup'):
+                player.set_active_ammo_powerup(
+                    player_data['active_ammo_powerup']['type'],
+                    player_data['active_ammo_powerup']['ammo']
+                )
+            player.ammo_powerup_queue = player_data.get('ammo_powerup_queue', [])
+
+            self.players.append(player)
+
+        # Restore player stats
+        for stats_data in save_data['player_stats']:
+            stats = PlayerStats(stats_data['player_id'])
+            stats.enemies_killed = stats_data['enemies_killed']
+            stats.shots_fired_total = stats_data['shots_fired_total']
+            stats.shots_fired_normal = stats_data['shots_fired_normal']
+            stats.shots_fired_rapid = stats_data['shots_fired_rapid']
+            stats.shots_fired_laser = stats_data['shots_fired_laser']
+            stats.shots_fired_multi = stats_data['shots_fired_multi']
+            stats.invincibility_time = stats_data['invincibility_time']
+            stats.permanent_upgrades_used = stats_data['permanent_upgrades_used']
+            stats.deaths = stats_data['deaths']
+            stats.boss_damage_dealt = stats_data['boss_damage_dealt']
+            stats.bosses_fought_count = stats_data['bosses_fought_count']
+            stats.bosses_fought_names = stats_data['bosses_fought_names']
+            stats.final_score = stats_data['final_score']
+            stats.final_xp_level = stats_data['final_xp_level']
+            stats.final_xp = stats_data['final_xp']
+            self.player_stats.append(stats)
+
+        # Reset game state
+        self.game_over = False
+        self.awaiting_level_up = False
+        self.pending_level_up = False
+
+        # Setup barriers and level
+        self.create_barriers()
+        self.setup_level()
+
     def calculate_enemy_speed_for_level(self, level):
         # Enemy speed only increases every 5 levels now
         speed_level = ((level - 1) // 5) + 1
@@ -4741,16 +4957,23 @@ class Game:
             if result == "quit":
                 self.running = False
                 return None
+            elif result == "save_and_quit":
+                print("Saving game and returning to title screen...")
+                self.save_game()
+                self.awaiting_level_up = False
+                self.pending_level_up = False
+                del self.level_up_screen
+                return "title"
             elif result == "continue":
                 print("Level up complete, continuing...")  # Debug
                 self.awaiting_level_up = False
                 self.pending_level_up = False  # Clear the flag
                 del self.level_up_screen
-                
+
                 # Now advance the game level
                 self.level += 1
                 print(f"Advanced to game level {self.level} after level up")  # Debug
-                
+
                 # Respawn dead players with 1 life if their partner survived
                 if self.coop_mode and len(self.players) == 2:
                     if not self.players[0].is_alive and self.players[1].is_alive:
@@ -4759,7 +4982,7 @@ class Game:
                     elif not self.players[1].is_alive and self.players[0].is_alive:
                         self.players[1].lives = 1
                         self.players[1].respawn()
-                
+
                 self.setup_level()
                 self.create_barriers()
         return None
@@ -4866,6 +5089,10 @@ class Game:
         if game_over and not self.game_over:
             self.game_over = True
             self.game_over_time = pygame.time.get_ticks()  # ADDED: Record when game over occurred
+
+            # Delete save file on game over
+            if os.path.exists("savegame.json"):
+                os.remove("savegame.json")
 
             # Set final stats for all players
             for i, stats in enumerate(self.player_stats):
@@ -5647,17 +5874,32 @@ def main():
                         sys.exit()
                 else:
                     break
+            elif action == "continue":
+                # Load saved game
+                game = Game(score_manager, sound_manager)
+                try:
+                    game.load_game()
+                    result = game.run()
+
+                    if result == "title":
+                        break  # Go back to title screen
+                    elif not result:
+                        pygame.quit()
+                        sys.exit()
+                except FileNotFoundError:
+                    print("Save file not found!")
+                    break  # Go back to title screen
             elif action in ["single", "coop"]:
                 game = Game(score_manager, sound_manager)
                 game.setup_game(action)
                 result = game.run()
-                
+
                 if result == "title":
                     break  # Go back to title screen
                 elif not result:
                     pygame.quit()
                     sys.exit()
-            
+
             title_screen.draw()
             clock.tick(60)
 
