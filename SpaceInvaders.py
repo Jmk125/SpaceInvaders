@@ -541,8 +541,8 @@ class LevelUpScreen:
         options = self.get_options_for_player(player_index)
 
         for stat_name, _, _ in options:
-            # Extra life and boss_shield are always available when shown
-            if stat_name in ["extra_life", "boss_shield"]:
+            # Extra life, boss_shield, and save_and_quit are always available when shown
+            if stat_name in ["extra_life", "boss_shield", "save_and_quit"]:
                 return False
             # If any stat can be upgraded, not all maxed
             if player.upgrades.can_upgrade(stat_name):
@@ -1023,6 +1023,11 @@ class LevelUpScreen:
                     elif p1_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, p1_color)
                         self.screen.blit(lives_text, lives_text.get_rect(topleft=(left_col_x - 70, y + 25)))
+                elif p1_stat_name == "save_and_quit":
+                    # No stats needed for save and quit option
+                    if self.player1_confirmed and i == self.player1_selection:
+                        confirm_text = self.tiny_font.render("✓ SELECTED", True, GREEN)
+                        self.screen.blit(confirm_text, confirm_text.get_rect(topleft=(left_col_x - 70, y + 25)))
                 elif p1_option:
                     if p1_stat_name == "boss_shield":
                         p1_color = WHITE if self.players[0].upgrades.can_upgrade(p1_stat_name) else GRAY
@@ -1068,6 +1073,13 @@ class LevelUpScreen:
                     elif p2_option:
                         lives_text = self.tiny_font.render(f"Lives: {self.players[1].lives}", True, p2_color)
                         self.screen.blit(lives_text, lives_text.get_rect(topleft=(right_col_x - 70, y + 25)))
+                elif p2_stat_name == "save_and_quit":
+                    # No stats needed for save and quit option
+                    if self.player2_confirmed and i == self.player2_selection:
+                        confirm_text = self.tiny_font.render("✓ SELECTED", True, BLUE)
+                        confirm_rect = confirm_text.get_rect()
+                        confirm_rect.topleft = (right_col_x - 70, y + 25)
+                        self.screen.blit(confirm_text, confirm_rect)
                 elif p2_option:
                     if p2_stat_name == "boss_shield":
                         p2_color = WHITE if self.players[1].upgrades.can_upgrade(p2_stat_name) else GRAY
@@ -1150,6 +1162,9 @@ class LevelUpScreen:
                 if stat_name == "extra_life":
                     lives_text = self.tiny_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
                     self.screen.blit(lives_text, lives_text.get_rect(topleft=(panel_margin_x + 40, y + 50)))
+                elif stat_name == "save_and_quit":
+                    # No stats needed for save and quit option
+                    pass
                 else:
                     if stat_name == "boss_shield":
                         can_upgrade = self.players[0].upgrades.can_upgrade(stat_name)
