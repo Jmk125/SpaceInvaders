@@ -4508,6 +4508,8 @@ class Game:
             'level': self.level,
             'score': self.score,
             'total_enemies_killed': self.total_enemies_killed,
+            'awaiting_level_up': self.awaiting_level_up,
+            'pending_level_up': self.pending_level_up,
             'xp_system': {
                 'current_xp': self.xp_system.current_xp,
                 'level': self.xp_system.level,
@@ -4667,12 +4669,19 @@ class Game:
 
         # Reset game state
         self.game_over = False
-        self.awaiting_level_up = False
-        self.pending_level_up = False
 
-        # Setup barriers and level
-        self.create_barriers()
-        self.setup_level()
+        # Restore level up state (if saved from level up screen)
+        self.awaiting_level_up = save_data.get('awaiting_level_up', False)
+        self.pending_level_up = save_data.get('pending_level_up', False)
+
+        # Setup barriers and level (only if not awaiting level up)
+        if not self.awaiting_level_up:
+            self.create_barriers()
+            self.setup_level()
+        else:
+            # If we're awaiting level up, we'll need to setup the level after the level up screen
+            # For now just create barriers
+            self.create_barriers()
 
     def calculate_enemy_speed_for_level(self, level):
         # Enemy speed only increases every 5 levels now
