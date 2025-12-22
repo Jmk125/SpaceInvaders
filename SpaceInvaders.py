@@ -641,7 +641,19 @@ class LevelUpScreen:
         options = self.get_available_permanent_options(player)
         if not options:
             return None
-        return random.choice(options)
+
+        # Filter out the last permanent powerup for this player to prevent consecutive repeats
+        last_powerup = self.last_permanent_powerup.get(player.player_id)
+        if last_powerup:
+            filtered_options = [opt for opt in options if opt[0] != last_powerup]
+            # If all options are filtered out (only one option available), use all
+            if filtered_options:
+                options = filtered_options
+
+        choice = random.choice(options)
+        # Track this choice for next time
+        self.last_permanent_powerup[player.player_id] = choice[0]
+        return choice
 
     def get_options_for_player(self, player_index):
         if 0 <= player_index < len(self.player_options):
@@ -4538,6 +4550,7 @@ class Game:
         
         # XP and upgrade system
         self.xp_system = XPSystem()
+        self.last_permanent_powerup = {}  # Track last permanent powerup per player to prevent consecutive repeats
 
         # Player statistics tracking
         self.player_stats = []  # Will be populated when players are created
@@ -4550,6 +4563,7 @@ class Game:
         self.is_boss_level = False
         self.boss_shield_granted = False
         self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0}
+        self.last_boss_type = None  # Track last boss to prevent consecutive repeats
 
         # Debug overrides for boss testing
         self.debug_force_boss_level = False
@@ -4940,7 +4954,14 @@ class Game:
         if self.debug_force_boss_type is not None:
             boss_class = self.debug_force_boss_type
         else:
-            boss_class = random.choice(self.available_bosses)
+            # Filter out the last boss to prevent consecutive repeats
+            available = [b for b in self.available_bosses if b != self.last_boss_type]
+            # If all bosses are filtered out (shouldn't happen with 4+ bosses), use all
+            if not available:
+                available = self.available_bosses
+            boss_class = random.choice(available)
+            # Track this boss for next selection
+            self.last_boss_type = boss_class
 
         # Use debug encounter level if set, otherwise increment normally
         if self.debug_boss_encounter_level is not None:
