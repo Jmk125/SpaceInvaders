@@ -33,6 +33,7 @@ BASE_ENEMY_SPEED = 0.15
 BASE_SHOOT_COOLDOWN = 300
 ENEMY_DROP_SPEED = 30
 RAPID_FIRE_COOLDOWN = 100
+AUTO_FIRE_COOLDOWN = 150  # Cooldown for auto-fire powerup (faster than normal, slower than rapid fire)
 AFTERIMAGE_INTERVAL = 80
 RESPAWN_IMMUNITY_DURATION = 3000
 
@@ -331,6 +332,8 @@ class PlayerUpgrades:
         self.ammo_capacity_level = 0
         self.extra_bullet_level = 0
         self.boss_shield_level = 0
+        self.reinforced_barriers_level = 0
+        self.auto_fire_level = 0
         
     def get_max_upgrade_level(self):
         """Calculate maximum upgrade level based on multiplier"""
@@ -347,6 +350,10 @@ class PlayerUpgrades:
             max_levels = 1
         elif stat == "boss_shield":
             max_levels = 1
+        elif stat == "reinforced_barriers":
+            max_levels = 2  # Stackable twice (2 hits -> 3 hits)
+        elif stat == "auto_fire":
+            max_levels = 1  # One-time upgrade
         elif stat == "bullet_length":
             max_levels = None  # Infinite scaling
         else:
@@ -398,6 +405,14 @@ class PlayerUpgrades:
 
     def has_extra_bullet(self):
         return self.extra_bullet_level > 0
+
+    def get_barrier_reinforcement_level(self):
+        """Returns the barrier reinforcement level (0-2), which adds extra hits needed to break barrier blocks"""
+        return self.reinforced_barriers_level
+
+    def has_auto_fire(self):
+        """Check if auto-fire upgrade is active"""
+        return self.auto_fire_level > 0
 
 
 class PlayerStats:
@@ -554,7 +569,9 @@ class LevelUpScreen:
             ("boss_damage", "Boss Breaker", "Bullets deal +10% boss damage (up to 5)"),
             ("ammo_capacity", "Ammo Belt", "Store extra ammo power-ups (up to 5)"),
             ("extra_bullet", "Twin Shot", "Add +1 bullet to every shot (one time)"),
-            ("boss_shield", "Boss Shield", "Regenerate a shield after each boss")
+            ("boss_shield", "Boss Shield", "Regenerate a shield after each boss"),
+            ("reinforced_barriers", "Reinforced Barriers", "Barriers take +1 hit before breaking (stacks to 2)"),
+            ("auto_fire", "Auto Fire", "Hold fire button for continuous shooting")
         ]
 
         self.player_options = []
@@ -2493,7 +2510,13 @@ class Player:
         
     def get_shoot_cooldown(self):
         """Get current shoot cooldown with upgrades"""
-        base_cooldown = RAPID_FIRE_COOLDOWN if self.rapid_fire else BASE_SHOOT_COOLDOWN
+        # Priority: rapid_fire powerup > auto_fire upgrade > normal shooting
+        if self.rapid_fire:
+            base_cooldown = RAPID_FIRE_COOLDOWN
+        elif self.upgrades.has_auto_fire():
+            base_cooldown = AUTO_FIRE_COOLDOWN
+        else:
+            base_cooldown = BASE_SHOOT_COOLDOWN
         return base_cooldown / self.upgrades.get_multiplier('fire_rate')
         
     def get_powerup_duration_multiplier(self):
@@ -2705,17 +2728,23 @@ class Player:
         ammo_count = int(base_ammo * self.get_powerup_duration_multiplier())
         self.add_ammo_power_up('multi_shot', ammo_count)
         
-    def handle_controller_input(self):
+    def handle_controller_input(self, shoot_callback=None):
         if not self.is_alive:
             return
         if self.controller:
             hat = self.controller.get_hat(0) if self.controller.get_numhats() > 0 else (0, 0)
             axis_x = self.controller.get_axis(0) if self.controller.get_numaxes() > 0 else 0
-            
+
             if hat[0] == -1 or axis_x < -0.3:
                 self.move_left()
             elif hat[0] == 1 or axis_x > 0.3:
                 self.move_right()
+
+            # Auto-fire support for controller
+            if self.upgrades.has_auto_fire() and shoot_callback:
+                button_pressed = self.controller.get_button(0) if self.controller.get_numbuttons() > 0 else False
+                if button_pressed:
+                    shoot_callback()
                 
     def draw(self, screen, font=None):
         if not self.is_alive:
@@ -3960,32 +3989,54 @@ class LaserBeam:
             screen.blit(laser_surface, (self.x - self.width // 2, 0))
 
 class Barrier:
-    def __init__(self, x, y):
+    def __init__(self, x, y, max_block_health=1):
         self.x = x
         self.y = y
         self.width = 90
         self.height = 60
-        self.blocks = []
+        self.max_block_health = max_block_health  # 1 = normal, 2 = reinforced level 1, 3 = reinforced level 2
+        self.block_health = {}  # Dictionary mapping block positions to health
         self.create_barrier()
-        
+
     def create_barrier(self):
         for row in range(5):
             for col in range(8):
                 if not (row == 0 and (col == 0 or col == 7)) and not (row == 1 and (col <= 1 or col >= 6)):
                     block_x = self.x + col * 11
                     block_y = self.y + row * 12
-                    self.blocks.append(pygame.Rect(block_x, block_y, 11, 12))
-                    
+                    block = pygame.Rect(block_x, block_y, 11, 12)
+                    # Store block with full health
+                    self.block_health[tuple([block.x, block.y, block.width, block.height])] = self.max_block_health
+
     def check_collision(self, bullet_rect):
-        for block in self.blocks[:]:
+        for block_key, health in list(self.block_health.items()):
+            block = pygame.Rect(block_key[0], block_key[1], block_key[2], block_key[3])
             if block.colliderect(bullet_rect):
-                self.blocks.remove(block)
+                # Decrease health instead of immediate removal
+                self.block_health[block_key] -= 1
+                if self.block_health[block_key] <= 0:
+                    del self.block_health[block_key]
                 return True
         return False
-        
+
     def draw(self, screen):
-        for block in self.blocks:
-            pygame.draw.rect(screen, GREEN, block)
+        for block_key, health in self.block_health.items():
+            block = pygame.Rect(block_key[0], block_key[1], block_key[2], block_key[3])
+            # Color based on remaining health
+            if health >= self.max_block_health:
+                color = GREEN  # Full health
+            elif health == 2:
+                color = YELLOW  # 2 hits remaining (for level 2 reinforced)
+            elif health == 1:
+                if self.max_block_health == 3:
+                    color = RED  # 1 hit remaining (for level 2 reinforced)
+                elif self.max_block_health == 2:
+                    color = YELLOW  # 1 hit remaining (for level 1 reinforced)
+                else:
+                    color = GREEN  # Should not happen for normal barriers
+            else:
+                color = GREEN  # Fallback
+            pygame.draw.rect(screen, color, block)
 
 class TitleScreen:
     def __init__(self, screen, score_manager, sound_manager):
@@ -4880,10 +4931,14 @@ class Game:
         self.barriers = []
         barrier_count = 5
         barrier_spacing = SCREEN_WIDTH // (barrier_count + 1)
+        # Get max barrier health from player's reinforced_barriers upgrade (1 + upgrade level)
+        max_block_health = 1
+        if self.players and len(self.players) > 0:
+            max_block_health = 1 + self.players[0].upgrades.get_barrier_reinforcement_level()
         for i in range(barrier_count):
             barrier_x = barrier_spacing * (i + 1) - 45
             barrier_y = SCREEN_HEIGHT - 300
-            self.barriers.append(Barrier(barrier_x, barrier_y))
+            self.barriers.append(Barrier(barrier_x, barrier_y, max_block_health))
             
     def create_enemy_grid(self):
         self.enemies = []
@@ -5175,23 +5230,124 @@ class Game:
     def handle_input(self):
         if not self.game_over and not self.awaiting_level_up:
             keys = pygame.key.get_pressed()
-            
+
             if len(self.players) > 0:
                 if keys[pygame.K_LEFT] or keys[pygame.K_a]:
                     self.players[0].move_left()
                 if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
                     self.players[0].move_right()
-                    
-                self.players[0].handle_controller_input()
-                    
+
+                # Auto-fire: check if space is held and auto-fire upgrade is active
+                if keys[pygame.K_SPACE] and self.players[0].is_alive and self.players[0].upgrades.has_auto_fire():
+                    player = self.players[0]
+                    # Determine shot type for stats tracking
+                    if player.has_laser:
+                        shot_stat_type = 'laser'
+                    elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                        shot_stat_type = 'multi'
+                    elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                        shot_stat_type = 'rapid'
+                    else:
+                        shot_stat_type = 'normal'
+
+                    shots = player.shoot(self.sound_manager)
+                    for shot_type, shot in shots:
+                        if shot_type == 'bullet':
+                            self.sound_manager.play_sound('shoot')
+                            self.player_bullets.append(shot)
+                            if len(self.player_stats) > 0:
+                                self.player_stats[0].record_shot(shot_stat_type)
+                        elif shot_type == 'laser':
+                            self.sound_manager.play_sound('laser')
+                            self.laser_beams.append(shot)
+                            if len(self.player_stats) > 0:
+                                self.player_stats[0].record_shot(shot_stat_type)
+
+                # Create shoot callback for player 1 controller auto-fire
+                def player1_shoot():
+                    player = self.players[0]
+                    if player.has_laser:
+                        shot_stat_type = 'laser'
+                    elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                        shot_stat_type = 'multi'
+                    elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                        shot_stat_type = 'rapid'
+                    else:
+                        shot_stat_type = 'normal'
+
+                    shots = player.shoot(self.sound_manager)
+                    for shot_type, shot in shots:
+                        if shot_type == 'bullet':
+                            self.sound_manager.play_sound('shoot')
+                            self.player_bullets.append(shot)
+                            if len(self.player_stats) > 0:
+                                self.player_stats[0].record_shot(shot_stat_type)
+                        elif shot_type == 'laser':
+                            self.sound_manager.play_sound('laser')
+                            self.laser_beams.append(shot)
+                            if len(self.player_stats) > 0:
+                                self.player_stats[0].record_shot(shot_stat_type)
+
+                self.players[0].handle_controller_input(player1_shoot)
+
             if self.coop_mode and len(self.players) > 1:
                 if not self.players[1].controller:
                     if keys[pygame.K_LEFT]:
                         self.players[1].move_left()
                     if keys[pygame.K_RIGHT]:
                         self.players[1].move_right()
+                    # Auto-fire for player 2 (RCTRL key)
+                    if keys[pygame.K_RCTRL] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
+                        player = self.players[1]
+                        # Determine shot type for stats tracking
+                        if player.has_laser:
+                            shot_stat_type = 'laser'
+                        elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                            shot_stat_type = 'multi'
+                        elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                            shot_stat_type = 'rapid'
+                        else:
+                            shot_stat_type = 'normal'
+
+                        shots = player.shoot(self.sound_manager)
+                        for shot_type, shot in shots:
+                            if shot_type == 'bullet':
+                                self.sound_manager.play_sound('shoot')
+                                self.player_bullets.append(shot)
+                                if len(self.player_stats) > 1:
+                                    self.player_stats[1].record_shot(shot_stat_type)
+                            elif shot_type == 'laser':
+                                self.sound_manager.play_sound('laser')
+                                self.laser_beams.append(shot)
+                                if len(self.player_stats) > 1:
+                                    self.player_stats[1].record_shot(shot_stat_type)
                 else:
-                    self.players[1].handle_controller_input()
+                    # Create shoot callback for player 2 controller auto-fire
+                    def player2_shoot():
+                        player = self.players[1]
+                        if player.has_laser:
+                            shot_stat_type = 'laser'
+                        elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                            shot_stat_type = 'multi'
+                        elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                            shot_stat_type = 'rapid'
+                        else:
+                            shot_stat_type = 'normal'
+
+                        shots = player.shoot(self.sound_manager)
+                        for shot_type, shot in shots:
+                            if shot_type == 'bullet':
+                                self.sound_manager.play_sound('shoot')
+                                self.player_bullets.append(shot)
+                                if len(self.player_stats) > 1:
+                                    self.player_stats[1].record_shot(shot_stat_type)
+                            elif shot_type == 'laser':
+                                self.sound_manager.play_sound('laser')
+                                self.laser_beams.append(shot)
+                                if len(self.player_stats) > 1:
+                                    self.player_stats[1].record_shot(shot_stat_type)
+
+                    self.players[1].handle_controller_input(player2_shoot)
     
     def activate_power_up(self, player, power_type):
         if power_type == 'rapid_fire':
