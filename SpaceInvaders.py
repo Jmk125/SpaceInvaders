@@ -120,7 +120,15 @@ class StarField:
     Each layer has different brightness to create depth without size variation.
     Parallax scrolling is activated during specific boss levels (e.g., Asteroid Field).
     """
-    def __init__(self):
+    def __init__(self, direction='vertical'):
+        """
+        Initialize starfield with a scrolling direction.
+
+        Args:
+            direction: 'vertical' for downward scrolling, 'horizontal' for right-to-left scrolling
+        """
+        self.direction = direction
+
         # Layer configuration: (brightness, speed, star_count)
         self.layers = [
             {
@@ -155,19 +163,28 @@ class StarField:
 
     def update(self, parallax_active=False):
         """
-        Update star positions. If parallax_active is True, stars move downward
+        Update star positions. If parallax_active is True, stars move based on direction
         at different speeds based on their layer (creating parallax effect).
         """
         if parallax_active:
             for layer in self.layers:
                 for star in layer['stars']:
-                    # Move star downward based on layer speed
-                    star['y'] += layer['speed']
+                    if self.direction == 'horizontal':
+                        # Move star left (right to left) based on layer speed
+                        star['x'] -= layer['speed']
 
-                    # Wrap around when star goes off bottom of screen
-                    if star['y'] > SCREEN_HEIGHT:
-                        star['y'] = 0
-                        star['x'] = random.randint(0, SCREEN_WIDTH)
+                        # Wrap around when star goes off left side of screen
+                        if star['x'] < 0:
+                            star['x'] = SCREEN_WIDTH
+                            star['y'] = random.randint(0, SCREEN_HEIGHT)
+                    else:
+                        # Move star downward based on layer speed
+                        star['y'] += layer['speed']
+
+                        # Wrap around when star goes off bottom of screen
+                        if star['y'] > SCREEN_HEIGHT:
+                            star['y'] = 0
+                            star['x'] = random.randint(0, SCREEN_WIDTH)
 
     def draw(self, screen):
         """Draw all three layers of stars with their respective brightness levels."""
@@ -4059,6 +4076,9 @@ class TitleScreen:
         # Debug code detection (up, down, left, right, right, left, down, up)
         self.debug_sequence = ["up", "down", "left", "right", "right", "left", "down", "up"]
         self.debug_index = 0
+
+        # Starfield background with horizontal scrolling
+        self.starfield = StarField(direction='horizontal')
         
     def scan_controllers(self):
         self.controllers = []
@@ -4148,7 +4168,11 @@ class TitleScreen:
         
     def draw(self):
         self.screen.fill(BLACK)
-        
+
+        # Update and draw starfield background with parallax effect
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
         # Title
         title_text = self.font_large.render("PLACE INVADERS", True, WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 200))
