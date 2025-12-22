@@ -95,6 +95,93 @@ ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches 
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
 
+# Starfield Configuration
+STAR_COUNT_PER_LAYER = 100  # Number of stars per layer
+STAR_SIZE_MIN = 1  # Minimum star size
+STAR_SIZE_MAX = 3  # Maximum star size
+
+# Layer 1 (Back/Darkest/Slowest)
+STAR_LAYER1_BRIGHTNESS = 80  # Darkest (0-255)
+STAR_LAYER1_SPEED = 0.3  # Slowest parallax speed
+
+# Layer 2 (Middle)
+STAR_LAYER2_BRIGHTNESS = 150  # Medium brightness
+STAR_LAYER2_SPEED = 0.6  # Medium parallax speed
+
+# Layer 3 (Front/Brightest/Fastest)
+STAR_LAYER3_BRIGHTNESS = 255  # Brightest (closest)
+STAR_LAYER3_SPEED = 1.0  # Fastest parallax speed
+
+
+class StarField:
+    """
+    Three-layer starfield with parallax scrolling effect.
+    Each layer has different brightness to create depth without size variation.
+    Parallax scrolling is activated during specific boss levels (e.g., Asteroid Field).
+    """
+    def __init__(self):
+        # Layer configuration: (brightness, speed, star_count)
+        self.layers = [
+            {
+                'brightness': STAR_LAYER1_BRIGHTNESS,
+                'speed': STAR_LAYER1_SPEED,
+                'count': STAR_COUNT_PER_LAYER,
+                'stars': []
+            },
+            {
+                'brightness': STAR_LAYER2_BRIGHTNESS,
+                'speed': STAR_LAYER2_SPEED,
+                'count': STAR_COUNT_PER_LAYER,
+                'stars': []
+            },
+            {
+                'brightness': STAR_LAYER3_BRIGHTNESS,
+                'speed': STAR_LAYER3_SPEED,
+                'count': STAR_COUNT_PER_LAYER,
+                'stars': []
+            }
+        ]
+
+        # Generate stars for each layer
+        for layer in self.layers:
+            for _ in range(layer['count']):
+                star = {
+                    'x': random.randint(0, SCREEN_WIDTH),
+                    'y': random.randint(0, SCREEN_HEIGHT),
+                    'size': random.randint(STAR_SIZE_MIN, STAR_SIZE_MAX)
+                }
+                layer['stars'].append(star)
+
+    def update(self, parallax_active=False):
+        """
+        Update star positions. If parallax_active is True, stars move downward
+        at different speeds based on their layer (creating parallax effect).
+        """
+        if parallax_active:
+            for layer in self.layers:
+                for star in layer['stars']:
+                    # Move star downward based on layer speed
+                    star['y'] += layer['speed']
+
+                    # Wrap around when star goes off bottom of screen
+                    if star['y'] > SCREEN_HEIGHT:
+                        star['y'] = 0
+                        star['x'] = random.randint(0, SCREEN_WIDTH)
+
+    def draw(self, screen):
+        """Draw all three layers of stars with their respective brightness levels."""
+        for layer in self.layers:
+            # Create color based on brightness (grayscale)
+            brightness = layer['brightness']
+            color = (brightness, brightness, brightness)
+
+            # Draw each star in the layer
+            for star in layer['stars']:
+                pygame.draw.circle(screen, color,
+                                 (int(star['x']), int(star['y'])),
+                                 star['size'])
+
+
 class SoundManager:
     def __init__(self):
         # Initialize pygame mixer with more channels and better settings
@@ -4406,7 +4493,10 @@ class Game:
         self.small_font = pygame.font.Font(None, 48)
         self.tiny_font = pygame.font.Font(None, 36)
         self.powerup_font = pygame.font.Font(None, 24)  # Small font for powerup indicators below ships
-        
+
+        # Starfield background
+        self.starfield = StarField()
+
     def scan_controllers(self):
         self.controllers = []
         for i in range(pygame.joystick.get_count()):
@@ -5184,6 +5274,12 @@ class Game:
             self.screen_flash_duration -= 16
             self.screen_flash_intensity = max(0, int(255 * (self.screen_flash_duration / 1500)))
 
+        # Update starfield (with parallax effect during Asteroid Field Boss)
+        parallax_active = (self.is_boss_level and
+                          self.current_boss and
+                          isinstance(self.current_boss, AsteroidFieldBoss))
+        self.starfield.update(parallax_active)
+
         # Update explosion waves
         for wave in self.boss_explosion_waves[:]:
             wave['radius'] += wave['growth_speed']
@@ -5606,6 +5702,10 @@ class Game:
             return
             
         self.screen.fill(BLACK)
+
+        # Draw starfield background (after black fill, before everything else)
+        self.starfield.draw(self.screen)
+
         # SCREEN FLASH EFFECT - Apply early for maximum impact
         if self.screen_flash_intensity > 0:
             # Fill screen with bright color based on flash intensity
