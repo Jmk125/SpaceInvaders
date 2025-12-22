@@ -2510,11 +2510,10 @@ class Player:
         
     def get_shoot_cooldown(self):
         """Get current shoot cooldown with upgrades"""
-        # Priority: rapid_fire powerup > auto_fire upgrade > normal shooting
+        # Rapid fire powerup uses faster cooldown, otherwise use base cooldown
+        # Auto-fire upgrade only enables holding button, doesn't change cooldown
         if self.rapid_fire:
             base_cooldown = RAPID_FIRE_COOLDOWN
-        elif self.upgrades.has_auto_fire():
-            base_cooldown = AUTO_FIRE_COOLDOWN
         else:
             base_cooldown = BASE_SHOOT_COOLDOWN
         return base_cooldown / self.upgrades.get_multiplier('fire_rate')
