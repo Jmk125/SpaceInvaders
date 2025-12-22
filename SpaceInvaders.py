@@ -4522,16 +4522,28 @@ class Game:
 
         # Save player data
         for player in self.players:
+            # Update active_ammo_powerup with current ammo count before saving
+            active_powerup = None
+            if player.active_ammo_powerup:
+                active_powerup = player.active_ammo_powerup.copy()
+                # Update with current ammo count
+                if active_powerup['type'] == 'rapid_fire':
+                    active_powerup['ammo'] = player.rapid_fire_ammo
+                elif active_powerup['type'] == 'multi_shot':
+                    active_powerup['ammo'] = player.multi_shot_ammo
+
             player_data = {
                 'player_id': player.player_id,
                 'lives': player.lives,
                 'is_alive': player.is_alive,
                 'has_boss_shield_upgrade': player.has_boss_shield_upgrade,
                 'boss_shield_active': player.boss_shield_active,
+                'rapid_fire': player.rapid_fire,
                 'rapid_fire_ammo': player.rapid_fire_ammo,
+                'has_multi_shot': player.has_multi_shot,
                 'multi_shot_ammo': player.multi_shot_ammo,
                 'has_laser': player.has_laser,
-                'active_ammo_powerup': player.active_ammo_powerup,
+                'active_ammo_powerup': active_powerup,
                 'ammo_powerup_queue': player.ammo_powerup_queue,
                 'upgrades': {
                     'shot_speed_level': player.upgrades.shot_speed_level,
@@ -4633,16 +4645,18 @@ class Game:
             player.is_alive = player_data['is_alive']
             player.has_boss_shield_upgrade = player_data['has_boss_shield_upgrade']
             player.boss_shield_active = player_data['boss_shield_active']
-            player.rapid_fire_ammo = player_data['rapid_fire_ammo']
-            player.multi_shot_ammo = player_data['multi_shot_ammo']
             player.has_laser = player_data['has_laser']
 
-            # Restore ammo power-ups
+            # Restore ammo power-ups with current ammo counts
+            player.rapid_fire = player_data.get('rapid_fire', False)
+            player.rapid_fire_ammo = player_data['rapid_fire_ammo']
+            player.has_multi_shot = player_data.get('has_multi_shot', False)
+            player.multi_shot_ammo = player_data['multi_shot_ammo']
+
+            # Restore active powerup state
             if player_data.get('active_ammo_powerup'):
-                player.set_active_ammo_powerup(
-                    player_data['active_ammo_powerup']['type'],
-                    player_data['active_ammo_powerup']['ammo']
-                )
+                player.active_ammo_powerup = player_data['active_ammo_powerup']
+
             player.ammo_powerup_queue = player_data.get('ammo_powerup_queue', [])
 
             self.players.append(player)
