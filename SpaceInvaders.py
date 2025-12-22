@@ -4221,6 +4221,8 @@ class DebugMenu:
             'boss_damage_level': 5,
             'ammo_capacity_level': 5,
             'extra_bullet_level': 1,
+            'reinforced_barriers_level': 2,
+            'auto_fire_level': 1,
         }
 
         self.config = {
