@@ -102,15 +102,15 @@ STAR_SIZE_MAX = 3  # Maximum star size
 
 # Layer 1 (Back/Darkest/Slowest)
 STAR_LAYER1_BRIGHTNESS = 80  # Darkest (0-255)
-STAR_LAYER1_SPEED = 0.3  # Slowest parallax speed
+STAR_LAYER1_SPEED = 0.6  # Slowest parallax speed
 
 # Layer 2 (Middle)
 STAR_LAYER2_BRIGHTNESS = 150  # Medium brightness
-STAR_LAYER2_SPEED = 0.6  # Medium parallax speed
+STAR_LAYER2_SPEED = 1.2  # Medium parallax speed
 
 # Layer 3 (Front/Brightest/Fastest)
 STAR_LAYER3_BRIGHTNESS = 255  # Brightest (closest)
-STAR_LAYER3_SPEED = 1.0  # Fastest parallax speed
+STAR_LAYER3_SPEED = 2.0  # Fastest parallax speed
 
 
 class StarField:
