@@ -4178,6 +4178,8 @@ class DebugMenu:
             'start_score': 0,
             'xp_level': 1,
             'xp_current': 0,
+            'force_boss_level': False,
+            'force_boss_type': 'Random',
             'players': [self._default_player_config(), self._default_player_config(player_id=2)],
         }
 
@@ -4206,6 +4208,9 @@ class DebugMenu:
             {'type': 'int', 'label': 'Start Score', 'path': ('start_score',), 'min': 0, 'max': 9999999, 'step': 250},
             {'type': 'int', 'label': 'XP Level', 'path': ('xp_level',), 'min': 1, 'max': 99, 'step': 1},
             {'type': 'int', 'label': 'XP Current', 'path': ('xp_current',), 'min': 0, 'max': 50000, 'step': 250},
+            {'type': 'label', 'label': 'Boss Testing'},
+            {'type': 'bool', 'label': 'Force Boss Level', 'path': ('force_boss_level',)},
+            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss'], 'path': ('force_boss_type',)},
         ]
 
         for idx in range(2):
@@ -4468,6 +4473,10 @@ class Game:
         self.is_boss_level = False
         self.boss_shield_granted = False
         self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0}
+
+        # Debug overrides for boss testing
+        self.debug_force_boss_level = False
+        self.debug_force_boss_type = None
         
         self.controllers = []
         self.scan_controllers()
@@ -4550,6 +4559,21 @@ class Game:
         self.xp_system.xp_for_next_level = int(
             XP_BASE_REQUIREMENT * (1 + XP_INCREASE_RATE) ** (self.xp_system.level - 1)
         )
+
+        # Apply boss testing overrides
+        self.debug_force_boss_level = debug_config.get('force_boss_level', False)
+        boss_type_name = debug_config.get('force_boss_type', 'Random')
+        if boss_type_name == 'Random':
+            self.debug_force_boss_type = None
+        else:
+            # Map boss name to boss class
+            boss_map = {
+                'Boss': Boss,
+                'AlienOverlordBoss': AlienOverlordBoss,
+                'BulletHellBoss': BulletHellBoss,
+                'AsteroidFieldBoss': AsteroidFieldBoss
+            }
+            self.debug_force_boss_type = boss_map.get(boss_type_name)
 
         player_configs = debug_config.get('players', [])
         for idx, player in enumerate(self.players):
@@ -4811,7 +4835,11 @@ class Game:
 
     def setup_level(self):
         """Setup current level - either boss or regular enemies"""
-        self.is_boss_level = self.is_level_a_boss_level(self.level)
+        # Check for debug override first
+        if self.debug_force_boss_level:
+            self.is_boss_level = True
+        else:
+            self.is_boss_level = self.is_level_a_boss_level(self.level)
         self.boss_shield_granted = False
 
         if self.is_boss_level:
@@ -4827,7 +4855,11 @@ class Game:
             self.create_enemy_grid()
 
     def create_boss_instance(self):
-        boss_class = random.choice(self.available_bosses)
+        # Check for debug override first
+        if self.debug_force_boss_type is not None:
+            boss_class = self.debug_force_boss_type
+        else:
+            boss_class = random.choice(self.available_bosses)
         self.boss_encounters[boss_class] = self.boss_encounters.get(boss_class, 0) + 1
         encounter_number = self.boss_encounters[boss_class]
         return boss_class(encounter_number)
