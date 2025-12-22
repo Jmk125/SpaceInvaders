@@ -4180,6 +4180,7 @@ class DebugMenu:
             'xp_current': 0,
             'force_boss_level': False,
             'force_boss_type': 'Random',
+            'boss_encounter_level': 1,
             'players': [self._default_player_config(), self._default_player_config(player_id=2)],
         }
 
@@ -4211,6 +4212,7 @@ class DebugMenu:
             {'type': 'label', 'label': 'Boss Testing'},
             {'type': 'bool', 'label': 'Force Boss Level', 'path': ('force_boss_level',)},
             {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss'], 'path': ('force_boss_type',)},
+            {'type': 'int', 'label': 'Boss Encounter Level', 'path': ('boss_encounter_level',), 'min': 1, 'max': 50, 'step': 1},
         ]
 
         for idx in range(2):
@@ -4477,6 +4479,7 @@ class Game:
         # Debug overrides for boss testing
         self.debug_force_boss_level = False
         self.debug_force_boss_type = None
+        self.debug_boss_encounter_level = None
         
         self.controllers = []
         self.scan_controllers()
@@ -4574,6 +4577,9 @@ class Game:
                 'AsteroidFieldBoss': AsteroidFieldBoss
             }
             self.debug_force_boss_type = boss_map.get(boss_type_name)
+
+        # Set boss encounter level override
+        self.debug_boss_encounter_level = debug_config.get('boss_encounter_level', None)
 
         player_configs = debug_config.get('players', [])
         for idx, player in enumerate(self.players):
@@ -4860,8 +4866,14 @@ class Game:
             boss_class = self.debug_force_boss_type
         else:
             boss_class = random.choice(self.available_bosses)
-        self.boss_encounters[boss_class] = self.boss_encounters.get(boss_class, 0) + 1
-        encounter_number = self.boss_encounters[boss_class]
+
+        # Use debug encounter level if set, otherwise increment normally
+        if self.debug_boss_encounter_level is not None:
+            encounter_number = self.debug_boss_encounter_level
+        else:
+            self.boss_encounters[boss_class] = self.boss_encounters.get(boss_class, 0) + 1
+            encounter_number = self.boss_encounters[boss_class]
+
         return boss_class(encounter_number)
         
     def create_barriers(self):
