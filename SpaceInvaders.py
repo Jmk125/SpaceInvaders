@@ -570,7 +570,10 @@ class LevelUpScreen:
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.tiny_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
-        
+
+        # Track last permanent powerup per player to prevent repeats
+        self.last_permanent_powerup = {}
+
         self.base_upgrade_options = [
             ("shot_speed", "Shot Speed", "Increase bullet travel speed"),
             ("fire_rate", "Fire Rate", "Reduce shooting cooldown"),
