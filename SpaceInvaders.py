@@ -541,7 +541,7 @@ class FloatingText:
         self.color = color
         self.duration = duration
         self.start_time = pygame.time.get_ticks()
-        self.font = pygame.font.Font(None, 36)
+        self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
         
     def update(self):
         """Update floating text position and check if expired"""
@@ -566,10 +566,10 @@ class LevelUpScreen:
         self.is_coop = is_coop
         self.sound_manager = sound_manager
         self.xp_level = xp_level
-        self.font_large = pygame.font.Font(None, 96)
-        self.font_medium = pygame.font.Font(None, 64)
-        self.font_small = pygame.font.Font(None, 48)
-        self.tiny_font = pygame.font.Font(None, 36)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.tiny_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
         
         self.base_upgrade_options = [
             ("shot_speed", "Shot Speed", "Increase bullet travel speed"),
@@ -1969,7 +1969,7 @@ class Boss:
         pygame.draw.rect(screen, WHITE, (main_bar_x, main_bar_y, main_bar_width, main_bar_height), 2)
         
         # Health text
-        font = pygame.font.Font(None, 36)
+        font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
         health_text = font.render(f"UFO: {self.health}/{self.max_health}", True, WHITE)
         text_rect = health_text.get_rect(center=(self.x + self.width // 2, main_bar_y - 20))
         screen.blit(health_text, text_rect)
@@ -2053,9 +2053,9 @@ class NameInputScreen:
         self.score = score
         self.level = level
         self.is_coop = is_coop
-        self.font_large = pygame.font.Font(None, 96)
-        self.font_medium = pygame.font.Font(None, 64)
-        self.font_small = pygame.font.Font(None, 48)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         
         # Name input system
         self.name = ["A", "A", "A"]
@@ -2225,9 +2225,9 @@ class HighScoreScreen:
         self.screen = screen
         self.score_manager = score_manager
         self.sound_manager = sound_manager
-        self.font_large = pygame.font.Font(None, 96)
-        self.font_medium = pygame.font.Font(None, 64)
-        self.font_small = pygame.font.Font(None, 48)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.viewing_coop = False
         self.player_stats = player_stats  # Optional stats to display
         self.players = players  # Optional player objects for colors
@@ -2255,8 +2255,8 @@ class HighScoreScreen:
 
     def draw_player_stats(self, stats, x, y):
         """Draw comprehensive stats for a single player"""
-        stats_font = pygame.font.Font(None, 28)
-        header_font = pygame.font.Font(None, 36)
+        stats_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)
+        header_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
 
         # Player header
         player_color = GREEN if stats.player_id == 1 else BLUE
@@ -2399,8 +2399,8 @@ class HighScoreScreen:
 
     def draw_compact_high_scores(self, x, y):
         """Draw a compact version of the high scores table"""
-        header_font = pygame.font.Font(None, 32)
-        compact_font = pygame.font.Font(None, 24)
+        header_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+        compact_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 10)
 
         # Determine which scores to show based on game mode
         is_coop = len(self.player_stats) > 1 if self.player_stats else False
@@ -2801,7 +2801,7 @@ class Player:
             if current_time - self.level_up_indicator_time < 3000:  # Show for 3 seconds
                 # Pulsing "LEVEL UP!" text above player
                 pulse = abs(math.sin(current_time * 0.01)) * 50 + 50
-                font = pygame.font.Font(None, 48)
+                font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
                 level_up_text = font.render("LEVEL UP!", True, (255, 255, int(pulse)))
                 text_rect = level_up_text.get_rect(center=(self.x + self.width // 2, self.y - 30))
                 screen.blit(level_up_text, text_rect)
@@ -3177,7 +3177,7 @@ class AlienOverlordBoss:
         pygame.draw.rect(screen, GREEN, (x, y, int(width * ratio), height))
         pygame.draw.rect(screen, WHITE, (x, y, width, height), 2)
         if label:
-            font = pygame.font.Font(None, 32)
+            font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
             text = font.render(f"{label}: {int(ratio * 100)}%", True, WHITE)
             text_rect = text.get_rect(center=(x + width // 2, y - 18))
             screen.blit(text, text_rect)
@@ -3448,7 +3448,7 @@ class BulletHellBoss:
         pygame.draw.rect(screen, GREEN, (x, y, int(width * ratio), height))
         pygame.draw.rect(screen, WHITE, (x, y, width, height), 2)
         if label:
-            font = pygame.font.Font(None, 36)
+            font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
             text = font.render(f"{label}: {int(ratio * 100)}%", True, WHITE)
             text_rect = text.get_rect(center=(x + width // 2, y - 20))
             screen.blit(text, text_rect)
@@ -3657,7 +3657,7 @@ class AsteroidFieldBoss:
         """Draw the asteroid field"""
         if self.destruction_complete:
             # Show completion message
-            font = pygame.font.Font(None, 80)
+            font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 32)
             text = font.render("ASTEROID FIELD CLEARED!", True, GREEN)
             text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
 
@@ -3687,7 +3687,7 @@ class AsteroidFieldBoss:
         pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 3)
 
         # Label
-        font = pygame.font.Font(None, 32)
+        font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
         label = f"ASTEROID FIELD: {int(health_ratio * 100)}%"
         text = font.render(label, True, WHITE)
         text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, bar_y - 20))
@@ -3977,7 +3977,7 @@ class PowerUp:
                          (self.x + self.width // 2, self.y + self.height // 2), 
                          self.width // 2 + pulse)
         
-        font = pygame.font.Font(None, 32)
+        font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
         symbols = {
             'rapid_fire': 'R',
             'invincibility': 'I', 
@@ -4070,9 +4070,9 @@ class TitleScreen:
         self.screen = screen
         self.score_manager = score_manager
         self.sound_manager = sound_manager
-        self.font_large = pygame.font.Font(None, 128)
-        self.font_medium = pygame.font.Font(None, 72)
-        self.font_small = pygame.font.Font(None, 48)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 48)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.selected_option = 0
 
         # Check if save file exists and add Continue option if it does
@@ -4185,75 +4185,38 @@ class TitleScreen:
         self.starfield.update(parallax_active=True)
         self.starfield.draw(self.screen)
 
-        # Title with decorative border
-        title_text = self.font_large.render("PLACE INVADERS", True, WHITE)
+        # Title
+        title_text = self.font_large.render("SPACE INVADERS", True, GREEN)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 200))
-
-        # Draw double border around title
-        border_padding = 30
-        title_border = title_rect.inflate(border_padding * 2, border_padding)
-        pygame.draw.rect(self.screen, CYAN, title_border, 3, border_radius=10)
-        pygame.draw.rect(self.screen, WHITE, title_border.inflate(10, 10), 2, border_radius=12)
-
         self.screen.blit(title_text, title_rect)
 
         # Subtitle
-        subtitle_text = self.font_medium.render("Enhanced Edition", True, CYAN)
-        subtitle_rect = subtitle_text.get_rect(center=(SCREEN_WIDTH // 2, 280))
+        subtitle_text = self.font_small.render("Enhanced Edition", True, CYAN)
+        subtitle_rect = subtitle_text.get_rect(center=(SCREEN_WIDTH // 2, 260))
         self.screen.blit(subtitle_text, subtitle_rect)
 
-        # Menu options with styled boxes
+        # Menu options
         for i, option in enumerate(self.options):
-            is_selected = i == self.selected_option
-            color = YELLOW if is_selected else WHITE
+            color = YELLOW if i == self.selected_option else WHITE
             option_text = self.font_medium.render(option, True, color)
-            option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 400 + i * 80))
-
-            # Draw background box for menu item
-            box_padding = 20
-            box_rect = option_rect.inflate(box_padding * 2, box_padding)
-
-            if is_selected:
-                # Selected item: glowing effect with multiple borders
-                pygame.draw.rect(self.screen, YELLOW, box_rect.inflate(8, 8), 2, border_radius=8)
-                pygame.draw.rect(self.screen, GOLD, box_rect.inflate(4, 4), 2, border_radius=8)
-                # Semi-transparent yellow background
-                glow_surface = pygame.Surface((box_rect.width, box_rect.height), pygame.SRCALPHA)
-                glow_surface.fill((*YELLOW, 30))
-                self.screen.blit(glow_surface, box_rect)
-            else:
-                # Unselected item: simple border
-                pygame.draw.rect(self.screen, GRAY, box_rect, 2, border_radius=8)
-
+            option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 380 + i * 70))
             self.screen.blit(option_text, option_rect)
 
-        # High score previews with decorative panel
+        # High score previews
         single_best = self.score_manager.get_best_score(False)
         coop_best = self.score_manager.get_best_score(True)
 
-        if single_best or coop_best:
-            # Draw panel background for high scores
-            panel_y = 730
-            panel_height = 100 if (single_best and coop_best) else 70
-            panel_rect = pygame.Rect(SCREEN_WIDTH // 2 - 400, panel_y, 800, panel_height)
+        preview_y = 750
+        if single_best:
+            single_text = self.font_small.render(f"Best Single: {single_best['score']:,} - {single_best['name']}", True, CYAN)
+            single_rect = single_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
+            self.screen.blit(single_text, single_rect)
+            preview_y += 40
 
-            # Semi-transparent panel
-            panel_surface = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
-            panel_surface.fill((*WHITE, 20))
-            self.screen.blit(panel_surface, panel_rect)
-            pygame.draw.rect(self.screen, CYAN, panel_rect, 2, border_radius=10)
-
-            preview_y = panel_y + 20
-            if single_best:
-                single_text = self.font_small.render(f"Best Single: {single_best['score']:,} by {single_best['name']}", True, GOLD)
-                single_rect = single_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
-                self.screen.blit(single_text, single_rect)
-                preview_y += 40
-
-            if coop_best:
-                coop_text = self.font_small.render(f"Best Co-op: {coop_best['score']:,} by {coop_best['name']}", True, GOLD)
-                coop_rect = coop_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
-                self.screen.blit(coop_text, coop_rect)
+        if coop_best:
+            coop_text = self.font_small.render(f"Best Co-op: {coop_best['score']:,} - {coop_best['name']}", True, CYAN)
+            coop_rect = coop_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
+            self.screen.blit(coop_text, coop_rect)
 
         pygame.display.flip()
 
@@ -4261,9 +4224,9 @@ class DebugMenu:
     def __init__(self, screen, sound_manager):
         self.screen = screen
         self.sound_manager = sound_manager
-        self.font_large = pygame.font.Font(None, 96)
-        self.font_medium = pygame.font.Font(None, 64)
-        self.font_small = pygame.font.Font(None, 40)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
         self.selected_index = 0
         self.scroll_offset = 0
 
@@ -4502,9 +4465,9 @@ class UFOWarningScreen:
     def __init__(self, screen, level):
         self.screen = screen
         self.level = level
-        self.font_huge = pygame.font.Font(None, 144)
-        self.font_large = pygame.font.Font(None, 96)
-        self.font_medium = pygame.font.Font(None, 64)
+        self.font_huge = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 48)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.start_time = pygame.time.get_ticks()
         self.duration = 3000  # 3 seconds
         
@@ -4614,10 +4577,10 @@ class Game:
         self.boss_explosion_waves = []
         self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss]
 
-        self.font = pygame.font.Font(None, 72)
-        self.small_font = pygame.font.Font(None, 48)
-        self.tiny_font = pygame.font.Font(None, 36)
-        self.powerup_font = pygame.font.Font(None, 24)  # Small font for powerup indicators below ships
+        self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
+        self.small_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.tiny_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
+        self.powerup_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)  # Small font for powerup indicators below ships
 
         # Starfield background
         self.starfield = StarField()
@@ -6052,94 +6015,44 @@ class Game:
             for text in self.floating_texts:
                 text.draw(self.screen)
                 
-        # UI - Top Left Info Panel
-        # Create panel background for score, level, and lives
-        panel_padding = 15
-        panel_x = 10
-        panel_y = 10
+        # UI - Clean retro style
+        score_text = self.small_font.render(f"SCORE {self.score:,}", True, GREEN)
+        level_text = self.small_font.render(f"LEVEL {self.level}", True, CYAN)
 
-        # Calculate panel dimensions based on content
-        if self.coop_mode:
-            panel_width = 400
-            panel_height = 180
-        else:
-            panel_width = 350
-            panel_height = 140
-
-        # Draw semi-transparent panel background
-        panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
-        panel_surface.fill((0, 0, 0, 120))
-        self.screen.blit(panel_surface, (panel_x, panel_y))
-
-        # Draw panel border with gradient effect
-        pygame.draw.rect(self.screen, CYAN, (panel_x, panel_y, panel_width, panel_height), 3, border_radius=10)
-        pygame.draw.rect(self.screen, WHITE, (panel_x + 2, panel_y + 2, panel_width - 4, panel_height - 4), 1, border_radius=8)
-
-        # Draw UI elements inside panel
-        text_x = panel_x + panel_padding
-        text_y = panel_y + panel_padding
-
-        score_text = self.small_font.render(f"Score: {self.score:,}", True, GOLD)
-        level_text = self.small_font.render(f"Level: {self.level}", True, CYAN)
-
-        self.screen.blit(score_text, (text_x, text_y))
-        self.screen.blit(level_text, (text_x, text_y + 50))
+        self.screen.blit(score_text, (20, 20))
+        self.screen.blit(level_text, (20, 50))
 
         # Player lives display
         if self.coop_mode:
-            lives_text1 = self.small_font.render(f"P1: {self.players[0].lives} lives {'(DEAD)' if not self.players[0].is_alive else ''}", True, GREEN if self.players[0].is_alive else RED)
-            lives_text2 = self.small_font.render(f"P2: {self.players[1].lives} lives {'(DEAD)' if not self.players[1].is_alive else ''}", True, BLUE if self.players[1].is_alive else RED)
-            self.screen.blit(lives_text1, (text_x, text_y + 100))
-            self.screen.blit(lives_text2, (text_x, text_y + 140))
+            lives_text1 = self.small_font.render(f"P1 {self.players[0].lives} {'X' if not self.players[0].is_alive else ''}", True, GREEN if self.players[0].is_alive else RED)
+            lives_text2 = self.small_font.render(f"P2 {self.players[1].lives} {'X' if not self.players[1].is_alive else ''}", True, BLUE if self.players[1].is_alive else RED)
+            self.screen.blit(lives_text1, (20, 80))
+            self.screen.blit(lives_text2, (20, 110))
         else:
             if self.players:
-                lives_text = self.small_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
-                self.screen.blit(lives_text, (text_x, text_y + 100))
+                lives_text = self.small_font.render(f"LIVES {self.players[0].lives}", True, WHITE)
+                self.screen.blit(lives_text, (20, 80))
 
-        # XP Bar - Enhanced with panel background
-        bar_width = 300
-        bar_height = 25
+        # XP Bar - Clean retro style
+        bar_width = 250
+        bar_height = 20
         bar_x = SCREEN_WIDTH - bar_width - 20
         bar_y = 20
 
-        # XP Panel background
-        xp_panel_padding = 15
-        xp_panel_width = bar_width + xp_panel_padding * 2
-        xp_panel_height = 90
-        xp_panel_x = bar_x - xp_panel_padding
-        xp_panel_y = bar_y - 10
-
-        # Draw XP panel background
-        xp_panel_surface = pygame.Surface((xp_panel_width, xp_panel_height), pygame.SRCALPHA)
-        xp_panel_surface.fill((0, 0, 0, 120))
-        self.screen.blit(xp_panel_surface, (xp_panel_x, xp_panel_y))
-
-        # Draw XP panel border
-        pygame.draw.rect(self.screen, GOLD, (xp_panel_x, xp_panel_y, xp_panel_width, xp_panel_height), 3, border_radius=10)
-        pygame.draw.rect(self.screen, WHITE, (xp_panel_x + 2, xp_panel_y + 2, xp_panel_width - 4, xp_panel_height - 4), 1, border_radius=8)
-
         # XP Bar background
-        pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height), border_radius=5)
+        pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
 
-        # XP Progress with gradient effect
+        # XP Progress
         progress = self.xp_system.get_xp_progress()
         progress_width = int(bar_width * progress)
-        if progress_width > 0:
-            # Draw gold gradient
-            pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, progress_width, bar_height), border_radius=5)
-            # Add a lighter highlight on top
-            if progress_width > 4:
-                highlight_surface = pygame.Surface((progress_width - 4, bar_height // 2), pygame.SRCALPHA)
-                highlight_surface.fill((255, 255, 150, 80))
-                self.screen.blit(highlight_surface, (bar_x + 2, bar_y + 2))
+        pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, progress_width, bar_height))
 
         # XP Bar border
-        pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2, border_radius=5)
+        pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
 
-        # XP level text - centered below bar
-        xp_level_text = self.small_font.render(f"XP Level: {self.xp_system.level}", True, GOLD)
-        xp_text_rect = xp_level_text.get_rect(center=(bar_x + bar_width // 2, bar_y + bar_height + 25))
-        self.screen.blit(xp_level_text, xp_text_rect)
+        # XP level text
+        xp_level_text = self.small_font.render(f"XP LV {self.xp_system.level}", True, GOLD)
+        self.screen.blit(xp_level_text, (bar_x, bar_y + bar_height + 5))
         
         # Power-up status is now displayed below each player's ship (see Player.draw())
         
@@ -6157,8 +6070,8 @@ class Game:
             self.screen.blit(game_over_text, text_rect)
 
             # Draw stats for each player
-            stats_font = pygame.font.Font(None, 28)
-            header_font = pygame.font.Font(None, 32)
+            stats_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)
+            header_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
 
             num_players = len(self.player_stats)
             if num_players == 1:
