@@ -4185,51 +4185,75 @@ class TitleScreen:
         self.starfield.update(parallax_active=True)
         self.starfield.draw(self.screen)
 
-        # Title
+        # Title with decorative border
         title_text = self.font_large.render("PLACE INVADERS", True, WHITE)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 200))
+
+        # Draw double border around title
+        border_padding = 30
+        title_border = title_rect.inflate(border_padding * 2, border_padding)
+        pygame.draw.rect(self.screen, CYAN, title_border, 3, border_radius=10)
+        pygame.draw.rect(self.screen, WHITE, title_border.inflate(10, 10), 2, border_radius=12)
+
         self.screen.blit(title_text, title_rect)
-        
+
         # Subtitle
         subtitle_text = self.font_medium.render("Enhanced Edition", True, CYAN)
         subtitle_rect = subtitle_text.get_rect(center=(SCREEN_WIDTH // 2, 280))
         self.screen.blit(subtitle_text, subtitle_rect)
-        
-        # Menu options
+
+        # Menu options with styled boxes
         for i, option in enumerate(self.options):
-            color = YELLOW if i == self.selected_option else WHITE
+            is_selected = i == self.selected_option
+            color = YELLOW if is_selected else WHITE
             option_text = self.font_medium.render(option, True, color)
             option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 400 + i * 80))
+
+            # Draw background box for menu item
+            box_padding = 20
+            box_rect = option_rect.inflate(box_padding * 2, box_padding)
+
+            if is_selected:
+                # Selected item: glowing effect with multiple borders
+                pygame.draw.rect(self.screen, YELLOW, box_rect.inflate(8, 8), 2, border_radius=8)
+                pygame.draw.rect(self.screen, GOLD, box_rect.inflate(4, 4), 2, border_radius=8)
+                # Semi-transparent yellow background
+                glow_surface = pygame.Surface((box_rect.width, box_rect.height), pygame.SRCALPHA)
+                glow_surface.fill((*YELLOW, 30))
+                self.screen.blit(glow_surface, box_rect)
+            else:
+                # Unselected item: simple border
+                pygame.draw.rect(self.screen, GRAY, box_rect, 2, border_radius=8)
+
             self.screen.blit(option_text, option_rect)
-            
-        # High score previews
+
+        # High score previews with decorative panel
         single_best = self.score_manager.get_best_score(False)
         coop_best = self.score_manager.get_best_score(True)
-        
-        preview_y = 750
-        if single_best:
-            single_text = self.font_small.render(f"Best Single: {single_best['score']:,} by {single_best['name']}", True, GRAY)
-            single_rect = single_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
-            self.screen.blit(single_text, single_rect)
-            preview_y += 40
-            
-        if coop_best:
-            coop_text = self.font_small.render(f"Best Co-op: {coop_best['score']:,} by {coop_best['name']}", True, GRAY)
-            coop_rect = coop_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
-            self.screen.blit(coop_text, coop_rect)
-        
-        # Controls info
-        controls_info = [
-            "Controls:",
-            "Keyboard: Arrow Keys/WASD + Space",
-            "Controller: D-pad/Stick + A button",
-            f"Controllers detected: {len(self.controllers)}"
-        ]
-        
-        for i, info in enumerate(controls_info):
-            color = WHITE if i == 0 else CYAN
-            info_text = self.font_small.render(info, True, color)
-            self.screen.blit(info_text, (50, 850 + i * 35))
+
+        if single_best or coop_best:
+            # Draw panel background for high scores
+            panel_y = 730
+            panel_height = 100 if (single_best and coop_best) else 70
+            panel_rect = pygame.Rect(SCREEN_WIDTH // 2 - 400, panel_y, 800, panel_height)
+
+            # Semi-transparent panel
+            panel_surface = pygame.Surface((panel_rect.width, panel_rect.height), pygame.SRCALPHA)
+            panel_surface.fill((*WHITE, 20))
+            self.screen.blit(panel_surface, panel_rect)
+            pygame.draw.rect(self.screen, CYAN, panel_rect, 2, border_radius=10)
+
+            preview_y = panel_y + 20
+            if single_best:
+                single_text = self.font_small.render(f"Best Single: {single_best['score']:,} by {single_best['name']}", True, GOLD)
+                single_rect = single_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
+                self.screen.blit(single_text, single_rect)
+                preview_y += 40
+
+            if coop_best:
+                coop_text = self.font_small.render(f"Best Co-op: {coop_best['score']:,} by {coop_best['name']}", True, GOLD)
+                coop_rect = coop_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
+                self.screen.blit(coop_text, coop_rect)
 
         pygame.display.flip()
 
@@ -6028,44 +6052,94 @@ class Game:
             for text in self.floating_texts:
                 text.draw(self.screen)
                 
-        # UI
-        score_text = self.small_font.render(f"Score: {self.score:,}", True, WHITE)
-        level_text = self.small_font.render(f"Level: {self.level}", True, WHITE)
-        
-        self.screen.blit(score_text, (20, 20))
-        self.screen.blit(level_text, (20, 70))
-        
-        # FIXED: XP Bar - simplified, no overlapping text
-        bar_width = 300
-        bar_height = 20
-        bar_x = SCREEN_WIDTH - bar_width - 20
-        bar_y = 20
-        
-        # Background
-        pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
-        
-        # Progress
-        progress = self.xp_system.get_xp_progress()
-        progress_width = int(bar_width * progress)
-        pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, progress_width, bar_height))
-        
-        # Border
-        pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
-        
-        # Only show XP level number - clean and simple
-        xp_level_text = self.small_font.render(f"XP Level: {self.xp_system.level}", True, WHITE)
-        self.screen.blit(xp_level_text, (bar_x, bar_y + bar_height + 10))
-        
-        # Player lives display - keep it simple and compact
+        # UI - Top Left Info Panel
+        # Create panel background for score, level, and lives
+        panel_padding = 15
+        panel_x = 10
+        panel_y = 10
+
+        # Calculate panel dimensions based on content
+        if self.coop_mode:
+            panel_width = 400
+            panel_height = 180
+        else:
+            panel_width = 350
+            panel_height = 140
+
+        # Draw semi-transparent panel background
+        panel_surface = pygame.Surface((panel_width, panel_height), pygame.SRCALPHA)
+        panel_surface.fill((0, 0, 0, 120))
+        self.screen.blit(panel_surface, (panel_x, panel_y))
+
+        # Draw panel border with gradient effect
+        pygame.draw.rect(self.screen, CYAN, (panel_x, panel_y, panel_width, panel_height), 3, border_radius=10)
+        pygame.draw.rect(self.screen, WHITE, (panel_x + 2, panel_y + 2, panel_width - 4, panel_height - 4), 1, border_radius=8)
+
+        # Draw UI elements inside panel
+        text_x = panel_x + panel_padding
+        text_y = panel_y + panel_padding
+
+        score_text = self.small_font.render(f"Score: {self.score:,}", True, GOLD)
+        level_text = self.small_font.render(f"Level: {self.level}", True, CYAN)
+
+        self.screen.blit(score_text, (text_x, text_y))
+        self.screen.blit(level_text, (text_x, text_y + 50))
+
+        # Player lives display
         if self.coop_mode:
             lives_text1 = self.small_font.render(f"P1: {self.players[0].lives} lives {'(DEAD)' if not self.players[0].is_alive else ''}", True, GREEN if self.players[0].is_alive else RED)
             lives_text2 = self.small_font.render(f"P2: {self.players[1].lives} lives {'(DEAD)' if not self.players[1].is_alive else ''}", True, BLUE if self.players[1].is_alive else RED)
-            self.screen.blit(lives_text1, (20, 120))
-            self.screen.blit(lives_text2, (20, 160))
+            self.screen.blit(lives_text1, (text_x, text_y + 100))
+            self.screen.blit(lives_text2, (text_x, text_y + 140))
         else:
             if self.players:
                 lives_text = self.small_font.render(f"Lives: {self.players[0].lives}", True, WHITE)
-                self.screen.blit(lives_text, (20, 120))
+                self.screen.blit(lives_text, (text_x, text_y + 100))
+
+        # XP Bar - Enhanced with panel background
+        bar_width = 300
+        bar_height = 25
+        bar_x = SCREEN_WIDTH - bar_width - 20
+        bar_y = 20
+
+        # XP Panel background
+        xp_panel_padding = 15
+        xp_panel_width = bar_width + xp_panel_padding * 2
+        xp_panel_height = 90
+        xp_panel_x = bar_x - xp_panel_padding
+        xp_panel_y = bar_y - 10
+
+        # Draw XP panel background
+        xp_panel_surface = pygame.Surface((xp_panel_width, xp_panel_height), pygame.SRCALPHA)
+        xp_panel_surface.fill((0, 0, 0, 120))
+        self.screen.blit(xp_panel_surface, (xp_panel_x, xp_panel_y))
+
+        # Draw XP panel border
+        pygame.draw.rect(self.screen, GOLD, (xp_panel_x, xp_panel_y, xp_panel_width, xp_panel_height), 3, border_radius=10)
+        pygame.draw.rect(self.screen, WHITE, (xp_panel_x + 2, xp_panel_y + 2, xp_panel_width - 4, xp_panel_height - 4), 1, border_radius=8)
+
+        # XP Bar background
+        pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height), border_radius=5)
+
+        # XP Progress with gradient effect
+        progress = self.xp_system.get_xp_progress()
+        progress_width = int(bar_width * progress)
+        if progress_width > 0:
+            # Draw gold gradient
+            pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, progress_width, bar_height), border_radius=5)
+            # Add a lighter highlight on top
+            if progress_width > 4:
+                highlight_surface = pygame.Surface((progress_width - 4, bar_height // 2), pygame.SRCALPHA)
+                highlight_surface.fill((255, 255, 150, 80))
+                self.screen.blit(highlight_surface, (bar_x + 2, bar_y + 2))
+
+        # XP Bar border
+        pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2, border_radius=5)
+
+        # XP level text - centered below bar
+        xp_level_text = self.small_font.render(f"XP Level: {self.xp_system.level}", True, GOLD)
+        xp_text_rect = xp_level_text.get_rect(center=(bar_x + bar_width // 2, bar_y + bar_height + 25))
+        self.screen.blit(xp_level_text, xp_text_rect)
         
         # Power-up status is now displayed below each player's ship (see Player.draw())
         
@@ -6155,35 +6229,12 @@ class Game:
 
     def update_display(self):
         """Update the display"""
-        # Draw instructions (only during gameplay, not game over)
-        if not self.game_over:
-            instructions = [
-                "P1: WASD/Arrows + Space",
-                "ESC: Return to title"
-            ]
-            if self.coop_mode:
-                instructions.insert(1, "P2: Right Ctrl (or controller)")
-
-            # Add boss level indicator
-            if self.is_boss_level:
-                instructions.append("BOSS LEVEL!")
-
-            # Position instructions below the XP bar instead of overlapping it
-            bar_y = 20  # Match the XP bar y position
-            bar_height = 20
-            start_y = bar_y + bar_height + 50  # Start below XP level text
-            for i, instruction in enumerate(instructions):
-                color = RED if instruction == "BOSS LEVEL!" else WHITE
-                text = self.small_font.render(instruction, True, color)
-                # Position on right side but below XP bar
-                self.screen.blit(text, (SCREEN_WIDTH - 400, start_y + i * 35))
-
-            # INTENSE WHITE FLASH OVERLAY - This goes over everything for maximum effect
-            if self.screen_flash_intensity > 0:
-                flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-                flash_surface.fill((255, 255, 255))
-                flash_surface.set_alpha(self.screen_flash_intensity)
-                self.screen.blit(flash_surface, (0, 0))
+        # INTENSE WHITE FLASH OVERLAY - This goes over everything for maximum effect
+        if self.screen_flash_intensity > 0:
+            flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            flash_surface.fill((255, 255, 255))
+            flash_surface.set_alpha(self.screen_flash_intensity)
+            self.screen.blit(flash_surface, (0, 0))
 
         pygame.display.flip()
         
