@@ -5350,6 +5350,8 @@ class Game:
                             self.laser_beams.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
+                        elif shot_type == 'muzzle_flash':
+                            self.muzzle_flash_particles.extend(shot)
 
                 # Create shoot callback for player 1 controller auto-fire
                 def player1_shoot():
@@ -5375,6 +5377,8 @@ class Game:
                             self.laser_beams.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
+                        elif shot_type == 'muzzle_flash':
+                            self.muzzle_flash_particles.extend(shot)
 
                 self.players[0].handle_controller_input(player1_shoot)
 
@@ -5409,6 +5413,8 @@ class Game:
                                 self.laser_beams.append(shot)
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                            elif shot_type == 'muzzle_flash':
+                                self.muzzle_flash_particles.extend(shot)
                 else:
                     # Create shoot callback for player 2 controller auto-fire
                     def player2_shoot():
@@ -5434,6 +5440,8 @@ class Game:
                                 self.laser_beams.append(shot)
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                            elif shot_type == 'muzzle_flash':
+                                self.muzzle_flash_particles.extend(shot)
 
                     self.players[1].handle_controller_input(player2_shoot)
     
