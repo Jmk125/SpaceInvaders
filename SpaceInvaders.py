@@ -2674,6 +2674,9 @@ class Player:
                 offsets = [-25, -8, 8, 25]
             for offset in offsets:
                 bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
+            # Add muzzle flash for multi-shot
+            muzzle_flash = self.create_muzzle_flash(offsets)
+            bullets.append(('muzzle_flash', muzzle_flash))
             self.multi_shot_ammo -= 1
             if self.multi_shot_ammo <= 0:
                 self.has_multi_shot = False
@@ -2686,6 +2689,9 @@ class Player:
                 offsets = [-12, 12]
             for offset in offsets:
                 bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
+            # Add muzzle flash for rapid fire
+            muzzle_flash = self.create_muzzle_flash(offsets)
+            bullets.append(('muzzle_flash', muzzle_flash))
             self.rapid_fire_ammo -= 1
             if self.rapid_fire_ammo <= 0:
                 self.rapid_fire = False
@@ -2698,12 +2704,50 @@ class Player:
                 offsets = [-12, 12]
             for offset in offsets:
                 bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
+            # Add muzzle flash for normal shot
+            muzzle_flash = self.create_muzzle_flash(offsets)
+            bullets.append(('muzzle_flash', muzzle_flash))
             # Play shoot sound for normal shot
             if sound_manager:
                 sound_manager.play_sound('shoot', force_play=True)  # Always play normal shots
-            
+
         return bullets
-        
+
+    def create_muzzle_flash(self, offsets):
+        """Create muzzle flash particles for bullet firing"""
+        particles = []
+        base_x = self.x + self.width // 2
+        muzzle_y = self.y  # Top of the ship
+
+        # Create particles for each firing offset (gun barrel position)
+        for offset in offsets:
+            gun_x = base_x + offset
+
+            # Create 5-8 particles per gun barrel
+            num_particles = random.randint(5, 8)
+            for _ in range(num_particles):
+                # Muzzle flash colors: bright white/yellow/orange
+                color = random.choice([
+                    (255, 255, 255),  # Bright white
+                    (255, 255, 150),  # Yellow-white
+                    (255, 200, 100),  # Yellow-orange
+                    (255, 150, 0)     # Orange
+                ])
+
+                # Small, fast particles shooting upward and slightly outward
+                particle = {
+                    'x': gun_x + random.uniform(-3, 3),
+                    'y': muzzle_y + random.uniform(-2, 2),
+                    'vel_x': random.uniform(-1.5, 1.5),
+                    'vel_y': random.uniform(-4, -1),  # Mostly upward
+                    'color': color,
+                    'size': random.randint(2, 4),
+                    'life': random.randint(100, 250)  # Short-lived (100-250ms)
+                }
+                particles.append(particle)
+
+        return particles
+
     def update_power_ups(self):
         current_time = pygame.time.get_ticks()
         
@@ -4572,7 +4616,7 @@ class Game:
         self.laser_beams = []
         self.enemy_explosions = []
         self.boss_explosion_particles = []
-        self.boss_explosion_particles = []
+        self.muzzle_flash_particles = []
         self.screen_shake_intensity = 0
         self.screen_shake_duration = 0
         self.screen_flash_intensity = 0
@@ -5107,6 +5151,9 @@ class Game:
                                 # Track laser shot in stats
                                 if len(self.player_stats) > 0:
                                     self.player_stats[0].record_shot(shot_stat_type)
+                            elif shot_type == 'muzzle_flash':
+                                # Add muzzle flash particles to the particle list
+                                self.muzzle_flash_particles.extend(shot)
                 elif event.key == pygame.K_RCTRL and not self.game_over and self.coop_mode:
                     if len(self.players) > 1 and self.players[1].is_alive:
                         player = self.players[1]
@@ -5134,6 +5181,9 @@ class Game:
                                 # Track laser shot in stats
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                            elif shot_type == 'muzzle_flash':
+                                # Add muzzle flash particles to the particle list
+                                self.muzzle_flash_particles.extend(shot)
                 elif event.key == pygame.K_r and self.game_over and not self.awaiting_name_input:
                     # FIXED: Check input delay before allowing restart
                     if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
@@ -5182,7 +5232,10 @@ class Game:
                                         # Track laser shot in stats
                                         if i < len(self.player_stats):
                                             self.player_stats[i].record_shot(shot_stat_type)
-                                        
+                                    elif shot_type == 'muzzle_flash':
+                                        # Add muzzle flash particles to the particle list
+                                        self.muzzle_flash_particles.extend(shot)
+
         return None
     
     def handle_name_input_events(self):
@@ -5529,10 +5582,19 @@ class Game:
             particle['y'] += particle['vel_y']
             particle['vel_y'] += 0.2  # Gravity
             particle['life'] -= 16  # Assuming 60 FPS
-            
+
             if particle['life'] <= 0:
                 self.boss_explosion_particles.remove(particle)
-            
+
+        # Update muzzle flash particles
+        for particle in self.muzzle_flash_particles[:]:
+            particle['x'] += particle['vel_x']
+            particle['y'] += particle['vel_y']
+            particle['life'] -= 16  # Assuming 60 FPS
+
+            if particle['life'] <= 0:
+                self.muzzle_flash_particles.remove(particle)
+
         for player in self.players:
             player.update_power_ups()
             
@@ -6003,11 +6065,23 @@ class Game:
                     alpha = max(0, min(255, particle['life'] // 3))
                     particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
                     color_with_alpha = (*particle['color'], alpha)
-                    pygame.draw.circle(particle_surface, color_with_alpha, 
+                    pygame.draw.circle(particle_surface, color_with_alpha,
                                      (particle['size'], particle['size']), particle['size'])
-                    self.screen.blit(particle_surface, (int(particle['x'] - particle['size']), 
+                    self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
                                                      int(particle['y'] - particle['size'])))
-                
+
+            # Draw muzzle flash particles
+            for particle in self.muzzle_flash_particles:
+                if particle['life'] > 0:
+                    # Fade out quickly based on remaining life
+                    alpha = max(0, min(255, particle['life']))
+                    particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+                    color_with_alpha = (*particle['color'], alpha)
+                    pygame.draw.circle(particle_surface, color_with_alpha,
+                                     (particle['size'], particle['size']), particle['size'])
+                    self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
+                                                     int(particle['y'] - particle['size'])))
+
             for barrier in self.barriers:
                 barrier.draw(self.screen)
                 
