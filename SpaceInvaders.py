@@ -2675,8 +2675,9 @@ class Player:
             for offset in offsets:
                 bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
             # Add muzzle flash for multi-shot
-            muzzle_flash = self.create_muzzle_flash(offsets)
-            bullets.append(('muzzle_flash', muzzle_flash))
+            particles, flashes = self.create_muzzle_flash(offsets)
+            bullets.append(('muzzle_flash', particles))
+            bullets.append(('muzzle_flash_flashes', flashes))
             self.multi_shot_ammo -= 1
             if self.multi_shot_ammo <= 0:
                 self.has_multi_shot = False
@@ -2690,8 +2691,9 @@ class Player:
             for offset in offsets:
                 bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
             # Add muzzle flash for rapid fire
-            muzzle_flash = self.create_muzzle_flash(offsets)
-            bullets.append(('muzzle_flash', muzzle_flash))
+            particles, flashes = self.create_muzzle_flash(offsets)
+            bullets.append(('muzzle_flash', particles))
+            bullets.append(('muzzle_flash_flashes', flashes))
             self.rapid_fire_ammo -= 1
             if self.rapid_fire_ammo <= 0:
                 self.rapid_fire = False
@@ -2705,8 +2707,9 @@ class Player:
             for offset in offsets:
                 bullets.append(('bullet', Bullet(base_x + offset, self.y, bullet_speed, **bullet_kwargs)))
             # Add muzzle flash for normal shot
-            muzzle_flash = self.create_muzzle_flash(offsets)
-            bullets.append(('muzzle_flash', muzzle_flash))
+            particles, flashes = self.create_muzzle_flash(offsets)
+            bullets.append(('muzzle_flash', particles))
+            bullets.append(('muzzle_flash_flashes', flashes))
             # Play shoot sound for normal shot
             if sound_manager:
                 sound_manager.play_sound('shoot', force_play=True)  # Always play normal shots
@@ -2714,8 +2717,9 @@ class Player:
         return bullets
 
     def create_muzzle_flash(self, offsets):
-        """Create muzzle flash particles for bullet firing"""
+        """Create muzzle flash particles and bright flash circles for bullet firing"""
         particles = []
+        flashes = []
         base_x = self.x + self.width // 2
         muzzle_y = self.y  # Top of the ship
 
@@ -2746,7 +2750,19 @@ class Player:
                 }
                 particles.append(particle)
 
-        return particles
+            # Create bright expanding flash circle at each gun position
+            flash = {
+                'x': gun_x,
+                'y': muzzle_y,
+                'radius': 2,
+                'max_radius': 15,
+                'growth_speed': 1.2,
+                'color': (255, 255, 255),  # Bright white
+                'life': 120  # Short flash duration (120ms)
+            }
+            flashes.append(flash)
+
+        return particles, flashes
 
     def update_power_ups(self):
         current_time = pygame.time.get_ticks()
@@ -4617,6 +4633,7 @@ class Game:
         self.enemy_explosions = []
         self.boss_explosion_particles = []
         self.muzzle_flash_particles = []
+        self.muzzle_flash_flashes = []  # Bright expanding circles for muzzle flash
         self.screen_shake_intensity = 0
         self.screen_shake_duration = 0
         self.screen_flash_intensity = 0
@@ -5154,6 +5171,9 @@ class Game:
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
+                            elif shot_type == 'muzzle_flash_flashes':
+                                # Add muzzle flash circles to the flash list
+                                self.muzzle_flash_flashes.extend(shot)
                 elif event.key == pygame.K_RCTRL and not self.game_over and self.coop_mode:
                     if len(self.players) > 1 and self.players[1].is_alive:
                         player = self.players[1]
@@ -5184,6 +5204,9 @@ class Game:
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
+                            elif shot_type == 'muzzle_flash_flashes':
+                                # Add muzzle flash circles to the flash list
+                                self.muzzle_flash_flashes.extend(shot)
                 elif event.key == pygame.K_r and self.game_over and not self.awaiting_name_input:
                     # FIXED: Check input delay before allowing restart
                     if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
@@ -5235,6 +5258,9 @@ class Game:
                                     elif shot_type == 'muzzle_flash':
                                         # Add muzzle flash particles to the particle list
                                         self.muzzle_flash_particles.extend(shot)
+                                    elif shot_type == 'muzzle_flash_flashes':
+                                        # Add muzzle flash circles to the flash list
+                                        self.muzzle_flash_flashes.extend(shot)
 
         return None
     
@@ -5352,6 +5378,8 @@ class Game:
                                 self.player_stats[0].record_shot(shot_stat_type)
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
+                        elif shot_type == 'muzzle_flash_flashes':
+                            self.muzzle_flash_flashes.extend(shot)
 
                 # Create shoot callback for player 1 controller auto-fire
                 def player1_shoot():
@@ -5379,6 +5407,8 @@ class Game:
                                 self.player_stats[0].record_shot(shot_stat_type)
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
+                        elif shot_type == 'muzzle_flash_flashes':
+                            self.muzzle_flash_flashes.extend(shot)
 
                 self.players[0].handle_controller_input(player1_shoot)
 
@@ -5415,6 +5445,8 @@ class Game:
                                     self.player_stats[1].record_shot(shot_stat_type)
                             elif shot_type == 'muzzle_flash':
                                 self.muzzle_flash_particles.extend(shot)
+                            elif shot_type == 'muzzle_flash_flashes':
+                                self.muzzle_flash_flashes.extend(shot)
                 else:
                     # Create shoot callback for player 2 controller auto-fire
                     def player2_shoot():
@@ -5442,6 +5474,8 @@ class Game:
                                     self.player_stats[1].record_shot(shot_stat_type)
                             elif shot_type == 'muzzle_flash':
                                 self.muzzle_flash_particles.extend(shot)
+                            elif shot_type == 'muzzle_flash_flashes':
+                                self.muzzle_flash_flashes.extend(shot)
 
                     self.players[1].handle_controller_input(player2_shoot)
     
@@ -5602,6 +5636,14 @@ class Game:
 
             if particle['life'] <= 0:
                 self.muzzle_flash_particles.remove(particle)
+
+        # Update muzzle flash circles (bright expanding flashes)
+        for flash in self.muzzle_flash_flashes[:]:
+            flash['radius'] += flash['growth_speed']
+            flash['life'] -= 16  # Assuming 60 FPS
+
+            if flash['life'] <= 0 or flash['radius'] >= flash['max_radius']:
+                self.muzzle_flash_flashes.remove(flash)
 
         for player in self.players:
             player.update_power_ups()
@@ -6089,6 +6131,20 @@ class Game:
                                      (particle['size'], particle['size']), particle['size'])
                     self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
                                                      int(particle['y'] - particle['size'])))
+
+            # Draw muzzle flash circles (bright expanding flashes)
+            for flash in self.muzzle_flash_flashes:
+                if flash['life'] > 0 and flash['radius'] < flash['max_radius']:
+                    # Fade out as life decreases
+                    alpha = max(0, min(255, int(255 * (flash['life'] / 120))))
+                    surface_size = int(flash['radius'] * 2 + 4)
+                    flash_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+                    color_with_alpha = (*flash['color'], alpha)
+                    center = (surface_size // 2, surface_size // 2)
+                    # Draw filled circle for bright flash
+                    pygame.draw.circle(flash_surface, color_with_alpha, center, int(flash['radius']))
+                    self.screen.blit(flash_surface, (int(flash['x'] - flash['radius']),
+                                                   int(flash['y'] - flash['radius'])))
 
             for barrier in self.barriers:
                 barrier.draw(self.screen)
