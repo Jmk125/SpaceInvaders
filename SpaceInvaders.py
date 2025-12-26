@@ -5629,10 +5629,30 @@ class Game:
                     self.barriers.clear()
                 self.ufo_warning_screen = None
             return  # Don't update game during warning
-            
+
+        # Update player explosion particles (even during game over so death animation plays)
+        for particle in self.player_explosion_particles[:]:
+            particle['x'] += particle['vel_x']
+            particle['y'] += particle['vel_y']
+            particle['vel_y'] += particle['gravity']  # Apply particle's gravity
+            particle['life'] -= 16  # Assuming 60 FPS
+
+            if particle['life'] <= 0:
+                self.player_explosion_particles.remove(particle)
+
+        # Update boss explosion particles (even during game over)
+        for particle in self.boss_explosion_particles[:]:
+            particle['x'] += particle['vel_x']
+            particle['y'] += particle['vel_y']
+            particle['vel_y'] += 0.2  # Gravity
+            particle['life'] -= 16  # Assuming 60 FPS
+
+            if particle['life'] <= 0:
+                self.boss_explosion_particles.remove(particle)
+
         if self.game_over or self.awaiting_level_up:
             return
-        
+
         # Update floating texts
         self.floating_texts = [text for text in self.floating_texts if text.update()]
 
@@ -5659,29 +5679,9 @@ class Game:
         for wave in self.boss_explosion_waves[:]:
             wave['radius'] += wave['growth_speed']
             wave['life'] -= 1
-            
+
             if wave['life'] <= 0 or wave['radius'] >= wave['max_radius']:
                 self.boss_explosion_waves.remove(wave)
-
-        # Update boss explosion particles
-        for particle in self.boss_explosion_particles[:]:
-            particle['x'] += particle['vel_x']
-            particle['y'] += particle['vel_y']
-            particle['vel_y'] += 0.2  # Gravity
-            particle['life'] -= 16  # Assuming 60 FPS
-
-            if particle['life'] <= 0:
-                self.boss_explosion_particles.remove(particle)
-
-        # Update player explosion particles
-        for particle in self.player_explosion_particles[:]:
-            particle['x'] += particle['vel_x']
-            particle['y'] += particle['vel_y']
-            particle['vel_y'] += particle['gravity']  # Apply particle's gravity
-            particle['life'] -= 16  # Assuming 60 FPS
-
-            if particle['life'] <= 0:
-                self.player_explosion_particles.remove(particle)
 
         # Update muzzle flash particles
         for particle in self.muzzle_flash_particles[:]:
@@ -6192,17 +6192,6 @@ class Game:
                     self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
                                                      int(particle['y'] - particle['size'])))
 
-            # Draw player explosion particles
-            for particle in self.player_explosion_particles:
-                if particle['life'] > 0:
-                    alpha = max(0, min(255, particle['life'] // 2))
-                    particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
-                    color_with_alpha = (*particle['color'], alpha)
-                    pygame.draw.circle(particle_surface, color_with_alpha,
-                                     (particle['size'], particle['size']), particle['size'])
-                    self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
-                                                     int(particle['y'] - particle['size'])))
-
             # Draw muzzle flash particles
             for particle in self.muzzle_flash_particles:
                 if particle['life'] > 0:
@@ -6238,7 +6227,18 @@ class Game:
             # Draw floating texts
             for text in self.floating_texts:
                 text.draw(self.screen)
-                
+
+        # Draw player explosion particles (outside game_over check so they're always visible)
+        for particle in self.player_explosion_particles:
+            if particle['life'] > 0:
+                alpha = max(0, min(255, particle['life'] // 2))
+                particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+                color_with_alpha = (*particle['color'], alpha)
+                pygame.draw.circle(particle_surface, color_with_alpha,
+                                 (particle['size'], particle['size']), particle['size'])
+                self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
+                                                 int(particle['y'] - particle['size'])))
+
         # UI - Clean retro style
         score_text = self.small_font.render(f"SCORE {self.score:,}", True, GREEN)
         level_text = self.small_font.render(f"LEVEL {self.level}", True, CYAN)
