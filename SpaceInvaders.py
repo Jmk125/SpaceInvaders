@@ -4293,14 +4293,9 @@ class TitleScreen:
         self.starfield.draw(self.screen)
 
         # Title
-        title_text = self.font_large.render("SPACE INVADERS", True, GREEN)
+        title_text = self.font_large.render("PLACE INVADERS", True, GREEN)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 200))
         self.screen.blit(title_text, title_rect)
-
-        # Subtitle
-        subtitle_text = self.font_small.render("Enhanced Edition", True, CYAN)
-        subtitle_rect = subtitle_text.get_rect(center=(SCREEN_WIDTH // 2, 260))
-        self.screen.blit(subtitle_text, subtitle_rect)
 
         # Menu options
         for i, option in enumerate(self.options):
@@ -4619,7 +4614,7 @@ class Game:
         except:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
             
-        pygame.display.set_caption("Space Invaders Enhanced")
+        pygame.display.set_caption("Place Invaders")
         self.clock = pygame.time.Clock()
         self.running = True
         self.game_over = False
