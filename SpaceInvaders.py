@@ -2602,12 +2602,12 @@ class Player:
         if sound_manager:
             sound_manager.play_sound('player_explosion', volume_override=0.8)
 
+        # Create death explosion particles on every death
+        explosion_particles = self.create_death_explosion()
+
         self.lives -= 1
-        explosion_particles = None
         if self.lives <= 0:
             self.is_alive = False
-            # Create death explosion particles
-            explosion_particles = self.create_death_explosion()
         else:
             self.respawn()
         return True, explosion_particles
