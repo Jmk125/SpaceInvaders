@@ -1535,7 +1535,7 @@ class Boss:
                 # Stop growing at max radius
                 if 'max_radius' in explosion and explosion['radius'] >= explosion['max_radius']:
                     explosion['growth'] = 0
-            return
+            return []
             
         # Normal UFO movement (existing code)
         self.x += self.speed * self.direction
@@ -1561,12 +1561,14 @@ class Boss:
             debris['vel_y'] += 0.2
             debris['life'] -= 1
             
-        # Update explosion effects  
+        # Update explosion effects
         self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
         for explosion in self.explosion_effects:
             explosion['radius'] += explosion['growth']
             explosion['life'] -= 1
-        
+
+        return []
+
     def shoot(self, players, sound_manager=None):
         """Boss shooting patterns"""
         if self.destruction_complete:
@@ -2586,26 +2588,29 @@ class Player:
         self.activate_boss_shield()
         
     def take_damage(self, sound_manager=None):
-        """Player takes damage"""
+        """Player takes damage - returns (took_damage, explosion_particles)"""
         if self.respawn_immunity or self.invincible:
-            return False
+            return False, None
 
         if self.boss_shield_active:
             self.clear_boss_shield()
             if sound_manager:
                 sound_manager.play_sound('explosion_small', volume_override=0.5)
-            return True
+            return True, None
 
         # Play player explosion sound
         if sound_manager:
             sound_manager.play_sound('player_explosion', volume_override=0.8)
 
         self.lives -= 1
+        explosion_particles = None
         if self.lives <= 0:
             self.is_alive = False
+            # Create death explosion particles
+            explosion_particles = self.create_death_explosion()
         else:
             self.respawn()
-        return True
+        return True, explosion_particles
         
     def move_left(self):
         if not self.is_alive:
@@ -2953,6 +2958,33 @@ class Player:
 
                 screen.blit(text_surface, (text_x, text_y))
 
+    def create_death_explosion(self):
+        """Create a small-scale particle explosion when player dies (similar to boss explosions)"""
+        explosion_particles = []
+
+        # Create particles - smaller scale than boss explosions
+        for _ in range(20):  # Fewer particles than boss (boss has 50-70)
+            particle = {
+                'x': self.x + random.randint(-20, self.width + 20),  # Smaller spread than boss
+                'y': self.y + random.randint(-10, self.height + 10),
+                'vel_x': random.uniform(-4, 4),  # Slower than boss particles
+                'vel_y': random.uniform(-4, 2),
+                'color': random.choice([
+                    (255, 150, 0),   # Bright Orange
+                    (255, 80, 80),   # Bright Red
+                    (255, 255, 100), # Bright Yellow
+                    (255, 255, 255), # White
+                    (100, 255, 255), # Bright Cyan
+                    (255, 200, 0),   # Gold
+                ]),
+                'size': random.randint(2, 6),  # Smaller particles than boss (boss is 4-12)
+                'life': random.randint(500, 900),  # Shorter duration than boss (boss is 1000-1800)
+                'gravity': random.uniform(0.1, 0.3)  # Same gravity as boss
+            }
+            explosion_particles.append(particle)
+
+        return explosion_particles
+
 class AlienOverlordBoss:
     def __init__(self, encounter):
         self.encounter = max(1, encounter)
@@ -3110,12 +3142,13 @@ class AlienOverlordBoss:
 
     def _check_hand_player_collision(self, hand, players, sound_manager):
         if not players or hand['rect'] is None:
-            return
+            return None
         for player in players:
             if player and player.is_alive and hand['rect'].colliderect(player.rect):
-                player.take_damage(sound_manager)
+                took_damage, explosion_particles = player.take_damage(sound_manager)
                 hand['state'] = 'returning'
-                break
+                return explosion_particles
+        return None
 
     def update(self, players=None, sound_manager=None):
         if self.destruction_complete:
@@ -3123,7 +3156,7 @@ class AlienOverlordBoss:
             for explosion in self.explosion_effects:
                 explosion['radius'] += explosion['growth']
                 explosion['life'] -= 1
-            return
+            return []
 
         self.x += self.head_speed * self.direction
         if self.x <= 100 or self.x + self.width >= SCREEN_WIDTH - 100:
@@ -3133,6 +3166,9 @@ class AlienOverlordBoss:
 
         alive_players = [p for p in players if p and p.is_alive] if players else []
         current_time = pygame.time.get_ticks()
+
+        # Collect player explosion particles
+        player_explosion_particles = []
 
         for hand in self.hands:
             home_x, home_y = self._get_hand_home_position(hand)
@@ -3154,7 +3190,9 @@ class AlienOverlordBoss:
                     hand['y'] = drop_target_y
                     hand['state'] = 'returning'
                 self._update_hand_rect(hand)
-                self._check_hand_player_collision(hand, alive_players, sound_manager)
+                explosion_particles = self._check_hand_player_collision(hand, alive_players, sound_manager)
+                if explosion_particles:
+                    player_explosion_particles.extend(explosion_particles)
             elif hand['state'] == 'returning':
                 reached = self._move_hand_toward(hand, home_x, home_y)
                 if reached:
@@ -3165,6 +3203,8 @@ class AlienOverlordBoss:
         for explosion in self.explosion_effects:
             explosion['radius'] += explosion['growth']
             explosion['life'] -= 1
+
+        return player_explosion_particles
 
     def _update_hand_rect(self, hand):
         if hand['destroyed']:
@@ -3341,6 +3381,8 @@ class BulletHellBoss:
         for explosion in self.explosion_effects:
             explosion['radius'] += explosion['growth']
             explosion['life'] -= 1
+
+        return []
 
     def shoot(self, players, sound_manager=None):
         """Rapid-fire shooting that creates a bullet hell effect"""
@@ -3640,7 +3682,7 @@ class AsteroidFieldBoss:
     def update(self, players=None, sound_manager=None):
         """Update asteroid field"""
         if self.destruction_complete:
-            return
+            return []
 
         current_time = pygame.time.get_ticks()
 
@@ -3667,12 +3709,14 @@ class AsteroidFieldBoss:
                 if self.health <= 0:
                     self.health = 0
                     self.start_completion_sequence()
-                    return  # Exit early, asteroids already cleared
+                    return []  # Exit early, asteroids already cleared
 
         # Remove asteroids that reached bottom
         for asteroid in asteroids_to_remove:
             if asteroid in self.asteroids:  # Safety check
                 self.asteroids.remove(asteroid)
+
+        return []
 
     def shoot(self, players, sound_manager=None):
         """This boss doesn't shoot bullets - asteroids are the hazard"""
@@ -4632,6 +4676,7 @@ class Game:
         self.laser_beams = []
         self.enemy_explosions = []
         self.boss_explosion_particles = []
+        self.player_explosion_particles = []
         self.muzzle_flash_particles = []
         self.muzzle_flash_flashes = []  # Bright expanding circles for muzzle flash
         self.screen_shake_intensity = 0
@@ -5628,6 +5673,16 @@ class Game:
             if particle['life'] <= 0:
                 self.boss_explosion_particles.remove(particle)
 
+        # Update player explosion particles
+        for particle in self.player_explosion_particles[:]:
+            particle['x'] += particle['vel_x']
+            particle['y'] += particle['vel_y']
+            particle['vel_y'] += particle['gravity']  # Apply particle's gravity
+            particle['life'] -= 16  # Assuming 60 FPS
+
+            if particle['life'] <= 0:
+                self.player_explosion_particles.remove(particle)
+
         # Update muzzle flash particles
         for particle in self.muzzle_flash_particles[:]:
             particle['x'] += particle['vel_x']
@@ -5677,7 +5732,10 @@ class Game:
         
         # Update boss or regular enemies
         if self.is_boss_level and self.current_boss:
-            self.current_boss.update(self.players, self.sound_manager)
+            boss_explosion_particles = self.current_boss.update(self.players, self.sound_manager)
+            # Capture player explosion particles from boss update (e.g., AlienOverlordBoss hand attacks)
+            if boss_explosion_particles:
+                self.player_explosion_particles.extend(boss_explosion_particles)
             # Boss shooting
             boss_bullets = self.current_boss.shoot(self.players, self.sound_manager)
             self.enemy_bullets.extend(boss_bullets)
@@ -5719,8 +5777,11 @@ class Game:
                 # Kill all alive players
                 for player in self.players:
                     if player.is_alive:
-                        if player.take_damage(self.sound_manager):
-                            pass  # Player took damage/died
+                        took_damage, explosion_particles = player.take_damage(self.sound_manager)
+                        if took_damage:
+                            # Add explosion particles if player died
+                            if explosion_particles:
+                                self.player_explosion_particles.extend(explosion_particles)
                 
                 # Reset alien positions but keep their speed
                 current_speeds = [enemy.speed for enemy in self.enemies]
@@ -5734,7 +5795,10 @@ class Game:
             for player in self.players:
                 if player.is_alive and self.current_boss.y + self.current_boss.height >= player.y:
                     # Kill the player first with sound
-                    player.take_damage(self.sound_manager)
+                    took_damage, explosion_particles = player.take_damage(self.sound_manager)
+                    # Add explosion particles if player died
+                    if explosion_particles:
+                        self.player_explosion_particles.extend(explosion_particles)
                     self.game_over = True
                     self.game_over_time = pygame.time.get_ticks()
                     if self.score_manager.is_high_score(self.score, self.coop_mode):
@@ -5947,10 +6011,14 @@ class Game:
             for i, player in enumerate(self.players):
                 if player.is_alive and bullet.rect.colliderect(player.rect):
                     was_alive = player.lives > 0
-                    if player.take_damage(self.sound_manager):
+                    took_damage, explosion_particles = player.take_damage(self.sound_manager)
+                    if took_damage:
                         # Track death if player died
                         if was_alive and player.lives <= 0 and i < len(self.player_stats):
                             self.player_stats[i].record_death()
+                        # Add explosion particles if player died
+                        if explosion_particles:
+                            self.player_explosion_particles.extend(explosion_particles)
                         self.enemy_bullets.remove(bullet)
                         break
 
@@ -5983,10 +6051,14 @@ class Game:
 
                         if asteroid.collides_with_circle(player_center_x, player_center_y, player_radius):
                             was_alive = player.lives > 0
-                            if player.take_damage(self.sound_manager):
+                            took_damage, explosion_particles = player.take_damage(self.sound_manager)
+                            if took_damage:
                                 # Track death if player died
                                 if was_alive and player.lives <= 0 and i < len(self.player_stats):
                                     self.player_stats[i].record_death()
+                                # Add explosion particles if player died
+                                if explosion_particles:
+                                    self.player_explosion_particles.extend(explosion_particles)
                                 self.current_boss.remove_asteroid(asteroid)
                                 self.sound_manager.play_sound('explosion_small', volume_override=0.5)
                                 break
@@ -6018,7 +6090,7 @@ class Game:
         self.floating_texts = []
         self.enemy_explosions = []
         self.boss_explosion_particles = []
-        self.boss_explosion_particles = []
+        self.player_explosion_particles = []
         self.screen_shake_intensity = 0
         self.screen_shake_duration = 0
         self.screen_flash_intensity = 0
@@ -6113,6 +6185,17 @@ class Game:
             for particle in self.boss_explosion_particles:
                 if particle['life'] > 0:
                     alpha = max(0, min(255, particle['life'] // 3))
+                    particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
+                    color_with_alpha = (*particle['color'], alpha)
+                    pygame.draw.circle(particle_surface, color_with_alpha,
+                                     (particle['size'], particle['size']), particle['size'])
+                    self.screen.blit(particle_surface, (int(particle['x'] - particle['size']),
+                                                     int(particle['y'] - particle['size'])))
+
+            # Draw player explosion particles
+            for particle in self.player_explosion_particles:
+                if particle['life'] > 0:
+                    alpha = max(0, min(255, particle['life'] // 2))
                     particle_surface = pygame.Surface((particle['size'] * 2, particle['size'] * 2), pygame.SRCALPHA)
                     color_with_alpha = (*particle['color'], alpha)
                     pygame.draw.circle(particle_surface, color_with_alpha,
