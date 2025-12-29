@@ -4170,7 +4170,7 @@ class Barrier:
                 return True
         return False
 
-    def draw(self, screen, can_phase=False):
+    def draw(self, screen):
         for block_key, health in self.block_health.items():
             block = pygame.Rect(block_key[0], block_key[1], block_key[2], block_key[3])
             # Color based on remaining health
@@ -4188,12 +4188,6 @@ class Barrier:
             else:
                 color = GREEN  # Fallback
             pygame.draw.rect(screen, color, block)
-
-            # Add pulsing cyan outline when barrier phasing is active
-            if can_phase:
-                pulse = int(abs(math.sin(pygame.time.get_ticks() / 300)) * 100) + 100
-                outline_color = (0, pulse, pulse)  # Pulsing cyan
-                pygame.draw.rect(screen, outline_color, block, 2)  # 2px border
 
 class TitleScreen:
     def __init__(self, screen, score_manager, sound_manager):
@@ -6261,10 +6255,8 @@ class Game:
                     self.screen.blit(flash_surface, (int(flash['x'] - flash['radius']),
                                                    int(flash['y'] - flash['radius'])))
 
-            # Check if any player has barrier phasing active
-            any_player_has_phasing = any(player.upgrades.can_phase_barriers() for player in self.players)
             for barrier in self.barriers:
-                barrier.draw(self.screen, can_phase=any_player_has_phasing)
+                barrier.draw(self.screen)
                 
             for power_up in self.power_ups:
                 power_up.draw(self.screen)
