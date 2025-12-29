@@ -36,6 +36,7 @@ RAPID_FIRE_COOLDOWN = 100
 AUTO_FIRE_COOLDOWN = 150  # Cooldown for auto-fire powerup (faster than normal, slower than rapid fire)
 AFTERIMAGE_INTERVAL = 80
 RESPAWN_IMMUNITY_DURATION = 3000
+BASE_LUCKY_DROP_CHANCE = 5  # Base percentage chance for powerup drops (affected by upgrades and co-op mode)
 
 # XP and Leveling System Configuration
 XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
@@ -5161,13 +5162,38 @@ class Game:
             
     def spawn_power_up(self, player=None):
         bonus_chance = player.upgrades.get_powerup_spawn_bonus() if player else 0
-        drop_chance = 5 + bonus_chance
+        base_chance = BASE_LUCKY_DROP_CHANCE
+
+        # In co-op mode, halve the drop chance since players kill enemies twice as fast
+        if self.coop_mode:
+            base_chance = base_chance / 2
+
+        drop_chance = base_chance + bonus_chance
         if random.randint(1, 100) <= drop_chance:
             power_types = ['rapid_fire', 'invincibility', 'laser', 'multi_shot']
-            power_type = random.choice(power_types)
-            x = random.randint(100, SCREEN_WIDTH - 100)
-            y = 100
-            self.power_ups.append(PowerUp(x, y, power_type))
+
+            # Check if player has an active laser (either ready to fire or currently firing)
+            player_has_laser = False
+            if player:
+                # Check if player has laser ready to fire
+                player_has_laser = player.has_laser
+                # Check if player has an active laser beam
+                if not player_has_laser:
+                    for laser in self.laser_beams:
+                        if laser.owner_player_id == player.player_id and laser.is_active():
+                            player_has_laser = True
+                            break
+
+            # If player has laser, don't spawn laser powerups (prevents infinite laser loop)
+            if player_has_laser and 'laser' in power_types:
+                power_types = [pt for pt in power_types if pt != 'laser']
+
+            # Only spawn if there are valid powerup types
+            if power_types:
+                power_type = random.choice(power_types)
+                x = random.randint(100, SCREEN_WIDTH - 100)
+                y = 100
+                self.power_ups.append(PowerUp(x, y, power_type))
         
     def handle_events(self):
         if self.showing_stats_screen:
