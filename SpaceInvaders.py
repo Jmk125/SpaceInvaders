@@ -561,12 +561,14 @@ class FloatingText:
         screen.blit(text_surface, (self.x, self.y))
         
 class LevelUpScreen:
-    def __init__(self, screen, players, is_coop=False, sound_manager=None, xp_level=1):
+    def __init__(self, screen, players, is_coop=False, sound_manager=None, xp_level=1, game_level=1, score=0):
         self.screen = screen
         self.players = players
         self.is_coop = is_coop
         self.sound_manager = sound_manager
         self.xp_level = xp_level
+        self.game_level = game_level
+        self.score = score
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -1074,12 +1076,26 @@ class LevelUpScreen:
         title_text = self.font_large.render("LEVEL UP!", True, GOLD)
         title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 80))
         self.screen.blit(title_text, title_rect)
-        
+
+        # Display stats (game level, player level, score)
+        stats_y = 140
+        game_level_text = self.tiny_font.render(f"Game Level: {self.game_level}", True, CYAN)
+        player_level_text = self.tiny_font.render(f"Player Level: {self.xp_level}", True, CYAN)
+        score_text = self.tiny_font.render(f"Score: {self.score:,}", True, CYAN)
+
+        game_level_rect = game_level_text.get_rect(center=(SCREEN_WIDTH // 2 - 300, stats_y))
+        player_level_rect = player_level_text.get_rect(center=(SCREEN_WIDTH // 2, stats_y))
+        score_rect = score_text.get_rect(center=(SCREEN_WIDTH // 2 + 300, stats_y))
+
+        self.screen.blit(game_level_text, game_level_rect)
+        self.screen.blit(player_level_text, player_level_rect)
+        self.screen.blit(score_text, score_rect)
+
         # Input delay indicator
         if pygame.time.get_ticks() - self.start_time < self.input_delay:
             remaining = (self.input_delay - (pygame.time.get_ticks() - self.start_time)) / 1000.0
             delay_text = self.font_medium.render(f"Input unlocks in {remaining:.1f}s", True, YELLOW)
-            delay_rect = delay_text.get_rect(center=(SCREEN_WIDTH // 2, 140))
+            delay_rect = delay_text.get_rect(center=(SCREEN_WIDTH // 2, 180))
             self.screen.blit(delay_text, delay_rect)
             return  # Don't draw the rest during input delay
             
@@ -6157,7 +6173,7 @@ class Game:
         # Handle level up screen
         if self.awaiting_level_up:
             if not hasattr(self, 'level_up_screen'):
-                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, self.xp_system.level)
+                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, self.xp_system.level, self.level, self.score)
             self.level_up_screen.draw()
             return
         
