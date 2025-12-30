@@ -58,6 +58,12 @@ ENEMY_SPEED_MULTIPLIER_MAX = 10  # Max speed multiplier when most enemies destro
 ENEMY_SPEED_FINAL_THRESHOLD = 5  # Number of remaining enemies to trigger extra speed boost
 ENEMY_SPEED_FINAL_MULTIPLIER = 2  # Per-enemy multiplier when below threshold
 
+# Per-Level Progression Configuration
+ENEMY_SPEED_LEVEL_INTERVAL = 5  # Enemy speed increases every N levels
+BOSS_FIRST_LEVEL = 4  # Level where first boss appears
+BOSS_INITIAL_GAP = 4  # Gap before first boss (level 4)
+BOSS_GAP_INCREMENT = 1  # Each subsequent boss requires N more levels (gap increases by 1)
+
 # Alien Overlord Boss Configuration
 ALIEN_BOSS_HEAD_HEALTH_BASE = 65
 ALIEN_BOSS_HEAD_HEALTH_PER_LEVEL = 15
@@ -5015,23 +5021,23 @@ class Game:
             self.create_barriers()
 
     def calculate_enemy_speed_for_level(self, level):
-        # Enemy speed only increases every 5 levels now
-        speed_level = ((level - 1) // 5) + 1
+        # Enemy speed increases every N levels (configurable)
+        speed_level = ((level - 1) // ENEMY_SPEED_LEVEL_INTERVAL) + 1
         speed_increase = (speed_level - 1) * ENEMY_SPEED_PROGRESSION
         return BASE_ENEMY_SPEED + speed_increase
 
     def is_level_a_boss_level(self, level):
         """Determine if this level is a boss level using progressive spacing.
-        First boss at level 4, then each subsequent boss requires one additional level.
-        Boss levels: 4, 9 (4+5), 15 (9+6), 22 (15+7), 30 (22+8), etc.
+        First boss at configured level, then each subsequent boss requires additional levels.
+        Example (defaults): 4, 9 (4+5), 15 (9+6), 22 (15+7), 30 (22+8), etc.
         """
-        boss_level = 4  # First boss at level 4
-        gap = 4  # Initial gap to first boss
+        boss_level = BOSS_FIRST_LEVEL
+        gap = BOSS_INITIAL_GAP
 
         while boss_level <= level:
             if boss_level == level:
                 return True
-            gap += 1  # Each subsequent boss requires one more level
+            gap += BOSS_GAP_INCREMENT  # Each subsequent boss requires more levels
             boss_level += gap
 
         return False
@@ -5200,16 +5206,14 @@ class Game:
                             player_has_laser = True
                             break
 
-            # If player has laser, don't spawn laser powerups (prevents infinite laser loop)
-            if player_has_laser and 'laser' in power_types:
-                power_types = [pt for pt in power_types if pt != 'laser']
+            # If player has laser, don't spawn any powerups (prevents laser chaining strategy)
+            if player_has_laser:
+                return
 
-            # Only spawn if there are valid powerup types
-            if power_types:
-                power_type = random.choice(power_types)
-                x = random.randint(100, SCREEN_WIDTH - 100)
-                y = 100
-                self.power_ups.append(PowerUp(x, y, power_type))
+            power_type = random.choice(power_types)
+            x = random.randint(100, SCREEN_WIDTH - 100)
+            y = 100
+            self.power_ups.append(PowerUp(x, y, power_type))
         
     def handle_events(self):
         if self.showing_stats_screen:
