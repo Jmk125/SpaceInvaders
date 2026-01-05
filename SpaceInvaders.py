@@ -162,8 +162,12 @@ class ProfileManager:
             'player2_fire_key': pygame.K_RCTRL,
             'player2_left_key': pygame.K_a,
             'player2_right_key': pygame.K_d,
-            'player1_fire_button': 0,
-            'player2_fire_button': 0
+            'player1_left_button': 13,  # D-pad left
+            'player1_right_button': 14,  # D-pad right
+            'player1_fire_button': 0,  # A button
+            'player2_left_button': 13,  # D-pad left
+            'player2_right_button': 14,  # D-pad right
+            'player2_fire_button': 0  # A button
         }
 
     def load_profiles(self):
@@ -2948,16 +2952,26 @@ class Player:
         ammo_count = int(base_ammo * self.get_powerup_duration_multiplier())
         self.add_ammo_power_up('multi_shot', ammo_count)
         
-    def handle_controller_input(self, shoot_callback=None, fire_button=0):
+    def handle_controller_input(self, shoot_callback=None, fire_button=0, left_button=None, right_button=None):
         if not self.is_alive:
             return
         if self.controller:
             hat = self.controller.get_hat(0) if self.controller.get_numhats() > 0 else (0, 0)
             axis_x = self.controller.get_axis(0) if self.controller.get_numaxes() > 0 else 0
 
-            if hat[0] == -1 or axis_x < -0.3:
+            # Check for left movement: button, hat, or axis
+            left_pressed = False
+            right_pressed = False
+
+            if left_button is not None and self.controller.get_numbuttons() > left_button:
+                left_pressed = self.controller.get_button(left_button)
+            if right_button is not None and self.controller.get_numbuttons() > right_button:
+                right_pressed = self.controller.get_button(right_button)
+
+            # Also check hat and axis as fallback
+            if left_pressed or hat[0] == -1 or axis_x < -0.3:
                 self.move_left()
-            elif hat[0] == 1 or axis_x > 0.3:
+            elif right_pressed or hat[0] == 1 or axis_x > 0.3:
                 self.move_right()
 
             # Auto-fire support for controller
@@ -4588,7 +4602,11 @@ class SettingsScreen:
             ("Keyboard - P2 Left", "player2_left_key", "keyboard"),
             ("Keyboard - P2 Right", "player2_right_key", "keyboard"),
             ("Keyboard - P2 Fire", "player2_fire_key", "keyboard"),
+            ("Controller - P1 Left", "player1_left_button", "controller"),
+            ("Controller - P1 Right", "player1_right_button", "controller"),
             ("Controller - P1 Fire", "player1_fire_button", "controller"),
+            ("Controller - P2 Left", "player2_left_button", "controller"),
+            ("Controller - P2 Right", "player2_right_button", "controller"),
             ("Controller - P2 Fire", "player2_fire_button", "controller"),
             ("Save Profile", None, "save"),
             ("Load Profile", None, "load"),
@@ -4598,6 +4616,11 @@ class SettingsScreen:
         self.awaiting_input = False  # Whether we're waiting for input
         self.awaiting_input_for = None  # Which binding key is being remapped
         self.awaiting_input_type = None  # "keyboard" or "controller"
+
+        # Message feedback system
+        self.message = None
+        self.message_time = 0
+        self.message_duration = 2000  # Show message for 2 seconds
 
         # Starfield background
         self.starfield = StarField(direction='horizontal')
@@ -4614,6 +4637,11 @@ class SettingsScreen:
             return name.replace('left ', 'L').upper()
         else:
             return name.upper()
+
+    def show_message(self, message):
+        """Show a temporary message on screen"""
+        self.message = message
+        self.message_time = pygame.time.get_ticks()
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -4727,18 +4755,18 @@ class SettingsScreen:
             self.screen.blit(keyboard_header, keyboard_rect)
 
             controller_header = self.font_small.render("CONTROLLER INPUTS", True, CYAN)
-            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, 530))
+            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, 510))
             self.screen.blit(controller_header, controller_rect)
 
             profile_header = self.font_small.render("PROFILE MANAGEMENT", True, CYAN)
-            profile_rect = profile_header.get_rect(center=(SCREEN_WIDTH // 2, 720))
+            profile_rect = profile_header.get_rect(center=(SCREEN_WIDTH // 2, 820))
             self.screen.blit(profile_header, profile_rect)
 
             # Show menu options with current bindings
             keyboard_start_y = 220
-            controller_start_y = 570
-            profile_start_y = 760
-            spacing = 45
+            controller_start_y = 550
+            profile_start_y = 860
+            spacing = 40
 
             for i, option in enumerate(self.options):
                 display_text, binding_key, input_type = option
@@ -4753,19 +4781,35 @@ class SettingsScreen:
                 elif input_type == "controller":
                     button_num = self.key_bindings[binding_key]
                     option_text = self.font_small.render(f"{display_text}: Button {button_num}", True, color)
-                    # Position in controller section (indices 6-7)
+                    # Position in controller section (indices 6-11)
                     y_offset = i - 6
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, controller_start_y + y_offset * spacing))
                 elif input_type in ["save", "load"]:
                     option_text = self.font_medium.render(display_text, True, color)
-                    # Position in profile section (indices 8-9)
-                    y_offset = i - 8
+                    # Position in profile section (indices 12-13)
+                    y_offset = i - 12
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, profile_start_y + y_offset * spacing))
                 else:  # Back option
                     option_text = self.font_medium.render(display_text, True, color)
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 950))
 
                 self.screen.blit(option_text, option_rect)
+
+        # Display message if active
+        if self.message:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.message_time < self.message_duration:
+                # Message is still active
+                message_text = self.font_medium.render(self.message, True, GREEN)
+                message_rect = message_text.get_rect(center=(SCREEN_WIDTH // 2, 50))
+                # Draw a background for the message
+                bg_rect = pygame.Rect(message_rect.x - 10, message_rect.y - 5, message_rect.width + 20, message_rect.height + 10)
+                pygame.draw.rect(self.screen, BLACK, bg_rect)
+                pygame.draw.rect(self.screen, GREEN, bg_rect, 2)
+                self.screen.blit(message_text, message_rect)
+            else:
+                # Message has expired
+                self.message = None
 
         pygame.display.flip()
 
@@ -5235,8 +5279,12 @@ class Game:
                 'player2_fire_key': pygame.K_RCTRL,
                 'player2_left_key': pygame.K_a,
                 'player2_right_key': pygame.K_d,
-                'player1_fire_button': 0,  # Controller button 0 (A button)
-                'player2_fire_button': 0   # Controller button 0 (A button)
+                'player1_left_button': 13,  # D-pad left
+                'player1_right_button': 14,  # D-pad right
+                'player1_fire_button': 0,  # A button
+                'player2_left_button': 13,  # D-pad left
+                'player2_right_button': 14,  # D-pad right
+                'player2_fire_button': 0  # A button
             }
         self.key_bindings = key_bindings
         self.awaiting_name_input = False
@@ -6128,7 +6176,12 @@ class Game:
                         elif shot_type == 'muzzle_flash_flashes':
                             self.muzzle_flash_flashes.extend(shot)
 
-                self.players[0].handle_controller_input(player1_shoot, self.key_bindings['player1_fire_button'])
+                self.players[0].handle_controller_input(
+                    player1_shoot,
+                    self.key_bindings['player1_fire_button'],
+                    self.key_bindings.get('player1_left_button'),
+                    self.key_bindings.get('player1_right_button')
+                )
 
             if self.coop_mode and len(self.players) > 1:
                 if not self.players[1].controller:
@@ -6195,7 +6248,12 @@ class Game:
                             elif shot_type == 'muzzle_flash_flashes':
                                 self.muzzle_flash_flashes.extend(shot)
 
-                    self.players[1].handle_controller_input(player2_shoot, self.key_bindings['player2_fire_button'])
+                    self.players[1].handle_controller_input(
+                        player2_shoot,
+                        self.key_bindings['player2_fire_button'],
+                        self.key_bindings.get('player2_left_button'),
+                        self.key_bindings.get('player2_right_button')
+                    )
     
     def activate_power_up(self, player, power_type):
         if power_type == 'rapid_fire':
@@ -7124,6 +7182,7 @@ def main():
                             elif name_result:
                                 # Save the profile
                                 profile_manager.save_profile(name_result, key_bindings)
+                                settings_screen.show_message(f"Profile '{name_result}' saved!")
                                 break
                             profile_name_screen.draw()
                             clock.tick(60)
@@ -7144,6 +7203,7 @@ def main():
                                     key_bindings.update(loaded_bindings)
                                     profile_manager.last_profile = load_result
                                     profile_manager.save_profiles()
+                                    settings_screen.show_message(f"Profile '{load_result}' loaded!")
                                 break
                             profile_selection_screen.draw()
                             clock.tick(60)
