@@ -64,7 +64,7 @@ ENEMY_SPEED_PROGRESSION_EXPONENT = 1.0  # Exponent for progression curve (1.0=li
 # Gives you precise control over speed at specific enemy counts
 # Format: List of (remaining_enemies, speed_multiplier) tuples
 # The system will use the highest applicable multiplier based on remaining enemies
-USE_THRESHOLD_PROGRESSION = False  # Set to True to use threshold-based system instead of formula-based
+USE_THRESHOLD_PROGRESSION = True  # Set to True to use threshold-based system instead of formula-based
 ENEMY_SPEED_THRESHOLDS = [
     (55, 1.0),   # 55+ enemies remaining: 1.0x base speed (no boost)
     (45, 1.5),   # 45-54 enemies: 1.5x base speed
@@ -80,7 +80,7 @@ ENEMY_SPEED_THRESHOLDS = [
 # Per-Level Progression Configuration
 # --- Enemy Speed Progression Between Levels ---
 ENEMY_SPEED_PROGRESSION = 0.10  # How much speed increases per interval (moved from line 53 for clarity)
-USE_BOSS_BASED_SPEED_PROGRESSION = False  # True = speed increases after each boss, False = increases every N levels
+USE_BOSS_BASED_SPEED_PROGRESSION = True  # True = speed increases after each boss, False = increases every N levels
 ENEMY_SPEED_LEVEL_INTERVAL = 5  # Enemy speed increases every N levels (only used when USE_BOSS_BASED_SPEED_PROGRESSION = False)
 
 # --- Boss Scheduling ---
