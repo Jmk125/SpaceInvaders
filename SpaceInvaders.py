@@ -4219,6 +4219,123 @@ class Barrier:
                 color = GREEN  # Fallback
             pygame.draw.rect(screen, color, block)
 
+class SettingsScreen:
+    def __init__(self, screen, sound_manager, key_bindings):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.key_bindings = key_bindings
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
+
+        self.options = ["Player 1 Fire Button", "Player 2 Fire Button", "Back"]
+        self.selected_option = 0
+        self.awaiting_key = False  # Whether we're waiting for a key press
+        self.awaiting_key_for = None  # Which option is being remapped
+
+        # Starfield background
+        self.starfield = StarField(direction='horizontal')
+
+    def get_key_name(self, key):
+        """Get a readable name for a pygame key constant"""
+        name = pygame.key.name(key)
+        # Capitalize and clean up the name
+        if name == 'space':
+            return 'SPACE'
+        elif name.startswith('right'):
+            return name.replace('right ', 'R').upper()
+        elif name.startswith('left'):
+            return name.replace('left ', 'L').upper()
+        else:
+            return name.upper()
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if self.awaiting_key:
+                    # We're waiting for a key press to assign
+                    if self.awaiting_key_for == "player1":
+                        self.key_bindings['player1_fire'] = event.key
+                    elif self.awaiting_key_for == "player2":
+                        self.key_bindings['player2_fire'] = event.key
+
+                    self.sound_manager.play_sound('menu_select')
+                    self.awaiting_key = False
+                    self.awaiting_key_for = None
+                else:
+                    # Normal menu navigation
+                    if event.key in (pygame.K_UP, pygame.K_w):
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_option = (self.selected_option - 1) % len(self.options)
+                    elif event.key in (pygame.K_DOWN, pygame.K_s):
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_option = (self.selected_option + 1) % len(self.options)
+                    elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                        self.sound_manager.play_sound('menu_select')
+                        selected_text = self.options[self.selected_option]
+                        if selected_text == "Player 1 Fire Button":
+                            self.awaiting_key = True
+                            self.awaiting_key_for = "player1"
+                        elif selected_text == "Player 2 Fire Button":
+                            self.awaiting_key = True
+                            self.awaiting_key_for = "player2"
+                        elif selected_text == "Back":
+                            return "back"
+                    elif event.key == pygame.K_ESCAPE:
+                        return "back"
+
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        # Update and draw starfield background
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        # Title
+        title_text = self.font_large.render("SETTINGS", True, GREEN)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 150))
+        self.screen.blit(title_text, title_rect)
+
+        # Check if we're awaiting a key press
+        if self.awaiting_key:
+            # Show "Press any key..." prompt
+            prompt_text = self.font_medium.render("Press any key...", True, YELLOW)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
+            self.screen.blit(prompt_text, prompt_rect)
+
+            # Show which setting is being changed
+            if self.awaiting_key_for == "player1":
+                setting_text = self.font_small.render("Player 1 Fire Button", True, WHITE)
+            else:
+                setting_text = self.font_small.render("Player 2 Fire Button", True, WHITE)
+            setting_rect = setting_text.get_rect(center=(SCREEN_WIDTH // 2, 350))
+            self.screen.blit(setting_text, setting_rect)
+        else:
+            # Show menu options with current bindings
+            start_y = 300
+            spacing = 80
+
+            for i, option in enumerate(self.options):
+                color = YELLOW if i == self.selected_option else WHITE
+
+                if option == "Player 1 Fire Button":
+                    key_name = self.get_key_name(self.key_bindings['player1_fire'])
+                    option_text = self.font_medium.render(f"{option}: {key_name}", True, color)
+                elif option == "Player 2 Fire Button":
+                    key_name = self.get_key_name(self.key_bindings['player2_fire'])
+                    option_text = self.font_medium.render(f"{option}: {key_name}", True, color)
+                else:
+                    option_text = self.font_medium.render(option, True, color)
+
+                option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
+                self.screen.blit(option_text, option_rect)
+
+        pygame.display.flip()
+
 class TitleScreen:
     def __init__(self, screen, score_manager, sound_manager):
         self.screen = screen
@@ -4232,9 +4349,9 @@ class TitleScreen:
         # Check if save file exists and add Continue option if it does
         self.has_save_file = os.path.exists("savegame.json")
         if self.has_save_file:
-            self.options = ["Continue", "Single Player", "Co-op", "High Scores", "Quit"]
+            self.options = ["Continue", "Single Player", "Co-op", "Settings", "High Scores", "Quit"]
         else:
-            self.options = ["Single Player", "Co-op", "High Scores", "Quit"]
+            self.options = ["Single Player", "Co-op", "Settings", "High Scores", "Quit"]
 
         self.controllers = []
         self.scan_controllers()
@@ -4288,6 +4405,8 @@ class TitleScreen:
                         return "single"
                     elif selected_text == "Co-op":
                         return "coop"
+                    elif selected_text == "Settings":
+                        return "settings"
                     elif selected_text == "High Scores":
                         return "highscores"
                     elif selected_text == "Quit":
@@ -4308,6 +4427,8 @@ class TitleScreen:
                         return "single"
                     elif selected_text == "Co-op":
                         return "coop"
+                    elif selected_text == "Settings":
+                        return "settings"
                     elif selected_text == "High Scores":
                         return "highscores"
                     elif selected_text == "Quit":
@@ -4655,12 +4776,12 @@ class UFOWarningScreen:
         pygame.display.flip()
 
 class Game:
-    def __init__(self, score_manager, sound_manager):
+    def __init__(self, score_manager, sound_manager, key_bindings=None):
         try:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
         except:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-            
+
         pygame.display.set_caption("Place Invaders")
         self.clock = pygame.time.Clock()
         self.running = True
@@ -4671,6 +4792,14 @@ class Game:
         self.coop_mode = False
         self.score_manager = score_manager
         self.sound_manager = sound_manager
+
+        # Key bindings for player controls
+        if key_bindings is None:
+            key_bindings = {
+                'player1_fire': pygame.K_SPACE,
+                'player2_fire': pygame.K_RCTRL
+            }
+        self.key_bindings = key_bindings
         self.awaiting_name_input = False
         self.awaiting_level_up = False
         self.pending_level_up = False  # Track if player leveled up during current level
@@ -5289,7 +5418,7 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE and not self.game_over:
+                if event.key == self.key_bindings['player1_fire'] and not self.game_over:
                     if len(self.players) > 0 and self.players[0].is_alive:
                         player = self.players[0]
                         # Determine shot type for stats tracking
@@ -5322,7 +5451,7 @@ class Game:
                             elif shot_type == 'muzzle_flash_flashes':
                                 # Add muzzle flash circles to the flash list
                                 self.muzzle_flash_flashes.extend(shot)
-                elif event.key == pygame.K_RCTRL and not self.game_over and self.coop_mode:
+                elif event.key == self.key_bindings['player2_fire'] and not self.game_over and self.coop_mode:
                     if len(self.players) > 1 and self.players[1].is_alive:
                         player = self.players[1]
                         # Determine shot type for stats tracking
@@ -5499,8 +5628,8 @@ class Game:
                 if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
                     self.players[0].move_right()
 
-                # Auto-fire: check if space is held and auto-fire upgrade is active
-                if keys[pygame.K_SPACE] and self.players[0].is_alive and self.players[0].upgrades.has_auto_fire():
+                # Auto-fire: check if fire key is held and auto-fire upgrade is active
+                if keys[self.key_bindings['player1_fire']] and self.players[0].is_alive and self.players[0].upgrades.has_auto_fire():
                     player = self.players[0]
                     # Determine shot type for stats tracking
                     if player.has_laser:
@@ -5566,8 +5695,8 @@ class Game:
                         self.players[1].move_left()
                     if keys[pygame.K_RIGHT]:
                         self.players[1].move_right()
-                    # Auto-fire for player 2 (RCTRL key)
-                    if keys[pygame.K_RCTRL] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
+                    # Auto-fire for player 2
+                    if keys[self.key_bindings['player2_fire']] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
                         player = self.players[1]
                         # Determine shot type for stats tracking
                         if player.has_laser:
@@ -6497,17 +6626,23 @@ class Game:
 
 def main():
     score_manager = HighScoreManager()
-    
+
     # Initialize sound manager
     sound_manager = SoundManager()
-    
+
+    # Initialize key bindings with defaults
+    key_bindings = {
+        'player1_fire': pygame.K_SPACE,
+        'player2_fire': pygame.K_RCTRL
+    }
+
     try:
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
     except:
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        
+
     clock = pygame.time.Clock()
-    
+
     while True:
         title_screen = TitleScreen(screen, score_manager, sound_manager)
         
@@ -6528,6 +6663,18 @@ def main():
                     high_score_screen.draw()
                     clock.tick(60)
                 break
+            elif action == "settings":
+                settings_screen = SettingsScreen(screen, sound_manager, key_bindings)
+                while True:
+                    settings_action = settings_screen.handle_events()
+                    if settings_action == "back":
+                        break
+                    elif settings_action == "quit":
+                        pygame.quit()
+                        sys.exit()
+                    settings_screen.draw()
+                    clock.tick(60)
+                break
             elif action == "debug_menu":
                 debug_menu = DebugMenu(screen, sound_manager)
                 debug_action, debug_config = debug_menu.run()
@@ -6537,7 +6684,7 @@ def main():
                     sys.exit()
                 elif debug_action == "start":
                     game_mode = debug_config.get('mode', 'single')
-                    game = Game(score_manager, sound_manager)
+                    game = Game(score_manager, sound_manager, key_bindings)
                     game.setup_game(game_mode, debug_config)
                     result = game.run()
 
@@ -6550,7 +6697,7 @@ def main():
                     break
             elif action == "continue":
                 # Load saved game
-                game = Game(score_manager, sound_manager)
+                game = Game(score_manager, sound_manager, key_bindings)
                 try:
                     game.load_game()
                     result = game.run()
@@ -6564,7 +6711,7 @@ def main():
                     print("Save file not found!")
                     break  # Go back to title screen
             elif action in ["single", "coop"]:
-                game = Game(score_manager, sound_manager)
+                game = Game(score_manager, sound_manager, key_bindings)
                 game.setup_game(action)
                 result = game.run()
 
