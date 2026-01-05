@@ -147,6 +147,8 @@ STAR_LAYER3_SPEED = 2.0  # Fastest parallax speed
 # Controller hat bindings
 HAT_LEFT = "hat_left"
 HAT_RIGHT = "hat_right"
+HAT_UP = "hat_up"
+HAT_DOWN = "hat_down"
 
 
 class ProfileManager:
@@ -2972,6 +2974,10 @@ class Player:
                     return hat[0] == -1
                 if binding == HAT_RIGHT:
                     return hat[0] == 1
+                if binding == HAT_UP:
+                    return hat[1] == 1
+                if binding == HAT_DOWN:
+                    return hat[1] == -1
                 return False
 
             if isinstance(left_button, str):
@@ -4662,6 +4668,10 @@ class SettingsScreen:
                 return "D-pad Left"
             if binding == HAT_RIGHT:
                 return "D-pad Right"
+            if binding == HAT_UP:
+                return "D-pad Up"
+            if binding == HAT_DOWN:
+                return "D-pad Down"
             return binding.upper()
         return f"Button {binding}"
 
@@ -4739,9 +4749,15 @@ class SettingsScreen:
                         return "back"
             elif event.type == pygame.JOYHATMOTION:
                 if self.awaiting_input and self.awaiting_input_type == "controller":
-                    if event.value[0] != 0 and self.awaiting_input_for:
-                        if "left" in self.awaiting_input_for or "right" in self.awaiting_input_for:
+                    if self.awaiting_input_for:
+                        if event.value[0] != 0:
                             binding = HAT_LEFT if event.value[0] < 0 else HAT_RIGHT
+                        elif event.value[1] != 0:
+                            binding = HAT_UP if event.value[1] > 0 else HAT_DOWN
+                        else:
+                            binding = None
+
+                        if binding:
                             self.key_bindings[self.awaiting_input_for] = binding
                             self.sound_manager.play_sound('menu_select')
                             self.awaiting_input = False
@@ -7213,7 +7229,7 @@ def main():
                             if name_result == "quit":
                                 pygame.quit()
                                 sys.exit()
-                            elif name_result == "cancel" or name_result is None:
+                            elif name_result == "cancel":
                                 break
                             elif name_result:
                                 # Save the profile
@@ -7230,7 +7246,7 @@ def main():
                             if load_result == "quit":
                                 pygame.quit()
                                 sys.exit()
-                            elif load_result == "cancel" or load_result is None:
+                            elif load_result == "cancel":
                                 break
                             elif load_result:
                                 # Load the selected profile
