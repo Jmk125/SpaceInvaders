@@ -145,6 +145,84 @@ STAR_LAYER3_BRIGHTNESS = 255  # Brightest (closest)
 STAR_LAYER3_SPEED = 2.0  # Fastest parallax speed
 
 
+class ProfileManager:
+    """Manages control profiles with save/load functionality"""
+    def __init__(self, filename="control_profiles.json"):
+        self.filename = filename
+        self.profiles = {}
+        self.last_profile = None
+        self.load_profiles()
+
+    def get_default_bindings(self):
+        """Get default key bindings"""
+        return {
+            'player1_fire_key': pygame.K_SPACE,
+            'player1_left_key': pygame.K_LEFT,
+            'player1_right_key': pygame.K_RIGHT,
+            'player2_fire_key': pygame.K_RCTRL,
+            'player2_left_key': pygame.K_a,
+            'player2_right_key': pygame.K_d,
+            'player1_fire_button': 0,
+            'player2_fire_button': 0
+        }
+
+    def load_profiles(self):
+        """Load profiles from file"""
+        try:
+            if os.path.exists(self.filename):
+                with open(self.filename, 'r') as f:
+                    data = json.load(f)
+                    self.last_profile = data.get('last_profile', None)
+                    # Load profiles and convert key codes back to integers
+                    saved_profiles = data.get('profiles', {})
+                    for profile_name, bindings in saved_profiles.items():
+                        self.profiles[profile_name] = bindings
+        except Exception as e:
+            print(f"Error loading profiles: {e}")
+            self.profiles = {}
+            self.last_profile = None
+
+    def save_profiles(self):
+        """Save profiles to file"""
+        try:
+            data = {
+                'last_profile': self.last_profile,
+                'profiles': self.profiles
+            }
+            with open(self.filename, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error saving profiles: {e}")
+
+    def save_profile(self, name, bindings):
+        """Save a new profile"""
+        self.profiles[name] = bindings.copy()
+        self.last_profile = name
+        self.save_profiles()
+
+    def get_profile(self, name):
+        """Get a profile by name"""
+        return self.profiles.get(name, None)
+
+    def delete_profile(self, name):
+        """Delete a profile"""
+        if name in self.profiles:
+            del self.profiles[name]
+            if self.last_profile == name:
+                self.last_profile = None
+            self.save_profiles()
+
+    def get_profile_names(self):
+        """Get list of all profile names"""
+        return list(self.profiles.keys())
+
+    def get_last_profile_bindings(self):
+        """Get bindings from last used profile, or defaults"""
+        if self.last_profile and self.last_profile in self.profiles:
+            return self.profiles[self.last_profile].copy()
+        return self.get_default_bindings()
+
+
 class StarField:
     """
     Three-layer starfield with parallax scrolling effect.
@@ -4219,11 +4297,284 @@ class Barrier:
                 color = GREEN  # Fallback
             pygame.draw.rect(screen, color, block)
 
+class ProfileNameInputScreen:
+    """Screen for entering a profile name (similar to NameInputScreen)"""
+    def __init__(self, screen, sound_manager):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+
+        # Name input system - allow up to 10 characters
+        self.name = ["A", "A", "A", "A", "A", "A", "A", "A", "A", "A"]
+        self.name_length = 3  # Start with 3 characters
+        self.current_position = 0
+        self.alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -"
+        self.current_letter_index = [0] * 10
+        self.input_mode = "controller"
+        self.keyboard_name = ""
+        self.ok_selected = False
+
+        # Starfield background
+        self.starfield = StarField(direction='horizontal')
+
+        # Detect input method
+        self.controllers = []
+        for i in range(pygame.joystick.get_count()):
+            controller = pygame.joystick.Joystick(i)
+            controller.init()
+            self.controllers.append(controller)
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                self.input_mode = "keyboard"
+                if event.key == pygame.K_RETURN:
+                    if self.keyboard_name.strip():
+                        self.sound_manager.play_sound('menu_select')
+                        return self.keyboard_name.strip()[:15]
+                    return None
+                elif event.key == pygame.K_BACKSPACE:
+                    self.keyboard_name = self.keyboard_name[:-1]
+                elif event.key == pygame.K_ESCAPE:
+                    self.sound_manager.play_sound('menu_select')
+                    return "cancel"
+                elif len(self.keyboard_name) < 15 and event.unicode.isprintable():
+                    self.keyboard_name += event.unicode.upper()
+
+            elif event.type == pygame.JOYBUTTONDOWN:
+                self.input_mode = "controller"
+                if event.button == 0:  # A button
+                    self.sound_manager.play_sound('menu_select')
+                    if self.ok_selected:
+                        return "".join(self.name[:self.name_length]).strip()
+                    else:
+                        if self.current_position < self.name_length - 1:
+                            self.current_position += 1
+                        else:
+                            self.ok_selected = True
+                elif event.button == 1:  # B button - cancel or go back
+                    if self.ok_selected:
+                        self.ok_selected = False
+                        self.current_position = self.name_length - 1
+                    elif self.current_position > 0:
+                        self.current_position -= 1
+                    else:
+                        self.sound_manager.play_sound('menu_select')
+                        return "cancel"
+                elif event.button == 2:  # X button - increase length
+                    if self.name_length < 10:
+                        self.name_length += 1
+                elif event.button == 3:  # Y button - decrease length
+                    if self.name_length > 3:
+                        self.name_length -= 1
+                        if self.current_position >= self.name_length:
+                            self.current_position = self.name_length - 1
+
+            elif event.type == pygame.JOYHATMOTION:
+                self.input_mode = "controller"
+                if event.value[1] == 1:  # Up
+                    if not self.ok_selected:
+                        self.current_letter_index[self.current_position] = (
+                            self.current_letter_index[self.current_position] - 1
+                        ) % len(self.alphabet)
+                        self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                elif event.value[1] == -1:  # Down
+                    if not self.ok_selected:
+                        self.current_letter_index[self.current_position] = (
+                            self.current_letter_index[self.current_position] + 1
+                        ) % len(self.alphabet)
+                        self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                elif event.value[0] == -1:  # Left
+                    if self.ok_selected:
+                        self.ok_selected = False
+                        self.current_position = self.name_length - 1
+                    elif self.current_position > 0:
+                        self.current_position -= 1
+                elif event.value[0] == 1:  # Right
+                    if self.current_position < self.name_length - 1:
+                        self.current_position += 1
+                    else:
+                        self.ok_selected = True
+
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        # Update and draw starfield background
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        # Title
+        title_text = self.font_large.render("SAVE PROFILE", True, GREEN)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 150))
+        self.screen.blit(title_text, title_rect)
+
+        # Input method indicator
+        if self.input_mode == "keyboard":
+            prompt_text = self.font_medium.render("Enter profile name:", True, WHITE)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
+            self.screen.blit(prompt_text, prompt_rect)
+
+            name_display = self.keyboard_name + "_" if len(self.keyboard_name) < 15 else self.keyboard_name
+            name_text = self.font_large.render(name_display, True, CYAN)
+            name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, 500))
+
+            box_rect = name_rect.inflate(40, 20)
+            pygame.draw.rect(self.screen, WHITE, box_rect, 3)
+            self.screen.blit(name_text, name_rect)
+
+            inst_text = self.font_small.render("Type name and press ENTER (ESC to cancel)", True, GRAY)
+            inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 620))
+            self.screen.blit(inst_text, inst_rect)
+
+        else:
+            prompt_text = self.font_medium.render("Enter profile name:", True, WHITE)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 300))
+            self.screen.blit(prompt_text, prompt_rect)
+
+            # Calculate letter spacing based on name length
+            letter_spacing = min(100, 800 // self.name_length)
+            start_x = SCREEN_WIDTH // 2 - (letter_spacing * (self.name_length - 1)) // 2
+
+            for i in range(self.name_length):
+                x = start_x + i * letter_spacing
+                color = YELLOW if i == self.current_position and not self.ok_selected else WHITE
+
+                if i == self.current_position and not self.ok_selected:
+                    box_rect = pygame.Rect(x - 30, 420, 60, 60)
+                    pygame.draw.rect(self.screen, YELLOW, box_rect, 3)
+
+                letter_text = self.font_large.render(self.name[i], True, color)
+                letter_rect = letter_text.get_rect(center=(x, 450))
+                self.screen.blit(letter_text, letter_rect)
+
+            ok_color = YELLOW if self.ok_selected else WHITE
+            ok_text = self.font_medium.render("OK", True, ok_color)
+            ok_rect = ok_text.get_rect(center=(SCREEN_WIDTH // 2, 570))
+
+            if self.ok_selected:
+                box_rect = ok_rect.inflate(40, 20)
+                pygame.draw.rect(self.screen, YELLOW, box_rect, 3)
+
+            self.screen.blit(ok_text, ok_rect)
+
+            instructions = [
+                "D-pad Up/Down: Change letter",
+                "D-pad Left/Right: Move cursor",
+                "A: Confirm/Next | B: Back/Cancel",
+                "X: Add letter | Y: Remove letter"
+            ]
+
+            for i, inst in enumerate(instructions):
+                inst_text = self.font_small.render(inst, True, GRAY)
+                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 680 + i * 35))
+                self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
+class ProfileSelectionScreen:
+    """Screen for selecting a profile to load"""
+    def __init__(self, screen, sound_manager, profile_manager):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.profile_manager = profile_manager
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
+
+        self.profile_names = profile_manager.get_profile_names()
+        self.profile_names.append("Cancel")  # Add cancel option
+        self.selected_index = 0
+
+        # Starfield background
+        self.starfield = StarField(direction='horizontal')
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    self.sound_manager.play_sound('menu_change')
+                    self.selected_index = (self.selected_index - 1) % len(self.profile_names)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    self.sound_manager.play_sound('menu_change')
+                    self.selected_index = (self.selected_index + 1) % len(self.profile_names)
+                elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                    self.sound_manager.play_sound('menu_select')
+                    selected_name = self.profile_names[self.selected_index]
+                    if selected_name == "Cancel":
+                        return "cancel"
+                    return selected_name
+                elif event.key == pygame.K_ESCAPE:
+                    self.sound_manager.play_sound('menu_select')
+                    return "cancel"
+            elif event.type == pygame.JOYBUTTONDOWN:
+                if event.button == 0:  # A button
+                    self.sound_manager.play_sound('menu_select')
+                    selected_name = self.profile_names[self.selected_index]
+                    if selected_name == "Cancel":
+                        return "cancel"
+                    return selected_name
+                elif event.button == 1:  # B button
+                    self.sound_manager.play_sound('menu_select')
+                    return "cancel"
+            elif event.type == pygame.JOYHATMOTION:
+                if event.value[1] == 1:  # Up
+                    self.sound_manager.play_sound('menu_change')
+                    self.selected_index = (self.selected_index - 1) % len(self.profile_names)
+                elif event.value[1] == -1:  # Down
+                    self.sound_manager.play_sound('menu_change')
+                    self.selected_index = (self.selected_index + 1) % len(self.profile_names)
+
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        # Update and draw starfield background
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        # Title
+        title_text = self.font_large.render("LOAD PROFILE", True, GREEN)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 150))
+        self.screen.blit(title_text, title_rect)
+
+        if not self.profile_names or (len(self.profile_names) == 1 and self.profile_names[0] == "Cancel"):
+            # No profiles available
+            no_profiles_text = self.font_medium.render("No saved profiles", True, WHITE)
+            no_profiles_rect = no_profiles_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
+            self.screen.blit(no_profiles_text, no_profiles_rect)
+        else:
+            # Show profile list
+            start_y = 300
+            spacing = 60
+
+            for i, profile_name in enumerate(self.profile_names):
+                color = YELLOW if i == self.selected_index else WHITE
+                profile_text = self.font_medium.render(profile_name, True, color)
+                profile_rect = profile_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
+                self.screen.blit(profile_text, profile_rect)
+
+        # Instructions
+        inst_text = self.font_small.render("Up/Down: Select | Enter/A: Load | ESC/B: Cancel", True, GRAY)
+        inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 900))
+        self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
 class SettingsScreen:
-    def __init__(self, screen, sound_manager, key_bindings):
+    def __init__(self, screen, sound_manager, key_bindings, profile_manager):
         self.screen = screen
         self.sound_manager = sound_manager
         self.key_bindings = key_bindings
+        self.profile_manager = profile_manager
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
@@ -4231,10 +4582,16 @@ class SettingsScreen:
 
         # Options organized as (display_text, binding_key, input_type)
         self.options = [
+            ("Keyboard - P1 Left", "player1_left_key", "keyboard"),
+            ("Keyboard - P1 Right", "player1_right_key", "keyboard"),
             ("Keyboard - P1 Fire", "player1_fire_key", "keyboard"),
+            ("Keyboard - P2 Left", "player2_left_key", "keyboard"),
+            ("Keyboard - P2 Right", "player2_right_key", "keyboard"),
             ("Keyboard - P2 Fire", "player2_fire_key", "keyboard"),
             ("Controller - P1 Fire", "player1_fire_button", "controller"),
             ("Controller - P2 Fire", "player2_fire_button", "controller"),
+            ("Save Profile", None, "save"),
+            ("Load Profile", None, "load"),
             ("Back", None, None)
         ]
         self.selected_option = 0
@@ -4280,7 +4637,13 @@ class SettingsScreen:
                         self.selected_option = (self.selected_option + 1) % len(self.options)
                     elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                         selected = self.options[self.selected_option]
-                        if selected[1] is None:  # Back option
+                        if selected[2] == "save":
+                            self.sound_manager.play_sound('menu_select')
+                            return "save"
+                        elif selected[2] == "load":
+                            self.sound_manager.play_sound('menu_select')
+                            return "load"
+                        elif selected[1] is None:  # Back option
                             self.sound_manager.play_sound('menu_select')
                             return "back"
                         else:
@@ -4302,7 +4665,13 @@ class SettingsScreen:
                     # Normal menu navigation with controller
                     if event.button == 0:  # A button - select
                         selected = self.options[self.selected_option]
-                        if selected[1] is None:  # Back option
+                        if selected[2] == "save":
+                            self.sound_manager.play_sound('menu_select')
+                            return "save"
+                        elif selected[2] == "load":
+                            self.sound_manager.play_sound('menu_select')
+                            return "load"
+                        elif selected[1] is None:  # Back option
                             self.sound_manager.play_sound('menu_select')
                             return "back"
                         else:
@@ -4333,7 +4702,7 @@ class SettingsScreen:
 
         # Title
         title_text = self.font_large.render("SETTINGS", True, GREEN)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 120))
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 100))
         self.screen.blit(title_text, title_rect)
 
         # Check if we're awaiting input
@@ -4343,48 +4712,58 @@ class SettingsScreen:
                 prompt_text = self.font_medium.render("Press any key...", True, YELLOW)
             else:
                 prompt_text = self.font_medium.render("Press any button...", True, YELLOW)
-            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 450))
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 500))
             self.screen.blit(prompt_text, prompt_rect)
 
             # Show which setting is being changed
             option_display = self.options[self.selected_option][0]
             setting_text = self.font_small.render(option_display, True, WHITE)
-            setting_rect = setting_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
+            setting_rect = setting_text.get_rect(center=(SCREEN_WIDTH // 2, 450))
             self.screen.blit(setting_text, setting_rect)
         else:
-            # Section headers
+            # Section headers and options
             keyboard_header = self.font_small.render("KEYBOARD CONTROLS", True, CYAN)
-            keyboard_rect = keyboard_header.get_rect(center=(SCREEN_WIDTH // 2, 220))
+            keyboard_rect = keyboard_header.get_rect(center=(SCREEN_WIDTH // 2, 180))
             self.screen.blit(keyboard_header, keyboard_rect)
 
             controller_header = self.font_small.render("CONTROLLER INPUTS", True, CYAN)
-            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, 450))
+            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, 530))
             self.screen.blit(controller_header, controller_rect)
 
+            profile_header = self.font_small.render("PROFILE MANAGEMENT", True, CYAN)
+            profile_rect = profile_header.get_rect(center=(SCREEN_WIDTH // 2, 720))
+            self.screen.blit(profile_header, profile_rect)
+
             # Show menu options with current bindings
-            keyboard_start_y = 270
-            controller_start_y = 500
-            spacing = 60
+            keyboard_start_y = 220
+            controller_start_y = 570
+            profile_start_y = 760
+            spacing = 45
 
             for i, option in enumerate(self.options):
                 display_text, binding_key, input_type = option
                 color = YELLOW if i == self.selected_option else WHITE
 
-                if binding_key is None:  # Back option
-                    option_text = self.font_medium.render(display_text, True, color)
-                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 680))
-                elif input_type == "keyboard":
+                if input_type == "keyboard":
                     key_name = self.get_key_name(self.key_bindings[binding_key])
-                    option_text = self.font_medium.render(f"{display_text}: {key_name}", True, color)
-                    # Position in keyboard section
-                    y_offset = 0 if i == 0 else 1
+                    option_text = self.font_small.render(f"{display_text}: {key_name}", True, color)
+                    # Position in keyboard section (indices 0-5)
+                    y_offset = i
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, keyboard_start_y + y_offset * spacing))
-                else:  # controller
+                elif input_type == "controller":
                     button_num = self.key_bindings[binding_key]
-                    option_text = self.font_medium.render(f"{display_text}: Button {button_num}", True, color)
-                    # Position in controller section
-                    y_offset = 0 if i == 2 else 1
+                    option_text = self.font_small.render(f"{display_text}: Button {button_num}", True, color)
+                    # Position in controller section (indices 6-7)
+                    y_offset = i - 6
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, controller_start_y + y_offset * spacing))
+                elif input_type in ["save", "load"]:
+                    option_text = self.font_medium.render(display_text, True, color)
+                    # Position in profile section (indices 8-9)
+                    y_offset = i - 8
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, profile_start_y + y_offset * spacing))
+                else:  # Back option
+                    option_text = self.font_medium.render(display_text, True, color)
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 950))
 
                 self.screen.blit(option_text, option_rect)
 
@@ -4851,7 +5230,11 @@ class Game:
         if key_bindings is None:
             key_bindings = {
                 'player1_fire_key': pygame.K_SPACE,
+                'player1_left_key': pygame.K_LEFT,
+                'player1_right_key': pygame.K_RIGHT,
                 'player2_fire_key': pygame.K_RCTRL,
+                'player2_left_key': pygame.K_a,
+                'player2_right_key': pygame.K_d,
                 'player1_fire_button': 0,  # Controller button 0 (A button)
                 'player2_fire_button': 0   # Controller button 0 (A button)
             }
@@ -5681,9 +6064,9 @@ class Game:
             keys = pygame.key.get_pressed()
 
             if len(self.players) > 0:
-                if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                if keys[self.key_bindings['player1_left_key']]:
                     self.players[0].move_left()
-                if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                if keys[self.key_bindings['player1_right_key']]:
                     self.players[0].move_right()
 
                 # Auto-fire: check if fire key is held and auto-fire upgrade is active
@@ -5749,9 +6132,9 @@ class Game:
 
             if self.coop_mode and len(self.players) > 1:
                 if not self.players[1].controller:
-                    if keys[pygame.K_LEFT]:
+                    if keys[self.key_bindings['player2_left_key']]:
                         self.players[1].move_left()
-                    if keys[pygame.K_RIGHT]:
+                    if keys[self.key_bindings['player2_right_key']]:
                         self.players[1].move_right()
                     # Auto-fire for player 2
                     if keys[self.key_bindings['player2_fire_key']] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
@@ -6688,13 +7071,9 @@ def main():
     # Initialize sound manager
     sound_manager = SoundManager()
 
-    # Initialize key bindings with defaults
-    key_bindings = {
-        'player1_fire_key': pygame.K_SPACE,
-        'player2_fire_key': pygame.K_RCTRL,
-        'player1_fire_button': 0,  # Controller button 0 (A button)
-        'player2_fire_button': 0   # Controller button 0 (A button)
-    }
+    # Initialize profile manager and load last profile (or defaults)
+    profile_manager = ProfileManager()
+    key_bindings = profile_manager.get_last_profile_bindings()
 
     try:
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
@@ -6724,7 +7103,7 @@ def main():
                     clock.tick(60)
                 break
             elif action == "settings":
-                settings_screen = SettingsScreen(screen, sound_manager, key_bindings)
+                settings_screen = SettingsScreen(screen, sound_manager, key_bindings, profile_manager)
                 while True:
                     settings_action = settings_screen.handle_events()
                     if settings_action == "back":
@@ -6732,6 +7111,42 @@ def main():
                     elif settings_action == "quit":
                         pygame.quit()
                         sys.exit()
+                    elif settings_action == "save":
+                        # Show profile name input screen
+                        profile_name_screen = ProfileNameInputScreen(screen, sound_manager)
+                        while True:
+                            name_result = profile_name_screen.handle_events()
+                            if name_result == "quit":
+                                pygame.quit()
+                                sys.exit()
+                            elif name_result == "cancel" or name_result is None:
+                                break
+                            elif name_result:
+                                # Save the profile
+                                profile_manager.save_profile(name_result, key_bindings)
+                                break
+                            profile_name_screen.draw()
+                            clock.tick(60)
+                    elif settings_action == "load":
+                        # Show profile selection screen
+                        profile_selection_screen = ProfileSelectionScreen(screen, sound_manager, profile_manager)
+                        while True:
+                            load_result = profile_selection_screen.handle_events()
+                            if load_result == "quit":
+                                pygame.quit()
+                                sys.exit()
+                            elif load_result == "cancel" or load_result is None:
+                                break
+                            elif load_result:
+                                # Load the selected profile
+                                loaded_bindings = profile_manager.get_profile(load_result)
+                                if loaded_bindings:
+                                    key_bindings.update(loaded_bindings)
+                                    profile_manager.last_profile = load_result
+                                    profile_manager.save_profiles()
+                                break
+                            profile_selection_screen.draw()
+                            clock.tick(60)
                     settings_screen.draw()
                     clock.tick(60)
                 break
