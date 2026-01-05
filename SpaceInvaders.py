@@ -144,6 +144,12 @@ STAR_LAYER2_SPEED = 1.2  # Medium parallax speed
 STAR_LAYER3_BRIGHTNESS = 255  # Brightest (closest)
 STAR_LAYER3_SPEED = 2.0  # Fastest parallax speed
 
+# Controller hat bindings
+HAT_LEFT = "hat_left"
+HAT_RIGHT = "hat_right"
+HAT_UP = "hat_up"
+HAT_DOWN = "hat_down"
+
 
 class ProfileManager:
     """Manages control profiles with save/load functionality"""
@@ -162,11 +168,11 @@ class ProfileManager:
             'player2_fire_key': pygame.K_RCTRL,
             'player2_left_key': pygame.K_a,
             'player2_right_key': pygame.K_d,
-            'player1_left_button': 13,  # D-pad left
-            'player1_right_button': 14,  # D-pad right
+            'player1_left_button': HAT_LEFT,
+            'player1_right_button': HAT_RIGHT,
             'player1_fire_button': 0,  # A button
-            'player2_left_button': 13,  # D-pad left
-            'player2_right_button': 14,  # D-pad right
+            'player2_left_button': HAT_LEFT,
+            'player2_right_button': HAT_RIGHT,
             'player2_fire_button': 0  # A button
         }
 
@@ -2963,9 +2969,24 @@ class Player:
             left_pressed = False
             right_pressed = False
 
-            if left_button is not None and self.controller.get_numbuttons() > left_button:
+            def hat_matches(binding):
+                if binding == HAT_LEFT:
+                    return hat[0] == -1
+                if binding == HAT_RIGHT:
+                    return hat[0] == 1
+                if binding == HAT_UP:
+                    return hat[1] == 1
+                if binding == HAT_DOWN:
+                    return hat[1] == -1
+                return False
+
+            if isinstance(left_button, str):
+                left_pressed = hat_matches(left_button)
+            if isinstance(left_button, int) and self.controller.get_numbuttons() > left_button:
                 left_pressed = self.controller.get_button(left_button)
-            if right_button is not None and self.controller.get_numbuttons() > right_button:
+            if isinstance(right_button, str):
+                right_pressed = hat_matches(right_button)
+            if isinstance(right_button, int) and self.controller.get_numbuttons() > right_button:
                 right_pressed = self.controller.get_button(right_button)
 
             # Also check hat and axis as fallback
@@ -4320,12 +4341,14 @@ class ProfileNameInputScreen:
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
 
-        # Name input system - allow up to 10 characters
-        self.name = ["A", "A", "A", "A", "A", "A", "A", "A", "A", "A"]
-        self.name_length = 3  # Start with 3 characters
+        # Name input system
+        self.max_name_length = 15
+        self.min_name_length = 3
+        self.name = ["A"] * self.max_name_length
+        self.name_length = self.min_name_length  # Start with 3 characters
         self.current_position = 0
         self.alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -"
-        self.current_letter_index = [0] * 10
+        self.current_letter_index = [0] * self.max_name_length
         self.input_mode = "controller"
         self.keyboard_name = ""
         self.ok_selected = False
@@ -4349,14 +4372,14 @@ class ProfileNameInputScreen:
                 if event.key == pygame.K_RETURN:
                     if self.keyboard_name.strip():
                         self.sound_manager.play_sound('menu_select')
-                        return self.keyboard_name.strip()[:15]
+                        return self.keyboard_name.strip()[:self.max_name_length]
                     return None
                 elif event.key == pygame.K_BACKSPACE:
                     self.keyboard_name = self.keyboard_name[:-1]
                 elif event.key == pygame.K_ESCAPE:
                     self.sound_manager.play_sound('menu_select')
                     return "cancel"
-                elif len(self.keyboard_name) < 15 and event.unicode.isprintable():
+                elif len(self.keyboard_name) < self.max_name_length and event.unicode.isprintable():
                     self.keyboard_name += event.unicode.upper()
 
             elif event.type == pygame.JOYBUTTONDOWN:
@@ -4380,10 +4403,10 @@ class ProfileNameInputScreen:
                         self.sound_manager.play_sound('menu_select')
                         return "cancel"
                 elif event.button == 2:  # X button - increase length
-                    if self.name_length < 10:
+                    if self.name_length < self.max_name_length:
                         self.name_length += 1
                 elif event.button == 3:  # Y button - decrease length
-                    if self.name_length > 3:
+                    if self.name_length > self.min_name_length:
                         self.name_length -= 1
                         if self.current_position >= self.name_length:
                             self.current_position = self.name_length - 1
@@ -4434,7 +4457,7 @@ class ProfileNameInputScreen:
             prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
             self.screen.blit(prompt_text, prompt_rect)
 
-            name_display = self.keyboard_name + "_" if len(self.keyboard_name) < 15 else self.keyboard_name
+            name_display = self.keyboard_name + "_" if len(self.keyboard_name) < self.max_name_length else self.keyboard_name
             name_text = self.font_large.render(name_display, True, CYAN)
             name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, 500))
 
@@ -4638,6 +4661,20 @@ class SettingsScreen:
         else:
             return name.upper()
 
+    def get_controller_binding_name(self, binding):
+        """Get a readable name for a controller binding"""
+        if isinstance(binding, str):
+            if binding == HAT_LEFT:
+                return "D-pad Left"
+            if binding == HAT_RIGHT:
+                return "D-pad Right"
+            if binding == HAT_UP:
+                return "D-pad Up"
+            if binding == HAT_DOWN:
+                return "D-pad Down"
+            return binding.upper()
+        return f"Button {binding}"
+
     def show_message(self, message):
         """Show a temporary message on screen"""
         self.message = message
@@ -4711,7 +4748,22 @@ class SettingsScreen:
                         self.sound_manager.play_sound('menu_select')
                         return "back"
             elif event.type == pygame.JOYHATMOTION:
-                if not self.awaiting_input:
+                if self.awaiting_input and self.awaiting_input_type == "controller":
+                    if self.awaiting_input_for:
+                        if event.value[0] != 0:
+                            binding = HAT_LEFT if event.value[0] < 0 else HAT_RIGHT
+                        elif event.value[1] != 0:
+                            binding = HAT_UP if event.value[1] > 0 else HAT_DOWN
+                        else:
+                            binding = None
+
+                        if binding:
+                            self.key_bindings[self.awaiting_input_for] = binding
+                            self.sound_manager.play_sound('menu_select')
+                            self.awaiting_input = False
+                            self.awaiting_input_for = None
+                            self.awaiting_input_type = None
+                elif not self.awaiting_input:
                     if event.value[1] == 1:  # Up
                         self.sound_manager.play_sound('menu_change')
                         self.selected_option = (self.selected_option - 1) % len(self.options)
@@ -4739,7 +4791,7 @@ class SettingsScreen:
             if self.awaiting_input_type == "keyboard":
                 prompt_text = self.font_medium.render("Press any key...", True, YELLOW)
             else:
-                prompt_text = self.font_medium.render("Press any button...", True, YELLOW)
+                prompt_text = self.font_medium.render("Press any button or D-pad direction...", True, YELLOW)
             prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 500))
             self.screen.blit(prompt_text, prompt_rect)
 
@@ -4779,8 +4831,8 @@ class SettingsScreen:
                     y_offset = i
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, keyboard_start_y + y_offset * spacing))
                 elif input_type == "controller":
-                    button_num = self.key_bindings[binding_key]
-                    option_text = self.font_small.render(f"{display_text}: Button {button_num}", True, color)
+                    binding_name = self.get_controller_binding_name(self.key_bindings[binding_key])
+                    option_text = self.font_small.render(f"{display_text}: {binding_name}", True, color)
                     # Position in controller section (indices 6-11)
                     y_offset = i - 6
                     option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, controller_start_y + y_offset * spacing))
@@ -7177,7 +7229,7 @@ def main():
                             if name_result == "quit":
                                 pygame.quit()
                                 sys.exit()
-                            elif name_result == "cancel" or name_result is None:
+                            elif name_result == "cancel":
                                 break
                             elif name_result:
                                 # Save the profile
@@ -7194,7 +7246,7 @@ def main():
                             if load_result == "quit":
                                 pygame.quit()
                                 sys.exit()
-                            elif load_result == "cancel" or load_result is None:
+                            elif load_result == "cancel":
                                 break
                             elif load_result:
                                 # Load the selected profile
