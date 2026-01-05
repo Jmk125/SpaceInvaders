@@ -50,7 +50,6 @@ BOSS_HEALTH_BASE = 50  # Base boss health
 BOSS_HEALTH_PER_LEVEL = 10  # Additional health per boss level
 BOSS_SPEED_BASE = 2.0  # Base boss speed
 BOSS_SHOOT_FREQUENCY = 50  # Lower = more frequent shooting
-ENEMY_SPEED_PROGRESSION = 0.10  # Speed increase per boss level (every 5 levels) -.15 default
 
 # Enemy In-Combat Speed Progression (as enemies are destroyed)
 ENEMY_GRID_TOTAL = 60  # Total enemies in a standard grid (5 rows × 12 columns)
@@ -79,7 +78,12 @@ ENEMY_SPEED_THRESHOLDS = [
 ]
 
 # Per-Level Progression Configuration
-ENEMY_SPEED_LEVEL_INTERVAL = 5  # Enemy speed increases every N levels
+# --- Enemy Speed Progression Between Levels ---
+ENEMY_SPEED_PROGRESSION = 0.10  # How much speed increases per interval (moved from line 53 for clarity)
+USE_BOSS_BASED_SPEED_PROGRESSION = False  # True = speed increases after each boss, False = increases every N levels
+ENEMY_SPEED_LEVEL_INTERVAL = 5  # Enemy speed increases every N levels (only used when USE_BOSS_BASED_SPEED_PROGRESSION = False)
+
+# --- Boss Scheduling ---
 BOSS_FIRST_LEVEL = 4  # Level where first boss appears
 BOSS_INITIAL_GAP = 4  # Gap before first boss (level 4)
 BOSS_GAP_INCREMENT = 1  # Each subsequent boss requires N more levels (gap increases by 1)
@@ -5040,10 +5044,31 @@ class Game:
             # For now just create barriers
             self.create_barriers()
 
+    def count_bosses_before_level(self, level):
+        """Count how many boss levels occur before the given level.
+        Used for boss-based speed progression."""
+        boss_count = 0
+        boss_level = BOSS_FIRST_LEVEL
+        gap = BOSS_INITIAL_GAP
+
+        while boss_level < level:
+            boss_count += 1
+            gap += BOSS_GAP_INCREMENT
+            boss_level += gap
+
+        return boss_count
+
     def calculate_enemy_speed_for_level(self, level):
-        # Enemy speed increases every N levels (configurable)
-        speed_level = ((level - 1) // ENEMY_SPEED_LEVEL_INTERVAL) + 1
-        speed_increase = (speed_level - 1) * ENEMY_SPEED_PROGRESSION
+        # Enemy speed increases based on configuration
+        if USE_BOSS_BASED_SPEED_PROGRESSION:
+            # Speed increases after each boss defeated
+            bosses_defeated = self.count_bosses_before_level(level)
+            speed_increase = bosses_defeated * ENEMY_SPEED_PROGRESSION
+        else:
+            # Speed increases every N levels (legacy behavior)
+            speed_level = ((level - 1) // ENEMY_SPEED_LEVEL_INTERVAL) + 1
+            speed_increase = (speed_level - 1) * ENEMY_SPEED_PROGRESSION
+
         return BASE_ENEMY_SPEED + speed_increase
 
     def is_level_a_boss_level(self, level):
