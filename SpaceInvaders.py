@@ -5230,7 +5230,11 @@ class Game:
         if key_bindings is None:
             key_bindings = {
                 'player1_fire_key': pygame.K_SPACE,
+                'player1_left_key': pygame.K_LEFT,
+                'player1_right_key': pygame.K_RIGHT,
                 'player2_fire_key': pygame.K_RCTRL,
+                'player2_left_key': pygame.K_a,
+                'player2_right_key': pygame.K_d,
                 'player1_fire_button': 0,  # Controller button 0 (A button)
                 'player2_fire_button': 0   # Controller button 0 (A button)
             }
@@ -6060,9 +6064,9 @@ class Game:
             keys = pygame.key.get_pressed()
 
             if len(self.players) > 0:
-                if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                if keys[self.key_bindings['player1_left_key']]:
                     self.players[0].move_left()
-                if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                if keys[self.key_bindings['player1_right_key']]:
                     self.players[0].move_right()
 
                 # Auto-fire: check if fire key is held and auto-fire upgrade is active
@@ -6128,9 +6132,9 @@ class Game:
 
             if self.coop_mode and len(self.players) > 1:
                 if not self.players[1].controller:
-                    if keys[pygame.K_LEFT]:
+                    if keys[self.key_bindings['player2_left_key']]:
                         self.players[1].move_left()
-                    if keys[pygame.K_RIGHT]:
+                    if keys[self.key_bindings['player2_right_key']]:
                         self.players[1].move_right()
                     # Auto-fire for player 2
                     if keys[self.key_bindings['player2_fire_key']] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
@@ -7067,13 +7071,9 @@ def main():
     # Initialize sound manager
     sound_manager = SoundManager()
 
-    # Initialize key bindings with defaults
-    key_bindings = {
-        'player1_fire_key': pygame.K_SPACE,
-        'player2_fire_key': pygame.K_RCTRL,
-        'player1_fire_button': 0,  # Controller button 0 (A button)
-        'player2_fire_button': 0   # Controller button 0 (A button)
-    }
+    # Initialize profile manager and load last profile (or defaults)
+    profile_manager = ProfileManager()
+    key_bindings = profile_manager.get_last_profile_bindings()
 
     try:
         screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
@@ -7103,7 +7103,7 @@ def main():
                     clock.tick(60)
                 break
             elif action == "settings":
-                settings_screen = SettingsScreen(screen, sound_manager, key_bindings)
+                settings_screen = SettingsScreen(screen, sound_manager, key_bindings, profile_manager)
                 while True:
                     settings_action = settings_screen.handle_events()
                     if settings_action == "back":
@@ -7111,6 +7111,42 @@ def main():
                     elif settings_action == "quit":
                         pygame.quit()
                         sys.exit()
+                    elif settings_action == "save":
+                        # Show profile name input screen
+                        profile_name_screen = ProfileNameInputScreen(screen, sound_manager)
+                        while True:
+                            name_result = profile_name_screen.handle_events()
+                            if name_result == "quit":
+                                pygame.quit()
+                                sys.exit()
+                            elif name_result == "cancel" or name_result is None:
+                                break
+                            elif name_result:
+                                # Save the profile
+                                profile_manager.save_profile(name_result, key_bindings)
+                                break
+                            profile_name_screen.draw()
+                            clock.tick(60)
+                    elif settings_action == "load":
+                        # Show profile selection screen
+                        profile_selection_screen = ProfileSelectionScreen(screen, sound_manager, profile_manager)
+                        while True:
+                            load_result = profile_selection_screen.handle_events()
+                            if load_result == "quit":
+                                pygame.quit()
+                                sys.exit()
+                            elif load_result == "cancel" or load_result is None:
+                                break
+                            elif load_result:
+                                # Load the selected profile
+                                loaded_bindings = profile_manager.get_profile(load_result)
+                                if loaded_bindings:
+                                    key_bindings.update(loaded_bindings)
+                                    profile_manager.last_profile = load_result
+                                    profile_manager.save_profiles()
+                                break
+                            profile_selection_screen.draw()
+                            clock.tick(60)
                     settings_screen.draw()
                     clock.tick(60)
                 break
