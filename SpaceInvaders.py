@@ -2870,7 +2870,7 @@ class Player:
         ammo_count = int(base_ammo * self.get_powerup_duration_multiplier())
         self.add_ammo_power_up('multi_shot', ammo_count)
         
-    def handle_controller_input(self, shoot_callback=None):
+    def handle_controller_input(self, shoot_callback=None, fire_button=0):
         if not self.is_alive:
             return
         if self.controller:
@@ -2884,7 +2884,7 @@ class Player:
 
             # Auto-fire support for controller
             if self.upgrades.has_auto_fire() and shoot_callback:
-                button_pressed = self.controller.get_button(0) if self.controller.get_numbuttons() > 0 else False
+                button_pressed = self.controller.get_button(fire_button) if self.controller.get_numbuttons() > fire_button else False
                 if button_pressed:
                     shoot_callback()
                 
@@ -4227,11 +4227,20 @@ class SettingsScreen:
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
+        self.font_tiny = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
 
-        self.options = ["Player 1 Fire Button", "Player 2 Fire Button", "Back"]
+        # Options organized as (display_text, binding_key, input_type)
+        self.options = [
+            ("Keyboard - P1 Fire", "player1_fire_key", "keyboard"),
+            ("Keyboard - P2 Fire", "player2_fire_key", "keyboard"),
+            ("Controller - P1 Fire", "player1_fire_button", "controller"),
+            ("Controller - P2 Fire", "player2_fire_button", "controller"),
+            ("Back", None, None)
+        ]
         self.selected_option = 0
-        self.awaiting_key = False  # Whether we're waiting for a key press
-        self.awaiting_key_for = None  # Which option is being remapped
+        self.awaiting_input = False  # Whether we're waiting for input
+        self.awaiting_input_for = None  # Which binding key is being remapped
+        self.awaiting_input_type = None  # "keyboard" or "controller"
 
         # Starfield background
         self.starfield = StarField(direction='horizontal')
@@ -4254,16 +4263,13 @@ class SettingsScreen:
             if event.type == pygame.QUIT:
                 return "quit"
             elif event.type == pygame.KEYDOWN:
-                if self.awaiting_key:
-                    # We're waiting for a key press to assign
-                    if self.awaiting_key_for == "player1":
-                        self.key_bindings['player1_fire'] = event.key
-                    elif self.awaiting_key_for == "player2":
-                        self.key_bindings['player2_fire'] = event.key
-
+                if self.awaiting_input and self.awaiting_input_type == "keyboard":
+                    # We're waiting for a keyboard key press to assign
+                    self.key_bindings[self.awaiting_input_for] = event.key
                     self.sound_manager.play_sound('menu_select')
-                    self.awaiting_key = False
-                    self.awaiting_key_for = None
+                    self.awaiting_input = False
+                    self.awaiting_input_for = None
+                    self.awaiting_input_type = None
                 else:
                     # Normal menu navigation
                     if event.key in (pygame.K_UP, pygame.K_w):
@@ -4273,18 +4279,48 @@ class SettingsScreen:
                         self.sound_manager.play_sound('menu_change')
                         self.selected_option = (self.selected_option + 1) % len(self.options)
                     elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
-                        self.sound_manager.play_sound('menu_select')
-                        selected_text = self.options[self.selected_option]
-                        if selected_text == "Player 1 Fire Button":
-                            self.awaiting_key = True
-                            self.awaiting_key_for = "player1"
-                        elif selected_text == "Player 2 Fire Button":
-                            self.awaiting_key = True
-                            self.awaiting_key_for = "player2"
-                        elif selected_text == "Back":
+                        selected = self.options[self.selected_option]
+                        if selected[1] is None:  # Back option
+                            self.sound_manager.play_sound('menu_select')
                             return "back"
+                        else:
+                            self.sound_manager.play_sound('menu_select')
+                            self.awaiting_input = True
+                            self.awaiting_input_for = selected[1]
+                            self.awaiting_input_type = selected[2]
                     elif event.key == pygame.K_ESCAPE:
                         return "back"
+            elif event.type == pygame.JOYBUTTONDOWN:
+                if self.awaiting_input and self.awaiting_input_type == "controller":
+                    # We're waiting for a controller button press to assign
+                    self.key_bindings[self.awaiting_input_for] = event.button
+                    self.sound_manager.play_sound('menu_select')
+                    self.awaiting_input = False
+                    self.awaiting_input_for = None
+                    self.awaiting_input_type = None
+                elif not self.awaiting_input:
+                    # Normal menu navigation with controller
+                    if event.button == 0:  # A button - select
+                        selected = self.options[self.selected_option]
+                        if selected[1] is None:  # Back option
+                            self.sound_manager.play_sound('menu_select')
+                            return "back"
+                        else:
+                            self.sound_manager.play_sound('menu_select')
+                            self.awaiting_input = True
+                            self.awaiting_input_for = selected[1]
+                            self.awaiting_input_type = selected[2]
+                    elif event.button == 1:  # B button - back
+                        self.sound_manager.play_sound('menu_select')
+                        return "back"
+            elif event.type == pygame.JOYHATMOTION:
+                if not self.awaiting_input:
+                    if event.value[1] == 1:  # Up
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_option = (self.selected_option - 1) % len(self.options)
+                    elif event.value[1] == -1:  # Down
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_option = (self.selected_option + 1) % len(self.options)
 
         return None
 
@@ -4297,41 +4333,59 @@ class SettingsScreen:
 
         # Title
         title_text = self.font_large.render("SETTINGS", True, GREEN)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 150))
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 120))
         self.screen.blit(title_text, title_rect)
 
-        # Check if we're awaiting a key press
-        if self.awaiting_key:
-            # Show "Press any key..." prompt
-            prompt_text = self.font_medium.render("Press any key...", True, YELLOW)
-            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
+        # Check if we're awaiting input
+        if self.awaiting_input:
+            # Show appropriate prompt based on input type
+            if self.awaiting_input_type == "keyboard":
+                prompt_text = self.font_medium.render("Press any key...", True, YELLOW)
+            else:
+                prompt_text = self.font_medium.render("Press any button...", True, YELLOW)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 450))
             self.screen.blit(prompt_text, prompt_rect)
 
             # Show which setting is being changed
-            if self.awaiting_key_for == "player1":
-                setting_text = self.font_small.render("Player 1 Fire Button", True, WHITE)
-            else:
-                setting_text = self.font_small.render("Player 2 Fire Button", True, WHITE)
-            setting_rect = setting_text.get_rect(center=(SCREEN_WIDTH // 2, 350))
+            option_display = self.options[self.selected_option][0]
+            setting_text = self.font_small.render(option_display, True, WHITE)
+            setting_rect = setting_text.get_rect(center=(SCREEN_WIDTH // 2, 400))
             self.screen.blit(setting_text, setting_rect)
         else:
+            # Section headers
+            keyboard_header = self.font_small.render("KEYBOARD CONTROLS", True, CYAN)
+            keyboard_rect = keyboard_header.get_rect(center=(SCREEN_WIDTH // 2, 220))
+            self.screen.blit(keyboard_header, keyboard_rect)
+
+            controller_header = self.font_small.render("CONTROLLER INPUTS", True, CYAN)
+            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, 450))
+            self.screen.blit(controller_header, controller_rect)
+
             # Show menu options with current bindings
-            start_y = 300
-            spacing = 80
+            keyboard_start_y = 270
+            controller_start_y = 500
+            spacing = 60
 
             for i, option in enumerate(self.options):
+                display_text, binding_key, input_type = option
                 color = YELLOW if i == self.selected_option else WHITE
 
-                if option == "Player 1 Fire Button":
-                    key_name = self.get_key_name(self.key_bindings['player1_fire'])
-                    option_text = self.font_medium.render(f"{option}: {key_name}", True, color)
-                elif option == "Player 2 Fire Button":
-                    key_name = self.get_key_name(self.key_bindings['player2_fire'])
-                    option_text = self.font_medium.render(f"{option}: {key_name}", True, color)
-                else:
-                    option_text = self.font_medium.render(option, True, color)
+                if binding_key is None:  # Back option
+                    option_text = self.font_medium.render(display_text, True, color)
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 680))
+                elif input_type == "keyboard":
+                    key_name = self.get_key_name(self.key_bindings[binding_key])
+                    option_text = self.font_medium.render(f"{display_text}: {key_name}", True, color)
+                    # Position in keyboard section
+                    y_offset = 0 if i == 0 else 1
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, keyboard_start_y + y_offset * spacing))
+                else:  # controller
+                    button_num = self.key_bindings[binding_key]
+                    option_text = self.font_medium.render(f"{display_text}: Button {button_num}", True, color)
+                    # Position in controller section
+                    y_offset = 0 if i == 2 else 1
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, controller_start_y + y_offset * spacing))
 
-                option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
                 self.screen.blit(option_text, option_rect)
 
         pygame.display.flip()
@@ -4796,8 +4850,10 @@ class Game:
         # Key bindings for player controls
         if key_bindings is None:
             key_bindings = {
-                'player1_fire': pygame.K_SPACE,
-                'player2_fire': pygame.K_RCTRL
+                'player1_fire_key': pygame.K_SPACE,
+                'player2_fire_key': pygame.K_RCTRL,
+                'player1_fire_button': 0,  # Controller button 0 (A button)
+                'player2_fire_button': 0   # Controller button 0 (A button)
             }
         self.key_bindings = key_bindings
         self.awaiting_name_input = False
@@ -5418,7 +5474,7 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == self.key_bindings['player1_fire'] and not self.game_over:
+                if event.key == self.key_bindings['player1_fire_key'] and not self.game_over:
                     if len(self.players) > 0 and self.players[0].is_alive:
                         player = self.players[0]
                         # Determine shot type for stats tracking
@@ -5451,7 +5507,7 @@ class Game:
                             elif shot_type == 'muzzle_flash_flashes':
                                 # Add muzzle flash circles to the flash list
                                 self.muzzle_flash_flashes.extend(shot)
-                elif event.key == self.key_bindings['player2_fire'] and not self.game_over and self.coop_mode:
+                elif event.key == self.key_bindings['player2_fire_key'] and not self.game_over and self.coop_mode:
                     if len(self.players) > 1 and self.players[1].is_alive:
                         player = self.players[1]
                         # Determine shot type for stats tracking
@@ -5507,7 +5563,9 @@ class Game:
                     # Normal controller shooting
                     for i, player in enumerate(self.players):
                         if player.controller and event.joy == player.controller.get_instance_id() and player.is_alive:
-                            if event.button == 0:
+                            # Check which player and use their configured fire button
+                            fire_button = self.key_bindings['player1_fire_button'] if i == 0 else self.key_bindings['player2_fire_button']
+                            if event.button == fire_button:
                                 # Determine shot type for stats tracking
                                 if player.has_laser:
                                     shot_stat_type = 'laser'
@@ -5629,7 +5687,7 @@ class Game:
                     self.players[0].move_right()
 
                 # Auto-fire: check if fire key is held and auto-fire upgrade is active
-                if keys[self.key_bindings['player1_fire']] and self.players[0].is_alive and self.players[0].upgrades.has_auto_fire():
+                if keys[self.key_bindings['player1_fire_key']] and self.players[0].is_alive and self.players[0].upgrades.has_auto_fire():
                     player = self.players[0]
                     # Determine shot type for stats tracking
                     if player.has_laser:
@@ -5687,7 +5745,7 @@ class Game:
                         elif shot_type == 'muzzle_flash_flashes':
                             self.muzzle_flash_flashes.extend(shot)
 
-                self.players[0].handle_controller_input(player1_shoot)
+                self.players[0].handle_controller_input(player1_shoot, self.key_bindings['player1_fire_button'])
 
             if self.coop_mode and len(self.players) > 1:
                 if not self.players[1].controller:
@@ -5696,7 +5754,7 @@ class Game:
                     if keys[pygame.K_RIGHT]:
                         self.players[1].move_right()
                     # Auto-fire for player 2
-                    if keys[self.key_bindings['player2_fire']] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
+                    if keys[self.key_bindings['player2_fire_key']] and self.players[1].is_alive and self.players[1].upgrades.has_auto_fire():
                         player = self.players[1]
                         # Determine shot type for stats tracking
                         if player.has_laser:
@@ -5754,7 +5812,7 @@ class Game:
                             elif shot_type == 'muzzle_flash_flashes':
                                 self.muzzle_flash_flashes.extend(shot)
 
-                    self.players[1].handle_controller_input(player2_shoot)
+                    self.players[1].handle_controller_input(player2_shoot, self.key_bindings['player2_fire_button'])
     
     def activate_power_up(self, player, power_type):
         if power_type == 'rapid_fire':
@@ -6632,8 +6690,10 @@ def main():
 
     # Initialize key bindings with defaults
     key_bindings = {
-        'player1_fire': pygame.K_SPACE,
-        'player2_fire': pygame.K_RCTRL
+        'player1_fire_key': pygame.K_SPACE,
+        'player2_fire_key': pygame.K_RCTRL,
+        'player1_fire_button': 0,  # Controller button 0 (A button)
+        'player2_fire_button': 0   # Controller button 0 (A button)
     }
 
     try:
