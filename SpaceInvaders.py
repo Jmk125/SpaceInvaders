@@ -54,9 +54,29 @@ ENEMY_SPEED_PROGRESSION = 0.10  # Speed increase per boss level (every 5 levels)
 
 # Enemy In-Combat Speed Progression (as enemies are destroyed)
 ENEMY_GRID_TOTAL = 60  # Total enemies in a standard grid (5 rows × 12 columns)
+
+# --- LEGACY LINEAR PROGRESSION (used when USE_THRESHOLD_PROGRESSION = False) ---
 ENEMY_SPEED_MULTIPLIER_MAX = 10  # Max speed multiplier when most enemies destroyed - 14 default
 ENEMY_SPEED_FINAL_THRESHOLD = 5  # Number of remaining enemies to trigger extra speed boost
 ENEMY_SPEED_FINAL_MULTIPLIER = 2  # Per-enemy multiplier when below threshold
+ENEMY_SPEED_PROGRESSION_EXPONENT = 1.0  # Exponent for progression curve (1.0=linear, 2.0=quadratic, 0.5=sqrt)
+
+# --- THRESHOLD-BASED PROGRESSION (used when USE_THRESHOLD_PROGRESSION = True) ---
+# Gives you precise control over speed at specific enemy counts
+# Format: List of (remaining_enemies, speed_multiplier) tuples
+# The system will use the highest applicable multiplier based on remaining enemies
+USE_THRESHOLD_PROGRESSION = False  # Set to True to use threshold-based system instead of formula-based
+ENEMY_SPEED_THRESHOLDS = [
+    (55, 1.0),   # 55+ enemies remaining: 1.0x base speed (no boost)
+    (45, 1.5),   # 45-54 enemies: 1.5x base speed
+    (35, 2.5),   # 35-44 enemies: 2.5x base speed
+    (25, 4.0),   # 25-34 enemies: 4.0x base speed
+    (15, 6.5),   # 15-24 enemies: 6.5x base speed
+    (10, 9.0),   # 10-14 enemies: 9.0x base speed
+    (5, 12.0),   # 5-9 enemies: 12.0x base speed
+    (3, 16.0),   # 3-4 enemies: 16.0x base speed
+    (1, 22.0),   # 1-2 enemies: 22.0x base speed (intense!)
+]
 
 # Per-Level Progression Configuration
 ENEMY_SPEED_LEVEL_INTERVAL = 5  # Enemy speed increases every N levels
@@ -5126,12 +5146,29 @@ class Game:
         total_enemies = ENEMY_GRID_TOTAL
         remaining_enemies = len(self.enemies)
         if remaining_enemies > 0:
-            destroyed_ratio = (total_enemies - remaining_enemies) / total_enemies
-            speed_multiplier = 1 + destroyed_ratio * ENEMY_SPEED_MULTIPLIER_MAX
+            if USE_THRESHOLD_PROGRESSION:
+                # Threshold-based progression: precise control at specific enemy counts
+                # Iterate through thresholds to find the best matching multiplier
+                # (list should be sorted descending, lowest threshold = highest multiplier)
+                speed_multiplier = 1.0  # Default fallback
+                for threshold_enemies, multiplier in ENEMY_SPEED_THRESHOLDS:
+                    if remaining_enemies <= threshold_enemies:
+                        speed_multiplier = multiplier
+                    # Keep iterating to find the lowest applicable threshold
+            else:
+                # Formula-based progression with configurable curve
+                destroyed_ratio = (total_enemies - remaining_enemies) / total_enemies
+                # Apply exponent to curve the progression:
+                # - 1.0 = linear (default)
+                # - 2.0 = quadratic (accelerates faster)
+                # - 0.5 = square root (accelerates slower)
+                curved_ratio = destroyed_ratio ** ENEMY_SPEED_PROGRESSION_EXPONENT
+                speed_multiplier = 1 + curved_ratio * ENEMY_SPEED_MULTIPLIER_MAX
 
-            if remaining_enemies <= ENEMY_SPEED_FINAL_THRESHOLD:
-                extra_multiplier = (ENEMY_SPEED_FINAL_THRESHOLD - remaining_enemies + 1) * ENEMY_SPEED_FINAL_MULTIPLIER
-                speed_multiplier += extra_multiplier
+                # Legacy final threshold boost (only in formula mode)
+                if remaining_enemies <= ENEMY_SPEED_FINAL_THRESHOLD:
+                    extra_multiplier = (ENEMY_SPEED_FINAL_THRESHOLD - remaining_enemies + 1) * ENEMY_SPEED_FINAL_MULTIPLIER
+                    speed_multiplier += extra_multiplier
 
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
