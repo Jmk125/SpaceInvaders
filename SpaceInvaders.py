@@ -150,6 +150,12 @@ HAT_RIGHT = "hat_right"
 HAT_UP = "hat_up"
 HAT_DOWN = "hat_down"
 
+# Controller axis bindings (for arcade joysticks and analog sticks)
+AXIS_LEFT = "axis_left"
+AXIS_RIGHT = "axis_right"
+AXIS_UP = "axis_up"
+AXIS_DOWN = "axis_down"
+
 
 class ProfileManager:
     """Manages control profiles with save/load functionality"""
@@ -2964,6 +2970,7 @@ class Player:
         if self.controller:
             hat = self.controller.get_hat(0) if self.controller.get_numhats() > 0 else (0, 0)
             axis_x = self.controller.get_axis(0) if self.controller.get_numaxes() > 0 else 0
+            axis_y = self.controller.get_axis(1) if self.controller.get_numaxes() > 1 else 0
 
             # Check for left movement: button, hat, or axis
             left_pressed = False
@@ -2980,12 +2987,24 @@ class Player:
                     return hat[1] == -1
                 return False
 
+            def axis_matches(binding):
+                threshold = 0.3
+                if binding == AXIS_LEFT:
+                    return axis_x < -threshold
+                if binding == AXIS_RIGHT:
+                    return axis_x > threshold
+                if binding == AXIS_UP:
+                    return axis_y < -threshold
+                if binding == AXIS_DOWN:
+                    return axis_y > threshold
+                return False
+
             if isinstance(left_button, str):
-                left_pressed = hat_matches(left_button)
+                left_pressed = hat_matches(left_button) or axis_matches(left_button)
             if isinstance(left_button, int) and self.controller.get_numbuttons() > left_button:
                 left_pressed = self.controller.get_button(left_button)
             if isinstance(right_button, str):
-                right_pressed = hat_matches(right_button)
+                right_pressed = hat_matches(right_button) or axis_matches(right_button)
             if isinstance(right_button, int) and self.controller.get_numbuttons() > right_button:
                 right_pressed = self.controller.get_button(right_button)
 
@@ -4672,6 +4691,14 @@ class SettingsScreen:
                 return "D-pad Up"
             if binding == HAT_DOWN:
                 return "D-pad Down"
+            if binding == AXIS_LEFT:
+                return "Joystick Left"
+            if binding == AXIS_RIGHT:
+                return "Joystick Right"
+            if binding == AXIS_UP:
+                return "Joystick Up"
+            if binding == AXIS_DOWN:
+                return "Joystick Down"
             return binding.upper()
         return f"Button {binding}"
 
@@ -4770,6 +4797,35 @@ class SettingsScreen:
                     elif event.value[1] == -1:  # Down
                         self.sound_manager.play_sound('menu_change')
                         self.selected_option = (self.selected_option + 1) % len(self.options)
+            elif event.type == pygame.JOYAXISMOTION:
+                if self.awaiting_input and self.awaiting_input_type == "controller":
+                    if self.awaiting_input_for:
+                        # Use a threshold to detect significant axis movement
+                        threshold = 0.5
+                        binding = None
+
+                        if abs(event.value) > threshold:
+                            if event.axis == 0:  # X-axis (left/right)
+                                binding = AXIS_LEFT if event.value < 0 else AXIS_RIGHT
+                            elif event.axis == 1:  # Y-axis (up/down)
+                                binding = AXIS_UP if event.value < 0 else AXIS_DOWN
+
+                        if binding:
+                            self.key_bindings[self.awaiting_input_for] = binding
+                            self.sound_manager.play_sound('menu_select')
+                            self.awaiting_input = False
+                            self.awaiting_input_for = None
+                            self.awaiting_input_type = None
+                elif not self.awaiting_input:
+                    # Allow axis motion for menu navigation
+                    threshold = 0.5
+                    if event.axis == 1:  # Y-axis
+                        if event.value < -threshold:  # Up
+                            self.sound_manager.play_sound('menu_change')
+                            self.selected_option = (self.selected_option - 1) % len(self.options)
+                        elif event.value > threshold:  # Down
+                            self.sound_manager.play_sound('menu_change')
+                            self.selected_option = (self.selected_option + 1) % len(self.options)
 
         return None
 
