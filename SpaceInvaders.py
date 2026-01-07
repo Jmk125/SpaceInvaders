@@ -685,11 +685,12 @@ class FloatingText:
         screen.blit(text_surface, (self.x, self.y))
         
 class LevelUpScreen:
-    def __init__(self, screen, players, is_coop=False, sound_manager=None, xp_level=1, game_level=1, score=0):
+    def __init__(self, screen, players, is_coop=False, sound_manager=None, xp_level=1, game_level=1, score=0, key_bindings=None):
         self.screen = screen
         self.players = players
         self.is_coop = is_coop
         self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
         self.xp_level = xp_level
         self.game_level = game_level
         self.score = score
@@ -973,7 +974,8 @@ class LevelUpScreen:
             elif event.type == pygame.JOYBUTTONDOWN:
                 if not self.is_coop:
                     # Single player controller
-                    if event.button == 0:  # A button
+                    fire_button = self.key_bindings.get('player1_fire_button', 0)
+                    if isinstance(fire_button, int) and event.button == fire_button:
                         options = self.get_options_for_player(0)
                         stat_name = options[self.current_selection][0]
                         if stat_name == "save_and_quit":
@@ -1011,7 +1013,8 @@ class LevelUpScreen:
                 else:
                     # Co-op controller handling
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
-                        if event.button == 0:  # A button
+                        fire_button = self.key_bindings.get('player1_fire_button', 0)
+                        if isinstance(fire_button, int) and event.button == fire_button:
                             p1_options = self.get_options_for_player(0)
                             stat_name = p1_options[self.player1_selection][0]
                             if stat_name == "save_and_quit":
@@ -1043,7 +1046,8 @@ class LevelUpScreen:
                                 self.player1_confirmed = True
 
                     if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
-                        if event.button == 0:  # A button
+                        fire_button = self.key_bindings.get('player2_fire_button', 0)
+                        if isinstance(fire_button, int) and event.button == fire_button:
                             p2_options = self.get_options_for_player(1)
                             stat_name = p2_options[self.player2_selection][0]
                             if stat_name == "save_and_quit":
@@ -1116,7 +1120,51 @@ class LevelUpScreen:
                                 self.sound_manager.play_sound('menu_change')
                             p2_options = self.get_options_for_player(1)
                             self.player2_selection = (self.player2_selection + 1) % len(p2_options)
-                            
+
+            elif event.type == pygame.JOYAXISMOTION:
+                # Support joystick axis for menu navigation
+                threshold = 0.5
+                if not self.is_coop:
+                    # Single player controller
+                    if event.axis == 1:  # Y-axis
+                        if event.value < -threshold:  # Up
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            options = self.get_options_for_player(0)
+                            self.current_selection = (self.current_selection - 1) % len(options)
+                        elif event.value > threshold:  # Down
+                            if self.sound_manager:
+                                self.sound_manager.play_sound('menu_change')
+                            options = self.get_options_for_player(0)
+                            self.current_selection = (self.current_selection + 1) % len(options)
+                else:
+                    # Co-op controller handling
+                    if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
+                        if event.axis == 1:  # Y-axis
+                            if event.value < -threshold:  # Up
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_change')
+                                p1_options = self.get_options_for_player(0)
+                                self.player1_selection = (self.player1_selection - 1) % len(p1_options)
+                            elif event.value > threshold:  # Down
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_change')
+                                p1_options = self.get_options_for_player(0)
+                                self.player1_selection = (self.player1_selection + 1) % len(p1_options)
+
+                    if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
+                        if event.axis == 1:  # Y-axis
+                            if event.value < -threshold:  # Up
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_change')
+                                p2_options = self.get_options_for_player(1)
+                                self.player2_selection = (self.player2_selection - 1) % len(p2_options)
+                            elif event.value > threshold:  # Down
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_change')
+                                p2_options = self.get_options_for_player(1)
+                                self.player2_selection = (self.player2_selection + 1) % len(p2_options)
+
         return None
         
     def create_upgrade_effect(self, player_index, stat_name, old_multiplier, new_multiplier):
@@ -2367,10 +2415,11 @@ class NameInputScreen:
         pygame.display.flip()
 
 class HighScoreScreen:
-    def __init__(self, screen, score_manager, sound_manager, player_stats=None, players=None):
+    def __init__(self, screen, score_manager, sound_manager, player_stats=None, players=None, key_bindings=None):
         self.screen = screen
         self.score_manager = score_manager
         self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -2390,11 +2439,19 @@ class HighScoreScreen:
                     self.sound_manager.play_sound('menu_change')
                     self.viewing_coop = not self.viewing_coop
             elif event.type == pygame.JOYBUTTONDOWN:
-                if event.button == 0 or event.button == 1:  # A or B button
+                # Use fire button or B button to go back
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 1:
                     self.sound_manager.play_sound('menu_select')
                     return "back"
             elif event.type == pygame.JOYHATMOTION:
                 if event.value[0] != 0:  # Left or Right
+                    self.sound_manager.play_sound('menu_change')
+                    self.viewing_coop = not self.viewing_coop
+            elif event.type == pygame.JOYAXISMOTION:
+                # Support joystick axis for switching modes
+                threshold = 0.5
+                if event.axis == 0 and abs(event.value) > threshold:  # X-axis
                     self.sound_manager.play_sound('menu_change')
                     self.viewing_coop = not self.viewing_coop
         return None
@@ -4353,9 +4410,10 @@ class Barrier:
 
 class ProfileNameInputScreen:
     """Screen for entering a profile name (similar to NameInputScreen)"""
-    def __init__(self, screen, sound_manager):
+    def __init__(self, screen, sound_manager, key_bindings=None):
         self.screen = screen
         self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -4403,7 +4461,8 @@ class ProfileNameInputScreen:
 
             elif event.type == pygame.JOYBUTTONDOWN:
                 self.input_mode = "controller"
-                if event.button == 0:  # A button
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if isinstance(fire_button, int) and event.button == fire_button:
                     self.sound_manager.play_sound('menu_select')
                     if self.ok_selected:
                         return "".join(self.name[:self.name_length]).strip()
@@ -4455,6 +4514,35 @@ class ProfileNameInputScreen:
                         self.current_position += 1
                     else:
                         self.ok_selected = True
+
+            elif event.type == pygame.JOYAXISMOTION:
+                self.input_mode = "controller"
+                threshold = 0.5
+                if event.axis == 1:  # Y-axis
+                    if event.value < -threshold:  # Up
+                        if not self.ok_selected:
+                            self.current_letter_index[self.current_position] = (
+                                self.current_letter_index[self.current_position] - 1
+                            ) % len(self.alphabet)
+                            self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                    elif event.value > threshold:  # Down
+                        if not self.ok_selected:
+                            self.current_letter_index[self.current_position] = (
+                                self.current_letter_index[self.current_position] + 1
+                            ) % len(self.alphabet)
+                            self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                elif event.axis == 0:  # X-axis
+                    if event.value < -threshold:  # Left
+                        if self.ok_selected:
+                            self.ok_selected = False
+                            self.current_position = self.name_length - 1
+                        elif self.current_position > 0:
+                            self.current_position -= 1
+                    elif event.value > threshold:  # Right
+                        if self.current_position < self.name_length - 1:
+                            self.current_position += 1
+                        else:
+                            self.ok_selected = True
 
         return None
 
@@ -4535,10 +4623,11 @@ class ProfileNameInputScreen:
 
 class ProfileSelectionScreen:
     """Screen for selecting a profile to load"""
-    def __init__(self, screen, sound_manager, profile_manager):
+    def __init__(self, screen, sound_manager, profile_manager, key_bindings=None):
         self.screen = screen
         self.sound_manager = sound_manager
         self.profile_manager = profile_manager
+        self.key_bindings = key_bindings if key_bindings else {}
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
@@ -4571,7 +4660,8 @@ class ProfileSelectionScreen:
                     self.sound_manager.play_sound('menu_select')
                     return "cancel"
             elif event.type == pygame.JOYBUTTONDOWN:
-                if event.button == 0:  # A button
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if isinstance(fire_button, int) and event.button == fire_button:
                     self.sound_manager.play_sound('menu_select')
                     selected_name = self.profile_names[self.selected_index]
                     if selected_name == "Cancel":
@@ -4587,6 +4677,16 @@ class ProfileSelectionScreen:
                 elif event.value[1] == -1:  # Down
                     self.sound_manager.play_sound('menu_change')
                     self.selected_index = (self.selected_index + 1) % len(self.profile_names)
+            elif event.type == pygame.JOYAXISMOTION:
+                # Support joystick axis for menu navigation
+                threshold = 0.5
+                if event.axis == 1:  # Y-axis
+                    if event.value < -threshold:  # Up
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_index = (self.selected_index - 1) % len(self.profile_names)
+                    elif event.value > threshold:  # Down
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_index = (self.selected_index + 1) % len(self.profile_names)
 
         return None
 
@@ -4922,10 +5022,11 @@ class SettingsScreen:
         pygame.display.flip()
 
 class TitleScreen:
-    def __init__(self, screen, score_manager, sound_manager):
+    def __init__(self, screen, score_manager, sound_manager, key_bindings):
         self.screen = screen
         self.score_manager = score_manager
         self.sound_manager = sound_manager
+        self.key_bindings = key_bindings
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 48)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -5003,7 +5104,9 @@ class TitleScreen:
                     if self._register_debug_input("right"):
                         return "debug_menu"
             elif event.type == pygame.JOYBUTTONDOWN:
-                if event.button == 0:
+                # Use the fire button from player 1 settings
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if isinstance(fire_button, int) and event.button == fire_button:
                     self.sound_manager.play_sound('menu_select')
                     selected_text = self.options[self.selected_option]
                     if selected_text == "Continue":
@@ -5035,7 +5138,28 @@ class TitleScreen:
                 elif event.value[0] == 1:
                     if self._register_debug_input("right"):
                         return "debug_menu"
-                    
+            elif event.type == pygame.JOYAXISMOTION:
+                # Support joystick axis for menu navigation
+                threshold = 0.5
+                if event.axis == 1:  # Y-axis
+                    if event.value < -threshold:  # Up
+                        if self._register_debug_input("up"):
+                            return "debug_menu"
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_option = (self.selected_option - 1) % len(self.options)
+                    elif event.value > threshold:  # Down
+                        if self._register_debug_input("down"):
+                            return "debug_menu"
+                        self.sound_manager.play_sound('menu_change')
+                        self.selected_option = (self.selected_option + 1) % len(self.options)
+                elif event.axis == 0:  # X-axis for debug sequence
+                    if event.value < -threshold:  # Left
+                        if self._register_debug_input("left"):
+                            return "debug_menu"
+                    elif event.value > threshold:  # Right
+                        if self._register_debug_input("right"):
+                            return "debug_menu"
+
         return None
         
     def draw(self):
@@ -5076,9 +5200,10 @@ class TitleScreen:
         pygame.display.flip()
 
 class DebugMenu:
-    def __init__(self, screen, sound_manager):
+    def __init__(self, screen, sound_manager, key_bindings=None):
         self.screen = screen
         self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
@@ -5256,13 +5381,28 @@ class DebugMenu:
                     self._adjust_value(self.menu_items[self.selected_index], -1)
                 elif event.value[0] == 1:
                     self._adjust_value(self.menu_items[self.selected_index], 1)
+            elif event.type == pygame.JOYAXISMOTION:
+                # Support joystick axis for menu navigation
+                threshold = 0.5
+                if event.axis == 1:  # Y-axis
+                    if event.value < -threshold:  # Up
+                        self._move_selection(-1)
+                    elif event.value > threshold:  # Down
+                        self._move_selection(1)
+                elif event.axis == 0:  # X-axis
+                    if event.value < -threshold:  # Left
+                        self._adjust_value(self.menu_items[self.selected_index], -1)
+                    elif event.value > threshold:  # Right
+                        self._adjust_value(self.menu_items[self.selected_index], 1)
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.button == 1:  # B button - back
                     return 'back', None
-                elif event.button == 0:  # A button - select
-                    selected_item = self.menu_items[self.selected_index]
-                    if selected_item['type'] == 'action':
-                        return selected_item['action'], self.config
+                else:
+                    fire_button = self.key_bindings.get('player1_fire_button', 0)
+                    if isinstance(fire_button, int) and event.button == fire_button:
+                        selected_item = self.menu_items[self.selected_index]
+                        if selected_item['type'] == 'action':
+                            return selected_item['action'], self.config
         return None, None
 
     def draw(self):
@@ -6160,7 +6300,8 @@ class Game:
                     self.score_manager,
                     self.sound_manager,
                     player_stats=self.player_stats,
-                    players=self.players
+                    players=self.players,
+                    key_bindings=self.key_bindings
                 )
                 self.showing_stats_screen = True
         return None
@@ -6975,7 +7116,7 @@ class Game:
         # Handle level up screen
         if self.awaiting_level_up:
             if not hasattr(self, 'level_up_screen'):
-                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, self.xp_system.level, self.level, self.score)
+                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, self.xp_system.level, self.level, self.score, self.key_bindings)
             self.level_up_screen.draw()
             return
         
@@ -7249,7 +7390,7 @@ def main():
     clock = pygame.time.Clock()
 
     while True:
-        title_screen = TitleScreen(screen, score_manager, sound_manager)
+        title_screen = TitleScreen(screen, score_manager, sound_manager, key_bindings)
         
         while True:
             action = title_screen.handle_events()
@@ -7257,7 +7398,7 @@ def main():
                 pygame.quit()
                 sys.exit()
             elif action == "highscores":
-                high_score_screen = HighScoreScreen(screen, score_manager, sound_manager)
+                high_score_screen = HighScoreScreen(screen, score_manager, sound_manager, key_bindings=key_bindings)
                 while True:
                     hs_action = high_score_screen.handle_events()
                     if hs_action == "back":
@@ -7279,7 +7420,7 @@ def main():
                         sys.exit()
                     elif settings_action == "save":
                         # Show profile name input screen
-                        profile_name_screen = ProfileNameInputScreen(screen, sound_manager)
+                        profile_name_screen = ProfileNameInputScreen(screen, sound_manager, key_bindings)
                         while True:
                             name_result = profile_name_screen.handle_events()
                             if name_result == "quit":
@@ -7296,7 +7437,7 @@ def main():
                             clock.tick(60)
                     elif settings_action == "load":
                         # Show profile selection screen
-                        profile_selection_screen = ProfileSelectionScreen(screen, sound_manager, profile_manager)
+                        profile_selection_screen = ProfileSelectionScreen(screen, sound_manager, profile_manager, key_bindings)
                         while True:
                             load_result = profile_selection_screen.handle_events()
                             if load_result == "quit":
@@ -7319,7 +7460,7 @@ def main():
                     clock.tick(60)
                 break
             elif action == "debug_menu":
-                debug_menu = DebugMenu(screen, sound_manager)
+                debug_menu = DebugMenu(screen, sound_manager, key_bindings)
                 debug_action, debug_config = debug_menu.run()
 
                 if debug_action == "quit":
