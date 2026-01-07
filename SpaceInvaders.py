@@ -5515,6 +5515,10 @@ class Game:
         self.level = 1
         self.total_enemies_killed = 0
         self.coop_mode = False
+
+        # DEBUG: Track powerup drops per level
+        self.powerups_spawned_this_level = 0
+        self.enemies_killed_this_level = 0
         self.score_manager = score_manager
         self.sound_manager = sound_manager
 
@@ -6140,7 +6144,14 @@ class Game:
             x = random.randint(100, SCREEN_WIDTH - 100)
             y = 100
             self.power_ups.append(PowerUp(x, y, power_type))
-        
+
+            # DEBUG: Track powerup spawn and log details
+            self.powerups_spawned_this_level += 1
+            powerup_spawn_level = player.upgrades.powerup_spawn_level if player else 0
+            print(f"[POWERUP DEBUG] Level {self.level}: Powerup #{self.powerups_spawned_this_level} spawned! "
+                  f"Type: {power_type}, Drop chance: {drop_chance}% "
+                  f"(base: {base_chance}% + bonus: {bonus_chance}% from {powerup_spawn_level} Lucky Drops upgrades)")
+
     def handle_events(self):
         if self.showing_stats_screen:
             return self.handle_stats_screen_events()
@@ -6326,9 +6337,23 @@ class Game:
                 self.pending_level_up = False  # Clear the flag
                 del self.level_up_screen
 
+                # DEBUG: Log powerup stats before advancing to next level
+                if self.enemies_killed_this_level > 0:
+                    drop_rate = (self.powerups_spawned_this_level / self.enemies_killed_this_level) * 100
+                    print(f"\n{'='*70}")
+                    print(f"[POWERUP DEBUG] LEVEL {self.level} SUMMARY:")
+                    print(f"  Enemies killed: {self.enemies_killed_this_level}")
+                    print(f"  Powerups spawned: {self.powerups_spawned_this_level}")
+                    print(f"  Actual drop rate: {drop_rate:.2f}%")
+                    print(f"{'='*70}\n")
+
                 # Now advance the game level
                 self.level += 1
                 print(f"Advanced to game level {self.level} after level up")  # Debug
+
+                # Reset powerup tracking for new level
+                self.powerups_spawned_this_level = 0
+                self.enemies_killed_this_level = 0
 
                 # Respawn dead players with 1 life if their partner survived
                 if self.coop_mode and len(self.players) == 2:
@@ -6541,9 +6566,23 @@ class Game:
                 self.awaiting_level_up = True
                 return False  # Don't advance game level yet, wait for upgrade selection
 
+            # DEBUG: Log powerup stats before advancing to next level
+            if self.enemies_killed_this_level > 0:
+                drop_rate = (self.powerups_spawned_this_level / self.enemies_killed_this_level) * 100
+                print(f"\n{'='*70}")
+                print(f"[POWERUP DEBUG] LEVEL {self.level} SUMMARY:")
+                print(f"  Enemies killed: {self.enemies_killed_this_level}")
+                print(f"  Powerups spawned: {self.powerups_spawned_this_level}")
+                print(f"  Actual drop rate: {drop_rate:.2f}%")
+                print(f"{'='*70}\n")
+
             # No level up pending, advance to next level
             self.level += 1
             print(f"Advanced to game level {self.level}")  # Debug
+
+            # Reset powerup tracking for new level
+            self.powerups_spawned_this_level = 0
+            self.enemies_killed_this_level = 0
 
             # Clear all enemy bullets to prevent them from carrying over to the next level
             self.enemy_bullets.clear()
@@ -6885,6 +6924,7 @@ class Game:
                         self.enemies.remove(enemy)
                         self.score += 10
                         self.total_enemies_killed += 1
+                        self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
                         self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
                         self.update_enemy_speed()
                         self.spawn_power_up(owner)
@@ -6949,6 +6989,7 @@ class Game:
                             self.enemies.remove(enemy)
                             self.score += 10
                             self.total_enemies_killed += 1
+                            self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
                             self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
                             self.spawn_power_up(owner)
 
