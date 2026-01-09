@@ -222,7 +222,13 @@ class ProfileManager:
 
     def get_profile(self, name):
         """Get a profile by name"""
-        return self.profiles.get(name, None)
+        profile = self.profiles.get(name, None)
+        if profile:
+            # Merge with defaults to ensure all keys exist (backward compatibility)
+            defaults = self.get_default_bindings()
+            defaults.update(profile)
+            return defaults
+        return None
 
     def delete_profile(self, name):
         """Delete a profile"""
@@ -239,7 +245,10 @@ class ProfileManager:
     def get_last_profile_bindings(self):
         """Get bindings from last used profile, or defaults"""
         if self.last_profile and self.last_profile in self.profiles:
-            return self.profiles[self.last_profile].copy()
+            # Merge with defaults to ensure all keys exist (backward compatibility)
+            defaults = self.get_default_bindings()
+            defaults.update(self.profiles[self.last_profile])
+            return defaults
         return self.get_default_bindings()
 
 
