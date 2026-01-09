@@ -79,7 +79,7 @@ ENEMY_SPEED_THRESHOLDS = [
 
 # Per-Level Progression Configuration
 # --- Enemy Speed Progression Between Levels ---
-ENEMY_SPEED_PROGRESSION = 0.10  # How much speed increases per interval (moved from line 53 for clarity)
+ENEMY_SPEED_PROGRESSION = 0.08  # How much speed increases per interval (moved from line 53 for clarity) - default 0.10
 USE_BOSS_BASED_SPEED_PROGRESSION = True  # True = speed increases after each boss, False = increases every N levels
 ENEMY_SPEED_LEVEL_INTERVAL = 5  # Enemy speed increases every N levels (only used when USE_BOSS_BASED_SPEED_PROGRESSION = False)
 
