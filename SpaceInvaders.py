@@ -4846,10 +4846,10 @@ class SettingsScreen:
         self.sound_manager = sound_manager
         self.key_bindings = key_bindings
         self.profile_manager = profile_manager
-        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
-        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
-        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
-        self.font_tiny = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 32)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
+        self.font_tiny = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)
 
         # Options organized as (display_text, binding_key, input_type)
         self.options = [
@@ -5057,7 +5057,7 @@ class SettingsScreen:
 
         # Title
         title_text = self.font_large.render("SETTINGS", True, GREEN)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 100))
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 80))
         self.screen.blit(title_text, title_rect)
 
         # Check if we're awaiting input
@@ -5076,24 +5076,41 @@ class SettingsScreen:
             setting_rect = setting_text.get_rect(center=(SCREEN_WIDTH // 2, 450))
             self.screen.blit(setting_text, setting_rect)
         else:
-            # Section headers and options
+            # Count items in each section dynamically
+            keyboard_items = [opt for opt in self.options if opt[2] == "keyboard"]
+            controller_items = [opt for opt in self.options if opt[2] == "controller"]
+            profile_items = [opt for opt in self.options if opt[2] in ["save", "load"]]
+
+            # Calculate positions dynamically
+            spacing = 32
+            keyboard_start_y = 160
+            keyboard_header_y = keyboard_start_y - 25
+
+            controller_start_y = keyboard_start_y + len(keyboard_items) * spacing + 40
+            controller_header_y = controller_start_y - 25
+
+            profile_start_y = controller_start_y + len(controller_items) * spacing + 40
+            profile_header_y = profile_start_y - 25
+
+            back_button_y = profile_start_y + len(profile_items) * spacing + 50
+
+            # Section headers
             keyboard_header = self.font_small.render("KEYBOARD CONTROLS", True, CYAN)
-            keyboard_rect = keyboard_header.get_rect(center=(SCREEN_WIDTH // 2, 180))
+            keyboard_rect = keyboard_header.get_rect(center=(SCREEN_WIDTH // 2, keyboard_header_y))
             self.screen.blit(keyboard_header, keyboard_rect)
 
             controller_header = self.font_small.render("CONTROLLER INPUTS", True, CYAN)
-            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, 510))
+            controller_rect = controller_header.get_rect(center=(SCREEN_WIDTH // 2, controller_header_y))
             self.screen.blit(controller_header, controller_rect)
 
             profile_header = self.font_small.render("PROFILE MANAGEMENT", True, CYAN)
-            profile_rect = profile_header.get_rect(center=(SCREEN_WIDTH // 2, 820))
+            profile_rect = profile_header.get_rect(center=(SCREEN_WIDTH // 2, profile_header_y))
             self.screen.blit(profile_header, profile_rect)
 
             # Show menu options with current bindings
-            keyboard_start_y = 220
-            controller_start_y = 550
-            profile_start_y = 860
-            spacing = 40
+            keyboard_index = 0
+            controller_index = 0
+            profile_index = 0
 
             for i, option in enumerate(self.options):
                 display_text, binding_key, input_type = option
@@ -5102,23 +5119,20 @@ class SettingsScreen:
                 if input_type == "keyboard":
                     key_name = self.get_key_name(self.key_bindings[binding_key])
                     option_text = self.font_small.render(f"{display_text}: {key_name}", True, color)
-                    # Position in keyboard section (indices 0-5)
-                    y_offset = i
-                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, keyboard_start_y + y_offset * spacing))
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, keyboard_start_y + keyboard_index * spacing))
+                    keyboard_index += 1
                 elif input_type == "controller":
                     binding_name = self.get_controller_binding_name(self.key_bindings[binding_key])
                     option_text = self.font_small.render(f"{display_text}: {binding_name}", True, color)
-                    # Position in controller section (indices 6-11)
-                    y_offset = i - 6
-                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, controller_start_y + y_offset * spacing))
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, controller_start_y + controller_index * spacing))
+                    controller_index += 1
                 elif input_type in ["save", "load"]:
                     option_text = self.font_medium.render(display_text, True, color)
-                    # Position in profile section (indices 12-13)
-                    y_offset = i - 12
-                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, profile_start_y + y_offset * spacing))
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, profile_start_y + profile_index * spacing))
+                    profile_index += 1
                 else:  # Back option
                     option_text = self.font_medium.render(display_text, True, color)
-                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, 950))
+                    option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, back_button_y))
 
                 self.screen.blit(option_text, option_rect)
 
