@@ -176,9 +176,13 @@ class ProfileManager:
             'player2_right_key': pygame.K_d,
             'player1_left_button': HAT_LEFT,
             'player1_right_button': HAT_RIGHT,
+            'player1_up_button': HAT_UP,
+            'player1_down_button': HAT_DOWN,
             'player1_fire_button': 0,  # A button
             'player2_left_button': HAT_LEFT,
             'player2_right_button': HAT_RIGHT,
+            'player2_up_button': HAT_UP,
+            'player2_down_button': HAT_DOWN,
             'player2_fire_button': 0  # A button
         }
 
@@ -2242,11 +2246,12 @@ class HighScoreManager:
         return scores[0] if scores else None
 
 class NameInputScreen:
-    def __init__(self, screen, score, level, is_coop=False):
+    def __init__(self, screen, score, level, is_coop=False, key_bindings=None):
         self.screen = screen
         self.score = score
         self.level = level
         self.is_coop = is_coop
+        self.key_bindings = key_bindings if key_bindings else {}
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -2260,13 +2265,17 @@ class NameInputScreen:
         self.keyboard_name = ""
         self.finished = False
         self.ok_selected = False
-        
+
         # Detect input method
         self.controllers = []
         for i in range(pygame.joystick.get_count()):
             controller = pygame.joystick.Joystick(i)
             controller.init()
             self.controllers.append(controller)
+
+        # Axis navigation cooldown
+        self.last_axis_input_time = 0
+        self.axis_cooldown = 200  # milliseconds between axis inputs
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -2287,7 +2296,9 @@ class NameInputScreen:
             
             elif event.type == pygame.JOYBUTTONDOWN:
                 self.input_mode = "controller"
-                if event.button == 0:  # A button
+                # Use fire button (remappable) or default A button (0)
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 0:
                     if self.ok_selected:
                         return "".join(self.name)
                     else:
@@ -2301,33 +2312,128 @@ class NameInputScreen:
                         self.current_position = 2
                     elif self.current_position > 0:
                         self.current_position -= 1
+                else:
+                    # Check for remappable direction buttons
+                    up_button = self.key_bindings.get('player1_up_button')
+                    down_button = self.key_bindings.get('player1_down_button')
+                    left_button = self.key_bindings.get('player1_left_button')
+                    right_button = self.key_bindings.get('player1_right_button')
+
+                    if isinstance(up_button, int) and event.button == up_button:
+                        # Up button pressed
+                        if not self.ok_selected:
+                            self.current_letter_index[self.current_position] = (
+                                self.current_letter_index[self.current_position] - 1
+                            ) % len(self.alphabet)
+                            self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                    elif isinstance(down_button, int) and event.button == down_button:
+                        # Down button pressed
+                        if not self.ok_selected:
+                            self.current_letter_index[self.current_position] = (
+                                self.current_letter_index[self.current_position] + 1
+                            ) % len(self.alphabet)
+                            self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                    elif isinstance(left_button, int) and event.button == left_button:
+                        # Left button pressed
+                        if self.ok_selected:
+                            self.ok_selected = False
+                            self.current_position = 2
+                        elif self.current_position > 0:
+                            self.current_position -= 1
+                    elif isinstance(right_button, int) and event.button == right_button:
+                        # Right button pressed
+                        if self.current_position < 2:
+                            self.current_position += 1
+                        else:
+                            self.ok_selected = True
             
             elif event.type == pygame.JOYHATMOTION:
                 self.input_mode = "controller"
-                if event.value[1] == 1:  # Up
+                # Check both standard D-pad and remappable direction assignments
+                up_button = self.key_bindings.get('player1_up_button')
+                down_button = self.key_bindings.get('player1_down_button')
+                left_button = self.key_bindings.get('player1_left_button')
+                right_button = self.key_bindings.get('player1_right_button')
+
+                # Up: check standard D-pad or HAT_UP assignment
+                if event.value[1] == 1 or (event.value[1] == 1 and up_button == HAT_UP):
                     if not self.ok_selected:
                         self.current_letter_index[self.current_position] = (
                             self.current_letter_index[self.current_position] - 1
                         ) % len(self.alphabet)
                         self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif event.value[1] == -1:  # Down
+                # Down: check standard D-pad or HAT_DOWN assignment
+                elif event.value[1] == -1 or (event.value[1] == -1 and down_button == HAT_DOWN):
                     if not self.ok_selected:
                         self.current_letter_index[self.current_position] = (
                             self.current_letter_index[self.current_position] + 1
                         ) % len(self.alphabet)
                         self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif event.value[0] == -1:  # Left
+                # Left: check standard D-pad or HAT_LEFT assignment
+                elif event.value[0] == -1 or (event.value[0] == -1 and left_button == HAT_LEFT):
                     if self.ok_selected:
                         self.ok_selected = False
                         self.current_position = 2
                     elif self.current_position > 0:
                         self.current_position -= 1
-                elif event.value[0] == 1:  # Right
+                # Right: check standard D-pad or HAT_RIGHT assignment
+                elif event.value[0] == 1 or (event.value[0] == 1 and right_button == HAT_RIGHT):
                     if self.current_position < 2:
                         self.current_position += 1
                     else:
                         self.ok_selected = True
-                        
+
+            elif event.type == pygame.JOYAXISMOTION:
+                self.input_mode = "controller"
+                # Cooldown to prevent too rapid changes
+                current_time = pygame.time.get_ticks()
+                if current_time - self.last_axis_input_time < self.axis_cooldown:
+                    continue
+
+                threshold = 0.5
+                up_button = self.key_bindings.get('player1_up_button')
+                down_button = self.key_bindings.get('player1_down_button')
+                left_button = self.key_bindings.get('player1_left_button')
+                right_button = self.key_bindings.get('player1_right_button')
+
+                if event.axis == 1:  # Y-axis (up/down)
+                    if event.value < -threshold:  # Up
+                        # Check if standard axis or assigned to AXIS_UP
+                        if up_button == AXIS_UP or up_button is None or isinstance(up_button, str) and 'hat' in up_button:
+                            if not self.ok_selected:
+                                self.current_letter_index[self.current_position] = (
+                                    self.current_letter_index[self.current_position] - 1
+                                ) % len(self.alphabet)
+                                self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                                self.last_axis_input_time = current_time
+                    elif event.value > threshold:  # Down
+                        # Check if standard axis or assigned to AXIS_DOWN
+                        if down_button == AXIS_DOWN or down_button is None or isinstance(down_button, str) and 'hat' in down_button:
+                            if not self.ok_selected:
+                                self.current_letter_index[self.current_position] = (
+                                    self.current_letter_index[self.current_position] + 1
+                                ) % len(self.alphabet)
+                                self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+                                self.last_axis_input_time = current_time
+                elif event.axis == 0:  # X-axis (left/right)
+                    if event.value < -threshold:  # Left
+                        # Check if standard axis or assigned to AXIS_LEFT
+                        if left_button == AXIS_LEFT or left_button is None or isinstance(left_button, str) and 'hat' in left_button:
+                            if self.ok_selected:
+                                self.ok_selected = False
+                                self.current_position = 2
+                            elif self.current_position > 0:
+                                self.current_position -= 1
+                            self.last_axis_input_time = current_time
+                    elif event.value > threshold:  # Right
+                        # Check if standard axis or assigned to AXIS_RIGHT
+                        if right_button == AXIS_RIGHT or right_button is None or isinstance(right_button, str) and 'hat' in right_button:
+                            if self.current_position < 2:
+                                self.current_position += 1
+                            else:
+                                self.ok_selected = True
+                            self.last_axis_input_time = current_time
+
         return None
     
     def draw(self):
@@ -2401,9 +2507,9 @@ class NameInputScreen:
             self.screen.blit(ok_text, ok_rect)
             
             instructions = [
-                "D-pad Up/Down: Change letter",
-                "D-pad Left/Right: Move cursor",
-                "A button: Confirm/Next",
+                "Controller Up/Down: Change letter",
+                "Controller Left/Right: Move cursor",
+                "Fire button: Confirm/Next",
                 "B button: Go back"
             ]
             
@@ -4746,9 +4852,13 @@ class SettingsScreen:
             ("Keyboard - P2 Fire", "player2_fire_key", "keyboard"),
             ("Controller - P1 Left", "player1_left_button", "controller"),
             ("Controller - P1 Right", "player1_right_button", "controller"),
+            ("Controller - P1 Up", "player1_up_button", "controller"),
+            ("Controller - P1 Down", "player1_down_button", "controller"),
             ("Controller - P1 Fire", "player1_fire_button", "controller"),
             ("Controller - P2 Left", "player2_left_button", "controller"),
             ("Controller - P2 Right", "player2_right_button", "controller"),
+            ("Controller - P2 Up", "player2_up_button", "controller"),
+            ("Controller - P2 Down", "player2_down_button", "controller"),
             ("Controller - P2 Fire", "player2_fire_button", "controller"),
             ("Save Profile", None, "save"),
             ("Load Profile", None, "load"),
@@ -5533,9 +5643,13 @@ class Game:
                 'player2_right_key': pygame.K_d,
                 'player1_left_button': 13,  # D-pad left
                 'player1_right_button': 14,  # D-pad right
+                'player1_up_button': 11,  # D-pad up
+                'player1_down_button': 12,  # D-pad down
                 'player1_fire_button': 0,  # A button
                 'player2_left_button': 13,  # D-pad left
                 'player2_right_button': 14,  # D-pad right
+                'player2_up_button': 11,  # D-pad up
+                'player2_down_button': 12,  # D-pad down
                 'player2_fire_button': 0  # A button
             }
         self.key_bindings = key_bindings
@@ -6627,7 +6741,7 @@ class Game:
 
             if self.score_manager.is_high_score(self.score, self.coop_mode):
                 self.awaiting_name_input = True
-                self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode)
+                self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode, self.key_bindings)
                 
         return game_over 
     
@@ -6822,7 +6936,7 @@ class Game:
                     self.game_over_time = pygame.time.get_ticks()
                     if self.score_manager.is_high_score(self.score, self.coop_mode):
                         self.awaiting_name_input = True
-                        self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode)
+                        self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode, self.key_bindings)
                     
     def check_collisions(self):
         # Player bullets vs enemies
