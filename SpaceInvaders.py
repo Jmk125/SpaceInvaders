@@ -1756,7 +1756,6 @@ class GreenLaser:
         self.width = 15  # Width of the laser beam
         self.duration = duration  # How long the laser stays active (ms)
         self.start_time = pygame.time.get_ticks()
-        self.y = 0  # Starts at top
         self.update_rect()
 
     def update_rect(self):
@@ -1814,6 +1813,9 @@ class GreenLaser:
         # Inner bright core
         core_rect = pygame.Rect(int(center_x - self.width // 4), int(center_y), self.width // 2, int(laser_height))
         pygame.draw.rect(screen, core_color, core_rect)
+
+        # Draw marker at top of laser (where it originates from center cube) for debugging
+        pygame.draw.circle(screen, (255, 0, 0), (int(center_x), int(center_y)), 5)  # Red dot at laser origin
 
 class YellowBall:
     """Slow-falling yellow ball for Rubik's Cube Boss yellow attack (bullet hell)"""
@@ -4972,15 +4974,20 @@ class RubiksCubeBoss:
 
         # Green laser warning flash effect
         show_warning_flash = False
+        warning_flash_color = None
         if self.green_laser_warning:
             current_time = pygame.time.get_ticks()
             warning_elapsed = current_time - self.green_laser_warning_start_time
             warning_progress = warning_elapsed / self.green_warning_duration  # 0.0 to 1.0
 
             # Flash interval decreases from 500ms to 50ms (faster and faster)
-            flash_interval = 500 - (warning_progress * 450)  # 500ms -> 50ms
+            flash_interval = max(50, 500 - (warning_progress * 450))  # 500ms -> 50ms, clamped at 50
             flash_on = (warning_elapsed % int(flash_interval)) < (int(flash_interval) / 2)
-            show_warning_flash = flash_on
+
+            if flash_on:
+                show_warning_flash = True
+                # Flash yellow/white (very visible against green)
+                warning_flash_color = (255, 255, 0) if (warning_elapsed // 100) % 2 == 0 else (255, 255, 255)
 
         # Draw each square with rotation
         for square in self.squares:
@@ -4990,17 +4997,21 @@ class RubiksCubeBoss:
             # Get rotated corners
             corners = self.get_rotated_square_corners(square['row'], square['col'])
 
-            # Determine color to draw (flash bright white during green laser warning)
+            # Determine color to draw (flash during green laser warning)
             if show_warning_flash and not square['is_center']:
-                draw_color = (255, 255, 255)  # Flash bright white during warning
+                draw_color = warning_flash_color  # Flash yellow/white during warning
             else:
                 draw_color = square['color']
 
             # Draw the square as a polygon
             pygame.draw.polygon(screen, draw_color, corners)
 
-            # Draw black border
-            pygame.draw.polygon(screen, BLACK, corners, 2)
+            # Draw thick warning border during warning phase
+            if self.green_laser_warning and not square['is_center']:
+                pygame.draw.polygon(screen, (255, 255, 0), corners, 4)  # Thick yellow border
+            else:
+                # Draw normal black border
+                pygame.draw.polygon(screen, BLACK, corners, 2)
 
             # Draw cracks on damaged squares
             health_ratio = square['health'] / square['max_health']
