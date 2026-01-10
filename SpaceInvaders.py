@@ -125,7 +125,7 @@ ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches 
 
 # Rubik's Cube Boss Configuration
 RUBIKS_BOSS_SQUARE_SIZE = 50  # Size of each small square (pixels)
-RUBIKS_BOSS_GRID_SIZE = 5  # 5x5 grid (25 squares total)
+RUBIKS_BOSS_GRID_SIZE = 7  # 7x7 grid (49 squares total)
 RUBIKS_BOSS_SQUARE_HEALTH_BASE = 4  # Base health for small squares (4 hits to destroy at encounter 1)
 RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL = 1  # Health increase per encounter for small squares
 RUBIKS_BOSS_CENTER_HEALTH_BASE = 50  # Base health for center cube (adjustable, much higher)
@@ -4433,7 +4433,7 @@ class RubiksCubeBoss:
         self.encounter = max(1, encounter)
 
         # Grid configuration
-        self.grid_size = RUBIKS_BOSS_GRID_SIZE  # 5x5
+        self.grid_size = RUBIKS_BOSS_GRID_SIZE  # 7x7
         self.square_size = RUBIKS_BOSS_SQUARE_SIZE  # 50px per square
         self.total_size = self.grid_size * self.square_size  # 250px total
 
@@ -4453,8 +4453,8 @@ class RubiksCubeBoss:
         self.rotation_angle = 0
         self.rotation_speed = RUBIKS_BOSS_ROTATION_SPEED_BASE + (self.encounter - 1) * RUBIKS_BOSS_ROTATION_SPEED_GROWTH
 
-        # Initialize 5x5 grid of squares
-        # Grid positions: [row][col] where (2, 2) is center
+        # Initialize 7x7 grid of squares
+        # Grid positions: [row][col] where (3, 3) is center
         self.squares = []
 
         # Rubik's cube colors (6 colors)
@@ -4476,9 +4476,10 @@ class RubiksCubeBoss:
         square_max_health = int(center_max_health * 0.2)
 
         # Create grid
+        center_pos = self.grid_size // 2  # Center position (3 for 7x7 grid)
         for row in range(self.grid_size):
             for col in range(self.grid_size):
-                is_center = (row == 2 and col == 2)  # Center square at (2, 2)
+                is_center = (row == center_pos and col == center_pos)  # Center square
 
                 if is_center:
                     max_health = center_max_health
