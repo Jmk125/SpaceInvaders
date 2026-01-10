@@ -4537,7 +4537,9 @@ class RubiksCubeBoss:
             # Update explosion effects
             self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
             for explosion in self.explosion_effects:
-                explosion['radius'] += explosion['growth']
+                # Update radius if particle has one (expanding explosions)
+                if 'radius' in explosion and 'growth' in explosion:
+                    explosion['radius'] += explosion['growth']
                 explosion['life'] -= 1
             return []
 
