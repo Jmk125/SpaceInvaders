@@ -132,7 +132,7 @@ RUBIKS_BOSS_CENTER_HEALTH_BASE = 50  # Base health for center cube (adjustable, 
 RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL = 15  # Health increase per encounter for center
 RUBIKS_BOSS_ROTATION_SPEED_BASE = 30  # Degrees per second (adjustable)
 RUBIKS_BOSS_ROTATION_SPEED_GROWTH = 5  # Rotation speed increase per encounter (degrees/sec)
-RUBIKS_BOSS_SPEED_BASE = 1.5  # Left/right movement speed
+RUBIKS_BOSS_SPEED_BASE = 2.5  # Left/right movement speed (increased from 1.5)
 RUBIKS_BOSS_MIXED_PHASE_DURATION = 5000  # Mixed colors phase duration (ms)
 RUBIKS_BOSS_ATTACK_PHASE_DURATION = 10000  # Single color attack phase duration (ms)
 RUBIKS_BOSS_RED_SHOOT_COOLDOWN = 1000  # Red spinning squares shoot interval (ms, adjustable)
@@ -2022,10 +2022,10 @@ class Boss:
         
         current_time = pygame.time.get_ticks()
         if current_time - self.last_direction_change > self.direction_change_cooldown:
-            if random.randint(1, 100) <= 30:
+            if random.randint(1, 100) <= 15:  # Reduced from 30% to 15% chance
                 self.direction *= -1
                 self.last_direction_change = current_time
-                self.direction_change_cooldown = random.randint(1000, 3000)
+                self.direction_change_cooldown = random.randint(2000, 6000)  # Changed from (1000, 3000)
         
         self.rect.x = self.x
         self.rect.y = self.y
@@ -4447,7 +4447,7 @@ class RubiksCubeBoss:
         self.speed = RUBIKS_BOSS_SPEED_BASE
         self.direction = random.choice([-1, 1])
         self.last_direction_change = pygame.time.get_ticks()
-        self.direction_change_cooldown = random.randint(1000, 3000)
+        self.direction_change_cooldown = random.randint(2000, 6000)  # Changed from (1000, 3000) for less frequent changes
 
         # Rotation
         self.rotation_angle = 0
@@ -4549,10 +4549,10 @@ class RubiksCubeBoss:
 
         current_time = pygame.time.get_ticks()
         if current_time - self.last_direction_change > self.direction_change_cooldown:
-            if random.randint(1, 100) <= 30:
+            if random.randint(1, 100) <= 15:  # Reduced from 30% to 15% chance
                 self.direction *= -1
                 self.last_direction_change = current_time
-                self.direction_change_cooldown = random.randint(1000, 3000)
+                self.direction_change_cooldown = random.randint(2000, 6000)  # Changed from (1000, 3000)
 
         # Update center position
         self.center_x = self.x + self.total_size // 2
@@ -6638,7 +6638,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss]
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss]
 
         self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.small_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -8190,7 +8190,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss]
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss]
         self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0}
 
         # Reset all players with new individual upgrades
