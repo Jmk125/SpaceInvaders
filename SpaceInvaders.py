@@ -126,8 +126,8 @@ ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches 
 # Rubik's Cube Boss Configuration
 RUBIKS_BOSS_SQUARE_SIZE = 50  # Size of each small square (pixels)
 RUBIKS_BOSS_GRID_SIZE = 5  # 5x5 grid (25 squares total)
-RUBIKS_BOSS_SQUARE_HEALTH_BASE = 5  # Base health for small squares (adjustable)
-RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL = 2  # Health increase per encounter for small squares
+RUBIKS_BOSS_SQUARE_HEALTH_BASE = 4  # Base health for small squares (4 hits to destroy at encounter 1)
+RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL = 1  # Health increase per encounter for small squares
 RUBIKS_BOSS_CENTER_HEALTH_BASE = 50  # Base health for center cube (adjustable, much higher)
 RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL = 15  # Health increase per encounter for center
 RUBIKS_BOSS_ROTATION_SPEED_BASE = 30  # Degrees per second (adjustable)
@@ -1749,17 +1749,22 @@ class BlueBullet:
 
 class GreenLaser:
     """Green laser beam for Rubik's Cube Boss green attack"""
-    def __init__(self, center_x, duration):
-        self.center_x = center_x
+    def __init__(self, boss, duration):
+        self.boss = boss  # Reference to boss to track movement
         self.width = 15  # Width of the laser beam
         self.duration = duration  # How long the laser stays active (ms)
         self.start_time = pygame.time.get_ticks()
         self.y = 0  # Starts at top
-        self.rect = pygame.Rect(int(self.center_x - self.width // 2), self.y, self.width, SCREEN_HEIGHT)
+        self.update_rect()
+
+    def update_rect(self):
+        """Update rect position based on boss center"""
+        center_x = self.boss.center_x
+        self.rect = pygame.Rect(int(center_x - self.width // 2), self.y, self.width, SCREEN_HEIGHT)
 
     def move(self):
-        # Laser doesn't move, just exists for duration
-        pass
+        # Update position to follow boss
+        self.update_rect()
 
     def is_off_screen(self):
         # Check if duration expired
@@ -1767,19 +1772,39 @@ class GreenLaser:
         return (current_time - self.start_time) > self.duration
 
     def draw(self, screen):
+        # Get current boss center position
+        center_x = self.boss.center_x
+
+        # Flashing effect - alternate between bright and dim green
+        current_time = pygame.time.get_ticks()
+        flash_cycle = (current_time // 100) % 2  # Flash every 100ms
+
+        if flash_cycle == 0:
+            # Bright flash
+            main_color = (0, 255, 0)
+            core_color = (200, 255, 200)
+            glow_alpha = 100
+        else:
+            # Dim
+            main_color = (0, 180, 0)
+            core_color = (100, 220, 100)
+            glow_alpha = 50
+
         # Draw green laser beam from top to bottom
-        laser_rect = pygame.Rect(int(self.center_x - self.width // 2), 0, self.width, SCREEN_HEIGHT)
+        laser_rect = pygame.Rect(int(center_x - self.width // 2), 0, self.width, SCREEN_HEIGHT)
 
         # Outer glow
-        glow_rect = pygame.Rect(int(self.center_x - self.width // 2 - 5), 0, self.width + 10, SCREEN_HEIGHT)
-        pygame.draw.rect(screen, (0, 255, 0, 50), glow_rect)
+        glow_rect = pygame.Rect(int(center_x - self.width // 2 - 5), 0, self.width + 10, SCREEN_HEIGHT)
+        glow_surface = pygame.Surface((self.width + 10, SCREEN_HEIGHT), pygame.SRCALPHA)
+        glow_surface.fill((*main_color, glow_alpha))
+        screen.blit(glow_surface, (int(center_x - self.width // 2 - 5), 0))
 
         # Main beam
-        pygame.draw.rect(screen, (0, 255, 0), laser_rect)
+        pygame.draw.rect(screen, main_color, laser_rect)
 
         # Inner bright core
-        core_rect = pygame.Rect(int(self.center_x - self.width // 4), 0, self.width // 2, SCREEN_HEIGHT)
-        pygame.draw.rect(screen, (150, 255, 150), core_rect)
+        core_rect = pygame.Rect(int(center_x - self.width // 4), 0, self.width // 2, SCREEN_HEIGHT)
+        pygame.draw.rect(screen, core_color, core_rect)
 
 class YellowBall:
     """Slow-falling yellow ball for Rubik's Cube Boss yellow attack (bullet hell)"""
@@ -4589,7 +4614,7 @@ class RubiksCubeBoss:
 
         elif self.current_attack_color == (0, 255, 0):  # Green - laser beam
             if self.green_laser is None:
-                self.green_laser = GreenLaser(self.center_x, self.attack_phase_duration)
+                self.green_laser = GreenLaser(self, self.attack_phase_duration)
                 bullets.append(self.green_laser)
 
                 if sound_manager:
@@ -4717,9 +4742,7 @@ class RubiksCubeBoss:
                     if square['is_center']:
                         self.start_destruction()
 
-                    return True
-
-                return False  # Hit but not destroyed
+                return True  # Return true if we hit ANY square (damaged or destroyed)
 
         return False
 
@@ -4805,6 +4828,57 @@ class RubiksCubeBoss:
 
         return particles
 
+    def draw_cracks_on_square(self, screen, corners, health_ratio):
+        """Draw progressive crack lines on a square based on damage"""
+        # Get center of square
+        center_x = sum(c[0] for c in corners) / 4
+        center_y = sum(c[1] for c in corners) / 4
+
+        # Determine crack level (0 = no cracks, 3 = heavily cracked)
+        if health_ratio > 0.75:
+            return  # No cracks yet
+        elif health_ratio > 0.5:
+            crack_level = 1  # Light cracks
+        elif health_ratio > 0.25:
+            crack_level = 2  # Medium cracks
+        else:
+            crack_level = 3  # Heavy cracks
+
+        # Draw crack lines
+        crack_color = (50, 50, 50)  # Dark gray cracks
+
+        if crack_level >= 1:
+            # First crack - diagonal from top-left to bottom-right
+            start = (center_x - self.square_size // 4, center_y - self.square_size // 4)
+            end = (center_x + self.square_size // 4, center_y + self.square_size // 4)
+            pygame.draw.line(screen, crack_color, start, end, 2)
+
+        if crack_level >= 2:
+            # Second crack - diagonal from top-right to bottom-left
+            start = (center_x + self.square_size // 4, center_y - self.square_size // 4)
+            end = (center_x - self.square_size // 4, center_y + self.square_size // 4)
+            pygame.draw.line(screen, crack_color, start, end, 2)
+
+            # Small branch crack from center
+            start = (center_x, center_y)
+            end = (center_x + self.square_size // 6, center_y - self.square_size // 6)
+            pygame.draw.line(screen, crack_color, start, end, 1)
+
+        if crack_level >= 3:
+            # Third set of cracks - horizontal and vertical
+            start = (center_x - self.square_size // 3, center_y)
+            end = (center_x + self.square_size // 3, center_y)
+            pygame.draw.line(screen, crack_color, start, end, 2)
+
+            start = (center_x, center_y - self.square_size // 3)
+            end = (center_x, center_y + self.square_size // 3)
+            pygame.draw.line(screen, crack_color, start, end, 2)
+
+            # More branch cracks
+            start = (center_x, center_y)
+            end = (center_x - self.square_size // 6, center_y + self.square_size // 6)
+            pygame.draw.line(screen, crack_color, start, end, 1)
+
     def draw(self, screen):
         """Draw the Rubik's Cube boss"""
         if self.destruction_complete:
@@ -4836,19 +4910,10 @@ class RubiksCubeBoss:
             # Draw black border
             pygame.draw.polygon(screen, BLACK, corners, 2)
 
-            # Draw health indicator for non-center squares (subtle)
-            if not square['is_center']:
-                health_ratio = square['health'] / square['max_health']
-                if health_ratio < 1.0:
-                    # Darken square based on damage
-                    center_x = sum(c[0] for c in corners) / 4
-                    center_y = sum(c[1] for c in corners) / 4
-                    damage_alpha = int((1 - health_ratio) * 100)
-                    # Create semi-transparent overlay
-                    s = pygame.Surface((self.square_size, self.square_size), pygame.SRCALPHA)
-                    s.fill((0, 0, 0, damage_alpha))
-                    screen.blit(s, (int(center_x - self.square_size // 2),
-                                   int(center_y - self.square_size // 2)))
+            # Draw cracks on damaged squares
+            health_ratio = square['health'] / square['max_health']
+            if health_ratio < 1.0:
+                self.draw_cracks_on_square(screen, corners, health_ratio)
 
         # Draw explosion particles on top
         for particle in self.explosion_effects:
@@ -4856,6 +4921,30 @@ class RubiksCubeBoss:
                 pygame.draw.circle(screen, particle['color'],
                                  (int(particle['x']), int(particle['y'])),
                                  particle['size'])
+
+        # Draw center cube health bar at top (like other bosses)
+        center_square = next((s for s in self.squares if s['is_center']), None)
+        if center_square and not center_square['destroyed']:
+            bar_width = 600
+            bar_height = 30
+            bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+            bar_y = 60
+
+            health_ratio = center_square['health'] / center_square['max_health']
+
+            # Background (red)
+            pygame.draw.rect(screen, RED, (bar_x, bar_y, bar_width, bar_height))
+            # Health (cyan/light blue to match center square color)
+            pygame.draw.rect(screen, self.center_color, (bar_x, bar_y, int(bar_width * health_ratio), bar_height))
+            # Border
+            pygame.draw.rect(screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 3)
+
+            # Label
+            font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+            label = f"RUBIK'S CUBE CORE: {int(health_ratio * 100)}%"
+            text = font.render(label, True, WHITE)
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, bar_y - 20))
+            screen.blit(text, text_rect)
 
         # Update particles
         for particle in self.explosion_effects[:]:
