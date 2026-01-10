@@ -4892,57 +4892,57 @@ class RubiksCubeBoss:
             return (world_x, world_y)
 
         if crack_level >= 1:
-            # First crack - diagonal with some organic variation
-            start = rotate_point(12, 10)
-            mid1 = rotate_point(22, 23)
-            mid2 = rotate_point(28, 27)
-            end = rotate_point(38, 40)
+            # First crack - diagonal from edge to edge with organic variation
+            start = rotate_point(2, 2)
+            mid1 = rotate_point(20, 22)
+            mid2 = rotate_point(30, 28)
+            end = rotate_point(48, 48)
             pygame.draw.line(screen, crack_color, start, mid1, 2)
             pygame.draw.line(screen, crack_color, mid1, mid2, 2)
             pygame.draw.line(screen, crack_color, mid2, end, 2)
 
         if crack_level >= 2:
-            # Second crack - another diagonal with branching
-            start = rotate_point(38, 12)
-            mid1 = rotate_point(30, 20)
-            mid2 = rotate_point(22, 28)
-            end = rotate_point(12, 38)
+            # Second crack - another diagonal edge to edge with branching
+            start = rotate_point(48, 2)
+            mid1 = rotate_point(32, 18)
+            mid2 = rotate_point(18, 32)
+            end = rotate_point(2, 48)
             pygame.draw.line(screen, crack_color, start, mid1, 2)
             pygame.draw.line(screen, crack_color, mid1, mid2, 2)
             pygame.draw.line(screen, crack_color, mid2, end, 2)
 
-            # Branch from middle
+            # Branch from middle extending to edge
             branch_start = rotate_point(25, 25)
-            branch_end = rotate_point(32, 15)
+            branch_end = rotate_point(48, 8)
             pygame.draw.line(screen, crack_color, branch_start, branch_end, 1)
 
         if crack_level >= 3:
-            # Third set - more complex cracking pattern
-            # Horizontal-ish crack with curve
-            start = rotate_point(8, 25)
-            mid1 = rotate_point(18, 22)
-            mid2 = rotate_point(32, 28)
-            end = rotate_point(42, 25)
+            # Third set - edge to edge cracks with curves
+            # Horizontal crack from left edge to right edge
+            start = rotate_point(0, 25)
+            mid1 = rotate_point(15, 20)
+            mid2 = rotate_point(35, 30)
+            end = rotate_point(50, 25)
             pygame.draw.line(screen, crack_color, start, mid1, 2)
             pygame.draw.line(screen, crack_color, mid1, mid2, 2)
             pygame.draw.line(screen, crack_color, mid2, end, 2)
 
-            # Vertical-ish crack with curve
-            start = rotate_point(25, 8)
-            mid1 = rotate_point(28, 18)
-            mid2 = rotate_point(22, 32)
-            end = rotate_point(25, 42)
+            # Vertical crack from top edge to bottom edge
+            start = rotate_point(25, 0)
+            mid1 = rotate_point(30, 15)
+            mid2 = rotate_point(20, 35)
+            end = rotate_point(25, 50)
             pygame.draw.line(screen, crack_color, start, mid1, 2)
             pygame.draw.line(screen, crack_color, mid1, mid2, 2)
             pygame.draw.line(screen, crack_color, mid2, end, 2)
 
-            # More small branches
+            # More branches extending to edges
             b1_start = rotate_point(25, 25)
-            b1_end = rotate_point(15, 32)
+            b1_end = rotate_point(2, 40)
             pygame.draw.line(screen, crack_color, b1_start, b1_end, 1)
 
             b2_start = rotate_point(25, 25)
-            b2_end = rotate_point(35, 18)
+            b2_end = rotate_point(40, 2)
             pygame.draw.line(screen, crack_color, b2_start, b2_end, 1)
 
     def draw(self, screen):
@@ -8063,7 +8063,9 @@ class Game:
         for bullet in self.enemy_bullets[:]:
             for barrier in self.barriers:
                 if barrier.check_collision(bullet.rect):
-                    self.enemy_bullets.remove(bullet)
+                    # White ball and green laser persist through barriers
+                    if not isinstance(bullet, (WhiteBall, GreenLaser)):
+                        self.enemy_bullets.remove(bullet)
                     break
                     
         # Power-ups vs players
@@ -8090,8 +8092,8 @@ class Game:
                         # Add explosion particles if player died
                         if explosion_particles:
                             self.player_explosion_particles.extend(explosion_particles)
-                        # Don't remove green laser when it hits player - it persists
-                        if not isinstance(bullet, GreenLaser):
+                        # Don't remove green laser or white ball when they hit player - they persist
+                        if not isinstance(bullet, (GreenLaser, WhiteBall)):
                             self.enemy_bullets.remove(bullet)
                         break
 
