@@ -1675,12 +1675,12 @@ class SlowFallingBullet:
         pygame.draw.circle(screen, WHITE, center, 2)
 
 class SpinningRedSquare:
-    """Spinning red square projectile for Rubik's Cube Boss red attack"""
+    """Spinning red square projectile for Rubik's Cube Boss red attack - same size as boss squares"""
     def __init__(self, x, y, target_x, target_y, speed):
         self.x = x
         self.y = y
-        self.width = 20
-        self.height = 20
+        self.width = 50  # Same size as boss squares
+        self.height = 50
         self.speed = speed
         self.rotation = 0  # Current rotation angle
         self.rotation_speed = 10  # Degrees per frame
@@ -1701,14 +1701,16 @@ class SpinningRedSquare:
         self.rect.y = int(self.y - self.height // 2)
 
     def is_off_screen(self):
-        return (self.x < -50 or self.x > SCREEN_WIDTH + 50 or
-                self.y < -50 or self.y > SCREEN_HEIGHT + 50)
+        return (self.x < -100 or self.x > SCREEN_WIDTH + 100 or
+                self.y < -100 or self.y > SCREEN_HEIGHT + 100)
 
     def draw(self, screen):
         # Create a rotating red square
         surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         pygame.draw.rect(surface, (255, 0, 0), (0, 0, self.width, self.height))
-        pygame.draw.rect(surface, (180, 0, 0), (2, 2, self.width - 4, self.height - 4))
+        pygame.draw.rect(surface, (180, 0, 0), (4, 4, self.width - 8, self.height - 8))
+        # Draw black border
+        pygame.draw.rect(surface, (0, 0, 0), (0, 0, self.width, self.height), 2)
 
         # Rotate the surface
         rotated = pygame.transform.rotate(surface, self.rotation)
@@ -1835,13 +1837,17 @@ class YellowBall:
 
 class WhiteBall:
     """Bouncing white ball for Rubik's Cube Boss white attack (screensaver style)"""
-    def __init__(self, x, y, speed):
+    def __init__(self, x, y, speed, duration=20000):
         self.x = x
         self.y = y
         self.radius = 25  # Large ball
         self.width = self.radius * 2
         self.height = self.radius * 2
         self.speed = speed
+
+        # Duration tracking
+        self.duration = duration  # 20 seconds by default
+        self.start_time = pygame.time.get_ticks()
 
         # Random initial direction
         angle = random.uniform(0, 2 * math.pi)
@@ -1869,8 +1875,9 @@ class WhiteBall:
         self.rect.y = int(self.y - self.radius)
 
     def is_off_screen(self):
-        # White ball never goes off screen, it bounces. Duration handled by boss
-        return False
+        # Check if duration expired
+        current_time = pygame.time.get_ticks()
+        return (current_time - self.start_time) > self.duration
 
     def draw(self, screen):
         center = (int(self.x), int(self.y))
@@ -4454,16 +4461,21 @@ class RubiksCubeBoss:
         # Center square is special (light blue)
         self.center_color = (135, 206, 250)  # Light blue
 
+        # Calculate center health first
+        center_max_health = RUBIKS_BOSS_CENTER_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL
+        # Regular squares have 10% of center health
+        square_max_health = int(center_max_health * 0.1)
+
         # Create grid
         for row in range(self.grid_size):
             for col in range(self.grid_size):
                 is_center = (row == 2 and col == 2)  # Center square at (2, 2)
 
                 if is_center:
-                    max_health = RUBIKS_BOSS_CENTER_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL
+                    max_health = center_max_health
                     color = self.center_color
                 else:
-                    max_health = RUBIKS_BOSS_SQUARE_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL
+                    max_health = square_max_health
                     color = random.choice(self.rubiks_colors)
 
                 square = {
@@ -4494,6 +4506,11 @@ class RubiksCubeBoss:
         # Special attack objects
         self.green_laser = None  # Active laser beam
         self.white_ball = None   # Active bouncing ball
+
+        # Green laser warning system
+        self.green_laser_warning = False
+        self.green_laser_warning_start_time = 0
+        self.green_warning_duration = 3000  # 3 seconds warning
 
         # Destruction state
         self.destruction_complete = False
@@ -4570,6 +4587,7 @@ class RubiksCubeBoss:
                 # Clear special attacks
                 self.green_laser = None
                 self.white_ball = None
+                self.green_laser_warning = False  # Reset warning state
 
         return []
 
@@ -4613,12 +4631,21 @@ class RubiksCubeBoss:
                     sound_manager.play_sound('enemy_shoot', volume_override=0.3)
 
         elif self.current_attack_color == (0, 255, 0):  # Green - laser beam
-            if self.green_laser is None:
-                self.green_laser = GreenLaser(self, self.attack_phase_duration)
-                bullets.append(self.green_laser)
+            if self.green_laser is None and not self.green_laser_warning:
+                # Start warning phase
+                self.green_laser_warning = True
+                self.green_laser_warning_start_time = current_time
+            elif self.green_laser_warning and self.green_laser is None:
+                # Check if warning is complete
+                warning_elapsed = current_time - self.green_laser_warning_start_time
+                if warning_elapsed >= self.green_warning_duration:
+                    # Fire laser
+                    self.green_laser = GreenLaser(self, self.attack_phase_duration)
+                    bullets.append(self.green_laser)
+                    self.green_laser_warning = False  # Reset warning
 
-                if sound_manager:
-                    sound_manager.play_sound('enemy_shoot', volume_override=0.5)
+                    if sound_manager:
+                        sound_manager.play_sound('enemy_shoot', volume_override=0.5)
 
         elif self.current_attack_color == (255, 255, 0):  # Yellow - slow falling balls
             if current_time - self.last_attack_time >= self.yellow_cooldown:
@@ -4828,56 +4855,95 @@ class RubiksCubeBoss:
 
         return particles
 
-    def draw_cracks_on_square(self, screen, corners, health_ratio):
-        """Draw progressive crack lines on a square based on damage"""
-        # Get center of square
+    def draw_cracks_on_square(self, screen, square, corners, health_ratio):
+        """Draw progressive crack lines on a square based on damage - rotates with square"""
+        # Get center of square in world space
         center_x = sum(c[0] for c in corners) / 4
         center_y = sum(c[1] for c in corners) / 4
 
         # Determine crack level (0 = no cracks, 3 = heavily cracked)
+        # Using 25% increments: 75%, 50%, 25%
         if health_ratio > 0.75:
             return  # No cracks yet
         elif health_ratio > 0.5:
-            crack_level = 1  # Light cracks
+            crack_level = 1  # First crack at 75%
         elif health_ratio > 0.25:
-            crack_level = 2  # Medium cracks
+            crack_level = 2  # Second crack at 50%
         else:
-            crack_level = 3  # Heavy cracks
+            crack_level = 3  # Third crack at 25%
 
-        # Draw crack lines
+        # Draw crack lines - calculate in local space, then rotate
         crack_color = (50, 50, 50)  # Dark gray cracks
 
+        # Helper function to transform local point to world space (rotated)
+        def rotate_point(local_x, local_y):
+            # Convert from local square coords (0-50) to centered coords
+            rel_x = local_x - self.square_size // 2
+            rel_y = local_y - self.square_size // 2
+
+            # Rotate by current rotation angle
+            angle_rad = math.radians(self.rotation_angle)
+            rotated_x = rel_x * math.cos(angle_rad) - rel_y * math.sin(angle_rad)
+            rotated_y = rel_x * math.sin(angle_rad) + rel_y * math.cos(angle_rad)
+
+            # Translate to world position
+            world_x = center_x + rotated_x
+            world_y = center_y + rotated_y
+            return (world_x, world_y)
+
         if crack_level >= 1:
-            # First crack - diagonal from top-left to bottom-right
-            start = (center_x - self.square_size // 4, center_y - self.square_size // 4)
-            end = (center_x + self.square_size // 4, center_y + self.square_size // 4)
-            pygame.draw.line(screen, crack_color, start, end, 2)
+            # First crack - diagonal with some organic variation
+            start = rotate_point(12, 10)
+            mid1 = rotate_point(22, 23)
+            mid2 = rotate_point(28, 27)
+            end = rotate_point(38, 40)
+            pygame.draw.line(screen, crack_color, start, mid1, 2)
+            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
+            pygame.draw.line(screen, crack_color, mid2, end, 2)
 
         if crack_level >= 2:
-            # Second crack - diagonal from top-right to bottom-left
-            start = (center_x + self.square_size // 4, center_y - self.square_size // 4)
-            end = (center_x - self.square_size // 4, center_y + self.square_size // 4)
-            pygame.draw.line(screen, crack_color, start, end, 2)
+            # Second crack - another diagonal with branching
+            start = rotate_point(38, 12)
+            mid1 = rotate_point(30, 20)
+            mid2 = rotate_point(22, 28)
+            end = rotate_point(12, 38)
+            pygame.draw.line(screen, crack_color, start, mid1, 2)
+            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
+            pygame.draw.line(screen, crack_color, mid2, end, 2)
 
-            # Small branch crack from center
-            start = (center_x, center_y)
-            end = (center_x + self.square_size // 6, center_y - self.square_size // 6)
-            pygame.draw.line(screen, crack_color, start, end, 1)
+            # Branch from middle
+            branch_start = rotate_point(25, 25)
+            branch_end = rotate_point(32, 15)
+            pygame.draw.line(screen, crack_color, branch_start, branch_end, 1)
 
         if crack_level >= 3:
-            # Third set of cracks - horizontal and vertical
-            start = (center_x - self.square_size // 3, center_y)
-            end = (center_x + self.square_size // 3, center_y)
-            pygame.draw.line(screen, crack_color, start, end, 2)
+            # Third set - more complex cracking pattern
+            # Horizontal-ish crack with curve
+            start = rotate_point(8, 25)
+            mid1 = rotate_point(18, 22)
+            mid2 = rotate_point(32, 28)
+            end = rotate_point(42, 25)
+            pygame.draw.line(screen, crack_color, start, mid1, 2)
+            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
+            pygame.draw.line(screen, crack_color, mid2, end, 2)
 
-            start = (center_x, center_y - self.square_size // 3)
-            end = (center_x, center_y + self.square_size // 3)
-            pygame.draw.line(screen, crack_color, start, end, 2)
+            # Vertical-ish crack with curve
+            start = rotate_point(25, 8)
+            mid1 = rotate_point(28, 18)
+            mid2 = rotate_point(22, 32)
+            end = rotate_point(25, 42)
+            pygame.draw.line(screen, crack_color, start, mid1, 2)
+            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
+            pygame.draw.line(screen, crack_color, mid2, end, 2)
 
-            # More branch cracks
-            start = (center_x, center_y)
-            end = (center_x - self.square_size // 6, center_y + self.square_size // 6)
-            pygame.draw.line(screen, crack_color, start, end, 1)
+            # More small branches
+            b1_start = rotate_point(25, 25)
+            b1_end = rotate_point(15, 32)
+            pygame.draw.line(screen, crack_color, b1_start, b1_end, 1)
+
+            b2_start = rotate_point(25, 25)
+            b2_end = rotate_point(35, 18)
+            pygame.draw.line(screen, crack_color, b2_start, b2_end, 1)
 
     def draw(self, screen):
         """Draw the Rubik's Cube boss"""
@@ -4896,6 +4962,18 @@ class RubiksCubeBoss:
                                      particle['size'])
             return
 
+        # Green laser warning flash effect
+        show_warning_flash = False
+        if self.green_laser_warning:
+            current_time = pygame.time.get_ticks()
+            warning_elapsed = current_time - self.green_laser_warning_start_time
+            warning_progress = warning_elapsed / self.green_warning_duration  # 0.0 to 1.0
+
+            # Flash interval decreases from 500ms to 50ms (faster and faster)
+            flash_interval = 500 - (warning_progress * 450)  # 500ms -> 50ms
+            flash_on = (warning_elapsed % int(flash_interval)) < (int(flash_interval) / 2)
+            show_warning_flash = flash_on
+
         # Draw each square with rotation
         for square in self.squares:
             if square['destroyed']:
@@ -4904,8 +4982,14 @@ class RubiksCubeBoss:
             # Get rotated corners
             corners = self.get_rotated_square_corners(square['row'], square['col'])
 
+            # Determine color to draw (flash green during warning)
+            if show_warning_flash and not square['is_center']:
+                draw_color = (0, 255, 0)  # Green flash
+            else:
+                draw_color = square['color']
+
             # Draw the square as a polygon
-            pygame.draw.polygon(screen, square['color'], corners)
+            pygame.draw.polygon(screen, draw_color, corners)
 
             # Draw black border
             pygame.draw.polygon(screen, BLACK, corners, 2)
@@ -4913,7 +4997,7 @@ class RubiksCubeBoss:
             # Draw cracks on damaged squares
             health_ratio = square['health'] / square['max_health']
             if health_ratio < 1.0:
-                self.draw_cracks_on_square(screen, corners, health_ratio)
+                self.draw_cracks_on_square(screen, square, corners, health_ratio)
 
         # Draw explosion particles on top
         for particle in self.explosion_effects:
@@ -8006,7 +8090,9 @@ class Game:
                         # Add explosion particles if player died
                         if explosion_particles:
                             self.player_explosion_particles.extend(explosion_particles)
-                        self.enemy_bullets.remove(bullet)
+                        # Don't remove green laser when it hits player - it persists
+                        if not isinstance(bullet, GreenLaser):
+                            self.enemy_bullets.remove(bullet)
                         break
 
         # Asteroids vs players (for Asteroid Field Boss)
