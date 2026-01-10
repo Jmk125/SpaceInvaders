@@ -123,6 +123,23 @@ ASTEROID_BOSS_SIZE_MIN = 30  # Minimum asteroid size (before multiplier)
 ASTEROID_BOSS_SIZE_MAX = 80  # Maximum asteroid size (before multiplier)
 ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches bottom
 
+# Rubik's Cube Boss Configuration
+RUBIKS_BOSS_SQUARE_SIZE = 50  # Size of each small square (pixels)
+RUBIKS_BOSS_GRID_SIZE = 5  # 5x5 grid (25 squares total)
+RUBIKS_BOSS_SQUARE_HEALTH_BASE = 5  # Base health for small squares (adjustable)
+RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL = 2  # Health increase per encounter for small squares
+RUBIKS_BOSS_CENTER_HEALTH_BASE = 50  # Base health for center cube (adjustable, much higher)
+RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL = 15  # Health increase per encounter for center
+RUBIKS_BOSS_ROTATION_SPEED_BASE = 30  # Degrees per second (adjustable)
+RUBIKS_BOSS_ROTATION_SPEED_GROWTH = 5  # Rotation speed increase per encounter (degrees/sec)
+RUBIKS_BOSS_SPEED_BASE = 1.5  # Left/right movement speed
+RUBIKS_BOSS_MIXED_PHASE_DURATION = 5000  # Mixed colors phase duration (ms)
+RUBIKS_BOSS_ATTACK_PHASE_DURATION = 10000  # Single color attack phase duration (ms)
+RUBIKS_BOSS_RED_SHOOT_COOLDOWN = 1000  # Red spinning squares shoot interval (ms, adjustable)
+RUBIKS_BOSS_BLUE_SHOOT_COOLDOWN = 200  # Blue rapid fire interval (ms)
+RUBIKS_BOSS_YELLOW_SHOOT_COOLDOWN = 300  # Yellow slow balls interval (ms)
+RUBIKS_BOSS_ORANGE_SHOOT_COOLDOWN = 800  # Orange large fireballs interval (ms)
+
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
@@ -1656,6 +1673,223 @@ class SlowFallingBullet:
         pygame.draw.circle(screen, (255, 200, 255), center, 4)
         # Bright center
         pygame.draw.circle(screen, WHITE, center, 2)
+
+class SpinningRedSquare:
+    """Spinning red square projectile for Rubik's Cube Boss red attack"""
+    def __init__(self, x, y, target_x, target_y, speed):
+        self.x = x
+        self.y = y
+        self.width = 20
+        self.height = 20
+        self.speed = speed
+        self.rotation = 0  # Current rotation angle
+        self.rotation_speed = 10  # Degrees per frame
+
+        # Calculate velocity toward target
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.hypot(dx, dy) or 1
+        self.vel_x = (dx / distance) * speed
+        self.vel_y = (dy / distance) * speed
+        self.rect = pygame.Rect(int(self.x - self.width // 2), int(self.y - self.height // 2), self.width, self.height)
+
+    def move(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.rotation = (self.rotation + self.rotation_speed) % 360
+        self.rect.x = int(self.x - self.width // 2)
+        self.rect.y = int(self.y - self.height // 2)
+
+    def is_off_screen(self):
+        return (self.x < -50 or self.x > SCREEN_WIDTH + 50 or
+                self.y < -50 or self.y > SCREEN_HEIGHT + 50)
+
+    def draw(self, screen):
+        # Create a rotating red square
+        surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        pygame.draw.rect(surface, (255, 0, 0), (0, 0, self.width, self.height))
+        pygame.draw.rect(surface, (180, 0, 0), (2, 2, self.width - 4, self.height - 4))
+
+        # Rotate the surface
+        rotated = pygame.transform.rotate(surface, self.rotation)
+        rect = rotated.get_rect(center=(int(self.x), int(self.y)))
+        screen.blit(rotated, rect.topleft)
+
+class BlueBullet:
+    """Blue rapid-fire bullet for Rubik's Cube Boss blue attack"""
+    def __init__(self, x, y, target_x, target_y, speed):
+        self.x = x
+        self.y = y
+        self.width = 10
+        self.height = 10
+        self.speed = speed
+
+        # Calculate velocity toward target
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.hypot(dx, dy) or 1
+        self.vel_x = (dx / distance) * speed
+        self.vel_y = (dy / distance) * speed
+        self.rect = pygame.Rect(int(self.x - self.width // 2), int(self.y - self.height // 2), self.width, self.height)
+
+    def move(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.rect.x = int(self.x - self.width // 2)
+        self.rect.y = int(self.y - self.height // 2)
+
+    def is_off_screen(self):
+        return (self.x < -30 or self.x > SCREEN_WIDTH + 30 or
+                self.y < -30 or self.y > SCREEN_HEIGHT + 30)
+
+    def draw(self, screen):
+        center = (int(self.x), int(self.y))
+        pygame.draw.circle(screen, (0, 100, 255), center, 5)
+        pygame.draw.circle(screen, (100, 180, 255), center, 3)
+
+class GreenLaser:
+    """Green laser beam for Rubik's Cube Boss green attack"""
+    def __init__(self, center_x, duration):
+        self.center_x = center_x
+        self.width = 15  # Width of the laser beam
+        self.duration = duration  # How long the laser stays active (ms)
+        self.start_time = pygame.time.get_ticks()
+        self.y = 0  # Starts at top
+        self.rect = pygame.Rect(int(self.center_x - self.width // 2), self.y, self.width, SCREEN_HEIGHT)
+
+    def move(self):
+        # Laser doesn't move, just exists for duration
+        pass
+
+    def is_off_screen(self):
+        # Check if duration expired
+        current_time = pygame.time.get_ticks()
+        return (current_time - self.start_time) > self.duration
+
+    def draw(self, screen):
+        # Draw green laser beam from top to bottom
+        laser_rect = pygame.Rect(int(self.center_x - self.width // 2), 0, self.width, SCREEN_HEIGHT)
+
+        # Outer glow
+        glow_rect = pygame.Rect(int(self.center_x - self.width // 2 - 5), 0, self.width + 10, SCREEN_HEIGHT)
+        pygame.draw.rect(screen, (0, 255, 0, 50), glow_rect)
+
+        # Main beam
+        pygame.draw.rect(screen, (0, 255, 0), laser_rect)
+
+        # Inner bright core
+        core_rect = pygame.Rect(int(self.center_x - self.width // 4), 0, self.width // 2, SCREEN_HEIGHT)
+        pygame.draw.rect(screen, (150, 255, 150), core_rect)
+
+class YellowBall:
+    """Slow-falling yellow ball for Rubik's Cube Boss yellow attack (bullet hell)"""
+    def __init__(self, x, y, speed):
+        self.x = x
+        self.y = y
+        self.width = 14
+        self.height = 14
+        self.speed = speed  # Very slow falling speed
+        self.rect = pygame.Rect(int(self.x - self.width // 2), int(self.y - self.height // 2), self.width, self.height)
+
+    def move(self):
+        self.y += self.speed
+        self.rect.x = int(self.x - self.width // 2)
+        self.rect.y = int(self.y - self.height // 2)
+
+    def is_off_screen(self):
+        return self.y > SCREEN_HEIGHT + 30
+
+    def draw(self, screen):
+        center = (int(self.x), int(self.y))
+        # Outer glow
+        pygame.draw.circle(screen, (255, 255, 0), center, 7)
+        # Middle layer
+        pygame.draw.circle(screen, (255, 255, 100), center, 5)
+        # Inner core
+        pygame.draw.circle(screen, (255, 255, 200), center, 3)
+
+class WhiteBall:
+    """Bouncing white ball for Rubik's Cube Boss white attack (screensaver style)"""
+    def __init__(self, x, y, speed):
+        self.x = x
+        self.y = y
+        self.radius = 25  # Large ball
+        self.width = self.radius * 2
+        self.height = self.radius * 2
+        self.speed = speed
+
+        # Random initial direction
+        angle = random.uniform(0, 2 * math.pi)
+        self.vel_x = math.cos(angle) * speed
+        self.vel_y = math.sin(angle) * speed
+
+        self.rect = pygame.Rect(int(self.x - self.radius), int(self.y - self.radius), self.width, self.height)
+
+    def move(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+
+        # Bounce off screen edges
+        if self.x - self.radius <= 0 or self.x + self.radius >= SCREEN_WIDTH:
+            self.vel_x *= -1
+            # Clamp position to prevent getting stuck
+            self.x = max(self.radius, min(SCREEN_WIDTH - self.radius, self.x))
+
+        if self.y - self.radius <= 0 or self.y + self.radius >= SCREEN_HEIGHT:
+            self.vel_y *= -1
+            # Clamp position to prevent getting stuck
+            self.y = max(self.radius, min(SCREEN_HEIGHT - self.radius, self.y))
+
+        self.rect.x = int(self.x - self.radius)
+        self.rect.y = int(self.y - self.radius)
+
+    def is_off_screen(self):
+        # White ball never goes off screen, it bounces. Duration handled by boss
+        return False
+
+    def draw(self, screen):
+        center = (int(self.x), int(self.y))
+        # Large white ball with glow
+        pygame.draw.circle(screen, (200, 200, 200), center, self.radius)
+        pygame.draw.circle(screen, (255, 255, 255), center, self.radius - 3)
+        # Shiny spot
+        pygame.draw.circle(screen, (255, 255, 255), (int(self.x - 8), int(self.y - 8)), 8)
+
+class OrangeFireball:
+    """Large orange fireball for Rubik's Cube Boss orange attack"""
+    def __init__(self, x, y, target_x, target_y, speed):
+        self.x = x
+        self.y = y
+        self.radius = 35  # Very large fireball
+        self.width = self.radius * 2
+        self.height = self.radius * 2
+        self.speed = speed
+
+        # Calculate velocity toward target
+        dx = target_x - x
+        dy = target_y - y
+        distance = math.hypot(dx, dy) or 1
+        self.vel_x = (dx / distance) * speed
+        self.vel_y = (dy / distance) * speed
+        self.rect = pygame.Rect(int(self.x - self.radius), int(self.y - self.radius), self.width, self.height)
+
+    def move(self):
+        self.x += self.vel_x
+        self.y += self.vel_y
+        self.rect.x = int(self.x - self.radius)
+        self.rect.y = int(self.y - self.radius)
+
+    def is_off_screen(self):
+        return (self.x < -100 or self.x > SCREEN_WIDTH + 100 or
+                self.y < -100 or self.y > SCREEN_HEIGHT + 100)
+
+    def draw(self, screen):
+        center = (int(self.x), int(self.y))
+        # Large layered fireball
+        pygame.draw.circle(screen, (255, 100, 0), center, self.radius)  # Outer orange
+        pygame.draw.circle(screen, (255, 150, 0), center, self.radius - 7)  # Mid orange
+        pygame.draw.circle(screen, (255, 200, 50), center, self.radius - 14)  # Inner yellow
+        pygame.draw.circle(screen, (255, 255, 150), center, self.radius - 21)  # Core white-yellow
 
 class Boss:
     def __init__(self, encounter):
@@ -4152,6 +4386,487 @@ class AsteroidFieldBoss:
         screen.blit(text, text_rect)
 
 
+class RubiksCubeBoss:
+    """Fifth boss - Rotating Rubik's Cube with color-based attacks"""
+    def __init__(self, encounter):
+        self.encounter = max(1, encounter)
+
+        # Grid configuration
+        self.grid_size = RUBIKS_BOSS_GRID_SIZE  # 5x5
+        self.square_size = RUBIKS_BOSS_SQUARE_SIZE  # 50px per square
+        self.total_size = self.grid_size * self.square_size  # 250px total
+
+        # Position
+        self.x = SCREEN_WIDTH // 2 - self.total_size // 2
+        self.y = 150
+        self.center_x = self.x + self.total_size // 2
+        self.center_y = self.y + self.total_size // 2
+
+        # Movement
+        self.speed = RUBIKS_BOSS_SPEED_BASE
+        self.direction = random.choice([-1, 1])
+        self.last_direction_change = pygame.time.get_ticks()
+        self.direction_change_cooldown = random.randint(1000, 3000)
+
+        # Rotation
+        self.rotation_angle = 0
+        self.rotation_speed = RUBIKS_BOSS_ROTATION_SPEED_BASE + (self.encounter - 1) * RUBIKS_BOSS_ROTATION_SPEED_GROWTH
+
+        # Initialize 5x5 grid of squares
+        # Grid positions: [row][col] where (2, 2) is center
+        self.squares = []
+
+        # Rubik's cube colors (6 colors)
+        self.rubiks_colors = [
+            (255, 0, 0),      # Red
+            (0, 0, 255),      # Blue
+            (0, 255, 0),      # Green
+            (255, 255, 0),    # Yellow
+            (255, 255, 255),  # White
+            (255, 140, 0)     # Orange
+        ]
+
+        # Center square is special (light blue)
+        self.center_color = (135, 206, 250)  # Light blue
+
+        # Create grid
+        for row in range(self.grid_size):
+            for col in range(self.grid_size):
+                is_center = (row == 2 and col == 2)  # Center square at (2, 2)
+
+                if is_center:
+                    max_health = RUBIKS_BOSS_CENTER_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL
+                    color = self.center_color
+                else:
+                    max_health = RUBIKS_BOSS_SQUARE_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL
+                    color = random.choice(self.rubiks_colors)
+
+                square = {
+                    'row': row,
+                    'col': col,
+                    'health': max_health,
+                    'max_health': max_health,
+                    'color': color,
+                    'destroyed': False,
+                    'is_center': is_center
+                }
+                self.squares.append(square)
+
+        # Attack phase system
+        self.current_phase = 'mixed'  # 'mixed' or 'attack'
+        self.current_attack_color = None
+        self.phase_start_time = pygame.time.get_ticks()
+        self.mixed_phase_duration = RUBIKS_BOSS_MIXED_PHASE_DURATION
+        self.attack_phase_duration = RUBIKS_BOSS_ATTACK_PHASE_DURATION
+
+        # Attack cooldowns
+        self.last_attack_time = pygame.time.get_ticks()
+        self.red_cooldown = RUBIKS_BOSS_RED_SHOOT_COOLDOWN
+        self.blue_cooldown = RUBIKS_BOSS_BLUE_SHOOT_COOLDOWN
+        self.yellow_cooldown = RUBIKS_BOSS_YELLOW_SHOOT_COOLDOWN
+        self.orange_cooldown = RUBIKS_BOSS_ORANGE_SHOOT_COOLDOWN
+
+        # Special attack objects
+        self.green_laser = None  # Active laser beam
+        self.white_ball = None   # Active bouncing ball
+
+        # Destruction state
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        self.explosion_effects = []
+
+        # Rect for compatibility
+        self.rect = pygame.Rect(self.x, self.y, self.total_size, self.total_size)
+        self.width = self.total_size
+        self.height = self.total_size
+
+    def update(self, players=None, sound_manager=None):
+        """Update boss movement, rotation, and attack phases"""
+        if self.destruction_complete:
+            # Update explosion effects
+            self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+            for explosion in self.explosion_effects:
+                explosion['radius'] += explosion['growth']
+                explosion['life'] -= 1
+            return []
+
+        # Movement (left/right like UFO boss)
+        self.x += self.speed * self.direction
+
+        if self.x <= 0 or self.x >= SCREEN_WIDTH - self.total_size:
+            self.direction *= -1
+
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_direction_change > self.direction_change_cooldown:
+            if random.randint(1, 100) <= 30:
+                self.direction *= -1
+                self.last_direction_change = current_time
+                self.direction_change_cooldown = random.randint(1000, 3000)
+
+        # Update center position
+        self.center_x = self.x + self.total_size // 2
+        self.center_y = self.y + self.total_size // 2
+
+        # Rotation
+        self.rotation_angle = (self.rotation_angle + self.rotation_speed / 60) % 360  # Assuming 60 FPS
+
+        # Update rect
+        self.rect.x = self.x
+        self.rect.y = self.y
+
+        # Attack phase management
+        time_in_phase = current_time - self.phase_start_time
+
+        if self.current_phase == 'mixed':
+            # Mixed colors, no attack
+            if time_in_phase >= self.mixed_phase_duration:
+                # Switch to attack phase with random color
+                self.current_phase = 'attack'
+                self.current_attack_color = random.choice(self.rubiks_colors)
+                self.phase_start_time = current_time
+                self.last_attack_time = current_time
+
+                # Apply color to all non-destroyed, non-center squares
+                for square in self.squares:
+                    if not square['destroyed'] and not square['is_center']:
+                        square['color'] = self.current_attack_color
+        else:  # attack phase
+            if time_in_phase >= self.attack_phase_duration:
+                # Switch back to mixed phase
+                self.current_phase = 'mixed'
+                self.current_attack_color = None
+                self.phase_start_time = current_time
+
+                # Randomize colors for non-destroyed, non-center squares
+                for square in self.squares:
+                    if not square['destroyed'] and not square['is_center']:
+                        square['color'] = random.choice(self.rubiks_colors)
+
+                # Clear special attacks
+                self.green_laser = None
+                self.white_ball = None
+
+        return []
+
+    def shoot(self, players, sound_manager=None):
+        """Generate attacks based on current color"""
+        if self.destruction_complete or self.current_phase != 'attack':
+            return []
+
+        bullets = []
+        current_time = pygame.time.get_ticks()
+
+        # Get closest alive player
+        alive_players = [p for p in players if p.is_alive]
+        if not alive_players:
+            return []
+
+        closest_player = min(alive_players, key=lambda p: math.hypot(
+            p.x + p.width // 2 - self.center_x,
+            p.y + p.height // 2 - self.center_y
+        ))
+        target_x = closest_player.x + closest_player.width // 2
+        target_y = closest_player.y + closest_player.height // 2
+
+        # Attack based on current color
+        if self.current_attack_color == (255, 0, 0):  # Red - spinning squares
+            if current_time - self.last_attack_time >= self.red_cooldown:
+                bullet = SpinningRedSquare(self.center_x, self.center_y, target_x, target_y, 4.0)
+                bullets.append(bullet)
+                self.last_attack_time = current_time
+
+                if sound_manager:
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.4)
+
+        elif self.current_attack_color == (0, 0, 255):  # Blue - rapid fire bullets
+            if current_time - self.last_attack_time >= self.blue_cooldown:
+                bullet = BlueBullet(self.center_x, self.center_y, target_x, target_y, 5.0)
+                bullets.append(bullet)
+                self.last_attack_time = current_time
+
+                if sound_manager:
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.3)
+
+        elif self.current_attack_color == (0, 255, 0):  # Green - laser beam
+            if self.green_laser is None:
+                self.green_laser = GreenLaser(self.center_x, self.attack_phase_duration)
+                bullets.append(self.green_laser)
+
+                if sound_manager:
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.5)
+
+        elif self.current_attack_color == (255, 255, 0):  # Yellow - slow falling balls
+            if current_time - self.last_attack_time >= self.yellow_cooldown:
+                # Spawn at random X position near boss
+                spawn_x = self.center_x + random.randint(-100, 100)
+                bullet = YellowBall(spawn_x, self.center_y, 1.0)
+                bullets.append(bullet)
+                self.last_attack_time = current_time
+
+        elif self.current_attack_color == (255, 255, 255):  # White - bouncing ball
+            if self.white_ball is None:
+                self.white_ball = WhiteBall(self.center_x, self.center_y, 6.0)
+                bullets.append(self.white_ball)
+
+                if sound_manager:
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.5)
+
+        elif self.current_attack_color == (255, 140, 0):  # Orange - large fireballs
+            if current_time - self.last_attack_time >= self.orange_cooldown:
+                bullet = OrangeFireball(self.center_x, self.center_y, target_x, target_y, 3.0)
+                bullets.append(bullet)
+                self.last_attack_time = current_time
+
+                if sound_manager:
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.5)
+
+        return bullets
+
+    def get_rotated_square_corners(self, row, col):
+        """Calculate the 4 corners of a square after rotation"""
+        # Local position relative to grid (before rotation)
+        local_x = col * self.square_size
+        local_y = row * self.square_size
+
+        # Calculate 4 corners of the square (before rotation)
+        corners = [
+            (local_x, local_y),
+            (local_x + self.square_size, local_y),
+            (local_x + self.square_size, local_y + self.square_size),
+            (local_x, local_y + self.square_size)
+        ]
+
+        # Rotate each corner around grid center
+        grid_center_x = self.total_size // 2
+        grid_center_y = self.total_size // 2
+
+        rotated_corners = []
+        angle_rad = math.radians(self.rotation_angle)
+
+        for corner_x, corner_y in corners:
+            # Translate to origin (relative to grid center)
+            rel_x = corner_x - grid_center_x
+            rel_y = corner_y - grid_center_y
+
+            # Rotate
+            rotated_x = rel_x * math.cos(angle_rad) - rel_y * math.sin(angle_rad)
+            rotated_y = rel_x * math.sin(angle_rad) + rel_y * math.cos(angle_rad)
+
+            # Translate back and add boss position
+            final_x = rotated_x + grid_center_x + self.x
+            final_y = rotated_y + grid_center_y + self.y
+
+            rotated_corners.append((final_x, final_y))
+
+        return rotated_corners
+
+    def point_in_polygon(self, point, polygon):
+        """Check if a point is inside a polygon using ray casting"""
+        x, y = point
+        n = len(polygon)
+        inside = False
+
+        p1x, p1y = polygon[0]
+        for i in range(1, n + 1):
+            p2x, p2y = polygon[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xinters:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+
+        return inside
+
+    def take_turret_damage(self, turret_index, damage=1):
+        """Not used for this boss"""
+        return False
+
+    def take_main_damage(self, damage=1):
+        """Check if bullet hit any square (including center)"""
+        # This will be called with a bullet position
+        # We need to check collision with rotated squares
+        # Note: The game engine will need to pass bullet rect
+        return False
+
+    def take_square_damage(self, bullet_rect, damage=1):
+        """Check if bullet hit any square and apply damage"""
+        bullet_center = (bullet_rect.centerx, bullet_rect.centery)
+
+        # Check each square
+        for square in self.squares:
+            if square['destroyed']:
+                continue
+
+            # Get rotated corners for this square
+            corners = self.get_rotated_square_corners(square['row'], square['col'])
+
+            # Check if bullet center is inside this square's polygon
+            if self.point_in_polygon(bullet_center, corners):
+                square['health'] -= damage
+
+                if square['health'] <= 0:
+                    square['destroyed'] = True
+
+                    # Create particle explosion
+                    self.create_square_explosion(square)
+
+                    # Check if center was destroyed (win condition)
+                    if square['is_center']:
+                        self.start_destruction()
+
+                    return True
+
+                return False  # Hit but not destroyed
+
+        return False
+
+    def create_square_explosion(self, square):
+        """Create particle explosion for destroyed square"""
+        # Get center of square
+        corners = self.get_rotated_square_corners(square['row'], square['col'])
+        center_x = sum(c[0] for c in corners) / 4
+        center_y = sum(c[1] for c in corners) / 4
+
+        # Create particles (similar to enemy explosions)
+        for _ in range(15):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 4)
+            particle = {
+                'x': center_x,
+                'y': center_y,
+                'vel_x': math.cos(angle) * speed,
+                'vel_y': math.sin(angle) * speed,
+                'life': random.randint(30, 60),
+                'color': square['color'],
+                'size': random.randint(2, 5)
+            }
+            self.explosion_effects.append(particle)
+
+    def get_turret_rects(self):
+        """Return rects for all non-destroyed squares (for hit detection)"""
+        rects = []
+        for i, square in enumerate(self.squares):
+            if not square['destroyed']:
+                # Get rotated corners
+                corners = self.get_rotated_square_corners(square['row'], square['col'])
+
+                # Calculate bounding box for the rotated square
+                min_x = min(c[0] for c in corners)
+                max_x = max(c[0] for c in corners)
+                min_y = min(c[1] for c in corners)
+                max_y = max(c[1] for c in corners)
+
+                rect = pygame.Rect(int(min_x), int(min_y), int(max_x - min_x), int(max_y - min_y))
+                rects.append((i, rect, square))  # Return index, rect, and square data
+
+        return rects
+
+    def get_main_body_rect(self):
+        """Return None - use get_turret_rects for all squares"""
+        return None
+
+    def start_destruction(self):
+        """Start boss destruction sequence"""
+        self.destruction_complete = True
+        self.destruction_start_time = pygame.time.get_ticks()
+
+        # Create final explosion
+        self.create_final_explosion()
+
+    def is_destruction_complete(self):
+        """Check if destruction animation is complete"""
+        if not self.destruction_complete:
+            return False
+        return pygame.time.get_ticks() - self.destruction_start_time > 2000  # 2 second animation
+
+    def create_final_explosion(self):
+        """Create large explosion effect when boss is destroyed"""
+        particles = []
+
+        # Create many particles from center
+        for _ in range(50):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(2, 8)
+            particle = {
+                'x': self.center_x,
+                'y': self.center_y,
+                'vel_x': math.cos(angle) * speed,
+                'vel_y': math.sin(angle) * speed,
+                'life': random.randint(60, 120),
+                'color': random.choice(self.rubiks_colors + [self.center_color]),
+                'size': random.randint(3, 8),
+                'radius': random.randint(10, 30),
+                'growth': random.uniform(0.5, 2)
+            }
+            self.explosion_effects.append(particle)
+
+        return particles
+
+    def draw(self, screen):
+        """Draw the Rubik's Cube boss"""
+        if self.destruction_complete:
+            # Draw explosion particles
+            for particle in self.explosion_effects:
+                if 'radius' in particle:
+                    # Expanding circle explosion
+                    pygame.draw.circle(screen, particle['color'],
+                                     (int(particle['x']), int(particle['y'])),
+                                     int(particle['radius']))
+                else:
+                    # Regular particle
+                    pygame.draw.circle(screen, particle['color'],
+                                     (int(particle['x']), int(particle['y'])),
+                                     particle['size'])
+            return
+
+        # Draw each square with rotation
+        for square in self.squares:
+            if square['destroyed']:
+                continue
+
+            # Get rotated corners
+            corners = self.get_rotated_square_corners(square['row'], square['col'])
+
+            # Draw the square as a polygon
+            pygame.draw.polygon(screen, square['color'], corners)
+
+            # Draw black border
+            pygame.draw.polygon(screen, BLACK, corners, 2)
+
+            # Draw health indicator for non-center squares (subtle)
+            if not square['is_center']:
+                health_ratio = square['health'] / square['max_health']
+                if health_ratio < 1.0:
+                    # Darken square based on damage
+                    center_x = sum(c[0] for c in corners) / 4
+                    center_y = sum(c[1] for c in corners) / 4
+                    damage_alpha = int((1 - health_ratio) * 100)
+                    # Create semi-transparent overlay
+                    s = pygame.Surface((self.square_size, self.square_size), pygame.SRCALPHA)
+                    s.fill((0, 0, 0, damage_alpha))
+                    screen.blit(s, (int(center_x - self.square_size // 2),
+                                   int(center_y - self.square_size // 2)))
+
+        # Draw explosion particles on top
+        for particle in self.explosion_effects:
+            if 'radius' not in particle:  # Only draw small particles during combat
+                pygame.draw.circle(screen, particle['color'],
+                                 (int(particle['x']), int(particle['y'])),
+                                 particle['size'])
+
+        # Update particles
+        for particle in self.explosion_effects[:]:
+            particle['x'] += particle.get('vel_x', 0)
+            particle['y'] += particle.get('vel_y', 0)
+            particle['life'] -= 1
+
+            if particle['life'] <= 0:
+                self.explosion_effects.remove(particle)
+
+
 class Enemy:
     def __init__(self, x, y, enemy_type=0):
         self.x = x
@@ -5398,7 +6113,7 @@ class DebugMenu:
             {'type': 'int', 'label': 'XP Current', 'path': ('xp_current',), 'min': 0, 'max': 50000, 'step': 250},
             {'type': 'label', 'label': 'Boss Testing'},
             {'type': 'bool', 'label': 'Force Boss Level', 'path': ('force_boss_level',)},
-            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss'], 'path': ('force_boss_type',)},
+            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss'], 'path': ('force_boss_type',)},
             {'type': 'int', 'label': 'Boss Encounter Level', 'path': ('boss_encounter_level',), 'min': 1, 'max': 50, 'step': 1},
         ]
 
@@ -5703,7 +6418,7 @@ class Game:
         self.current_boss = None
         self.is_boss_level = False
         self.boss_shield_granted = False
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0}
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0}
         self.last_boss_type = None  # Track last boss to prevent consecutive repeats
 
         # Debug overrides for boss testing
@@ -5806,7 +6521,8 @@ class Game:
                 'Boss': Boss,
                 'AlienOverlordBoss': AlienOverlordBoss,
                 'BulletHellBoss': BulletHellBoss,
-                'AsteroidFieldBoss': AsteroidFieldBoss
+                'AsteroidFieldBoss': AsteroidFieldBoss,
+                'RubiksCubeBoss': RubiksCubeBoss
             }
             self.debug_force_boss_type = boss_map.get(boss_type_name)
 
@@ -6966,10 +7682,23 @@ class Game:
         for bullet in self.player_bullets[:]:
             owner = next((p for p in self.players if p.player_id == bullet.owner_id), None)
             if self.is_boss_level and self.current_boss and not self.current_boss.destruction_complete:
-                # Check turret collisions first
+                # Special handling for RubiksCubeBoss
+                if isinstance(self.current_boss, RubiksCubeBoss):
+                    if self.current_boss.take_square_damage(bullet.rect, max(1, int(math.ceil(bullet.boss_damage_multiplier)))):
+                        # Hit a square
+                        if bullet.pierce_hits <= 0:
+                            self.player_bullets.remove(bullet)
+                        self.sound_manager.play_sound('ufo_hit', volume_override=0.5)
+                        self.score += 10
+                        self.add_xp(5, bullet.rect.centerx, bullet.rect.centery)
+                        if bullet.pierce_hits > 0:
+                            bullet.pierce_hits -= 1
+                    continue  # Skip normal boss collision logic
+
+                # Check turret collisions first (for other bosses)
                 turret_rects = self.current_boss.get_turret_rects()
                 hit_turret = False
-                
+
                 for turret_rect, turret_index in turret_rects:
                     if turret_rect and bullet.rect.colliderect(turret_rect):
                         damage = max(1, int(math.ceil(bullet.boss_damage_multiplier)))
@@ -7078,7 +7807,18 @@ class Game:
             owner = next((p for p in self.players if p.player_id == laser.owner_player_id), None)
             if laser.is_active():
                 if self.is_boss_level and self.current_boss and not self.current_boss.destruction_complete:
-                    # Laser vs turrets
+                    # Special handling for RubiksCubeBoss with lasers
+                    if isinstance(self.current_boss, RubiksCubeBoss):
+                        # Laser continuously damages squares
+                        if pygame.time.get_ticks() % 100 == 0:  # Damage every 100ms
+                            if self.current_boss.take_square_damage(laser.rect, 2):
+                                if pygame.time.get_ticks() % 200 == 0:
+                                    self.sound_manager.play_sound('ufo_hit', volume_override=0.4)
+                                self.score += 10
+                                self.add_xp(4, laser.rect.centerx, laser.rect.centery)
+                        continue  # Skip normal boss collision logic
+
+                    # Laser vs turrets (for other bosses)
                     turret_rects = self.current_boss.get_turret_rects()
                     for turret_rect, turret_index in turret_rects:
                         if turret_rect and laser.rect.colliderect(turret_rect):
@@ -7255,7 +7995,7 @@ class Game:
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
         self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss]
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0}
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0}
 
         # Reset all players with new individual upgrades
         for player in self.players:
