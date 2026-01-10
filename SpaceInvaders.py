@@ -1762,7 +1762,10 @@ class GreenLaser:
     def update_rect(self):
         """Update rect position based on boss center"""
         center_x = self.boss.center_x
-        self.rect = pygame.Rect(int(center_x - self.width // 2), self.y, self.width, SCREEN_HEIGHT)
+        center_y = self.boss.center_y
+        # Laser starts from center of boss and goes to bottom of screen
+        laser_height = SCREEN_HEIGHT - center_y
+        self.rect = pygame.Rect(int(center_x - self.width // 2), int(center_y), self.width, int(laser_height))
 
     def move(self):
         # Update position to follow boss
@@ -1776,6 +1779,10 @@ class GreenLaser:
     def draw(self, screen):
         # Get current boss center position
         center_x = self.boss.center_x
+        center_y = self.boss.center_y
+
+        # Calculate laser height from center to bottom
+        laser_height = SCREEN_HEIGHT - center_y
 
         # Flashing effect - alternate between bright and dim green
         current_time = pygame.time.get_ticks()
@@ -1792,20 +1799,20 @@ class GreenLaser:
             core_color = (100, 220, 100)
             glow_alpha = 50
 
-        # Draw green laser beam from top to bottom
-        laser_rect = pygame.Rect(int(center_x - self.width // 2), 0, self.width, SCREEN_HEIGHT)
+        # Draw green laser beam from center cube downward
+        laser_rect = pygame.Rect(int(center_x - self.width // 2), int(center_y), self.width, int(laser_height))
 
         # Outer glow
-        glow_rect = pygame.Rect(int(center_x - self.width // 2 - 5), 0, self.width + 10, SCREEN_HEIGHT)
-        glow_surface = pygame.Surface((self.width + 10, SCREEN_HEIGHT), pygame.SRCALPHA)
+        glow_rect = pygame.Rect(int(center_x - self.width // 2 - 5), int(center_y), self.width + 10, int(laser_height))
+        glow_surface = pygame.Surface((self.width + 10, int(laser_height)), pygame.SRCALPHA)
         glow_surface.fill((*main_color, glow_alpha))
-        screen.blit(glow_surface, (int(center_x - self.width // 2 - 5), 0))
+        screen.blit(glow_surface, (int(center_x - self.width // 2 - 5), int(center_y)))
 
         # Main beam
         pygame.draw.rect(screen, main_color, laser_rect)
 
         # Inner bright core
-        core_rect = pygame.Rect(int(center_x - self.width // 4), 0, self.width // 2, SCREEN_HEIGHT)
+        core_rect = pygame.Rect(int(center_x - self.width // 4), int(center_y), self.width // 2, int(laser_height))
         pygame.draw.rect(screen, core_color, core_rect)
 
 class YellowBall:
@@ -4463,8 +4470,8 @@ class RubiksCubeBoss:
 
         # Calculate center health first
         center_max_health = RUBIKS_BOSS_CENTER_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL
-        # Regular squares have 10% of center health
-        square_max_health = int(center_max_health * 0.1)
+        # Regular squares have 20% of center health
+        square_max_health = int(center_max_health * 0.2)
 
         # Create grid
         for row in range(self.grid_size):
@@ -4639,8 +4646,9 @@ class RubiksCubeBoss:
                 # Check if warning is complete
                 warning_elapsed = current_time - self.green_laser_warning_start_time
                 if warning_elapsed >= self.green_warning_duration:
-                    # Fire laser
-                    self.green_laser = GreenLaser(self, self.attack_phase_duration)
+                    # Fire laser - duration is remaining time in attack phase after warning
+                    remaining_duration = self.attack_phase_duration - self.green_warning_duration
+                    self.green_laser = GreenLaser(self, remaining_duration)
                     bullets.append(self.green_laser)
                     self.green_laser_warning = False  # Reset warning
 
@@ -4982,9 +4990,9 @@ class RubiksCubeBoss:
             # Get rotated corners
             corners = self.get_rotated_square_corners(square['row'], square['col'])
 
-            # Determine color to draw (flash green during warning)
+            # Determine color to draw (flash bright white during green laser warning)
             if show_warning_flash and not square['is_center']:
-                draw_color = (0, 255, 0)  # Green flash
+                draw_color = (255, 255, 255)  # Flash bright white during warning
             else:
                 draw_color = square['color']
 
