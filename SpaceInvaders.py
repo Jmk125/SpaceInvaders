@@ -138,6 +138,7 @@ RUBIKS_BOSS_RED_SHOOT_COOLDOWN = 1000  # Red spinning squares shoot interval (ms
 RUBIKS_BOSS_BLUE_SHOOT_COOLDOWN = 200  # Blue rapid fire interval (ms)
 RUBIKS_BOSS_YELLOW_SHOOT_COOLDOWN = 300  # Yellow slow balls interval (ms)
 RUBIKS_BOSS_ORANGE_SHOOT_COOLDOWN = 800  # Orange large fireballs interval (ms)
+RUBIKS_BOSS_WHITE_SHOOT_COOLDOWN = 3000  # White bouncing ball interval (ms)
 
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
@@ -4511,10 +4512,11 @@ class RubiksCubeBoss:
         self.blue_cooldown = RUBIKS_BOSS_BLUE_SHOOT_COOLDOWN
         self.yellow_cooldown = RUBIKS_BOSS_YELLOW_SHOOT_COOLDOWN
         self.orange_cooldown = RUBIKS_BOSS_ORANGE_SHOOT_COOLDOWN
+        self.white_cooldown = RUBIKS_BOSS_WHITE_SHOOT_COOLDOWN
 
         # Special attack objects
         self.green_laser = None  # Active laser beam
-        self.white_ball = None   # Active bouncing ball
+        self.last_white_ball_time = 0  # Track white ball shooting cooldown
 
         # Green laser warning system
         self.green_laser_warning = False
@@ -4583,6 +4585,7 @@ class RubiksCubeBoss:
                 self.current_attack_color = random.choice(self.rubiks_colors)
                 self.phase_start_time = current_time
                 self.last_attack_time = current_time
+                self.last_white_ball_time = current_time - self.white_cooldown  # Allow immediate white ball shot
 
                 # Apply color to all non-destroyed, non-center squares
                 for square in self.squares:
@@ -4602,8 +4605,8 @@ class RubiksCubeBoss:
 
                 # Clear special attacks
                 self.green_laser = None
-                self.white_ball = None
                 self.green_laser_warning = False  # Reset warning state
+                self.last_white_ball_time = 0  # Reset white ball cooldown
 
         return []
 
@@ -4672,10 +4675,11 @@ class RubiksCubeBoss:
                 bullets.append(bullet)
                 self.last_attack_time = current_time
 
-        elif self.current_attack_color == (255, 255, 255):  # White - bouncing ball
-            if self.white_ball is None:
-                self.white_ball = WhiteBall(self.center_x, self.center_y, 6.0)
-                bullets.append(self.white_ball)
+        elif self.current_attack_color == (255, 255, 255):  # White - bouncing balls
+            if current_time - self.last_white_ball_time >= self.white_cooldown:
+                bullet = WhiteBall(self.center_x, self.center_y, 6.0)
+                bullets.append(bullet)
+                self.last_white_ball_time = current_time
 
                 if sound_manager:
                     sound_manager.play_sound('enemy_shoot', volume_override=0.5)
