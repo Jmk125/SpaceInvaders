@@ -4543,8 +4543,13 @@ class RubiksCubeBoss:
                 explosion['life'] -= 1
             return []
 
+        # Check if only center square remains (final phase)
+        only_center_remains = all(sq['destroyed'] for sq in self.squares if not sq['is_center'])
+
         # Movement (left/right like UFO boss)
-        self.x += self.speed * self.direction
+        # Double speed when only center remains
+        current_speed = self.speed * 2 if only_center_remains else self.speed
+        self.x += current_speed * self.direction
 
         if self.x <= 0 or self.x >= SCREEN_WIDTH - self.total_size:
             self.direction *= -1
@@ -4686,18 +4691,28 @@ class RubiksCubeBoss:
 
         return bullets
 
-    def get_rotated_square_corners(self, row, col):
+    def get_rotated_square_corners(self, row, col, size_override=None):
         """Calculate the 4 corners of a square after rotation"""
+        # Use override size if provided (for enlarged center square in final phase)
+        square_size = size_override if size_override is not None else self.square_size
+
         # Local position relative to grid (before rotation)
+        # Center the enlarged square around its normal position
         local_x = col * self.square_size
         local_y = row * self.square_size
+
+        # If using override size, offset to center it
+        if size_override is not None:
+            offset = (size_override - self.square_size) / 2
+            local_x -= offset
+            local_y -= offset
 
         # Calculate 4 corners of the square (before rotation)
         corners = [
             (local_x, local_y),
-            (local_x + self.square_size, local_y),
-            (local_x + self.square_size, local_y + self.square_size),
-            (local_x, local_y + self.square_size)
+            (local_x + square_size, local_y),
+            (local_x + square_size, local_y + square_size),
+            (local_x, local_y + square_size)
         ]
 
         # Rotate each corner around grid center
@@ -4759,13 +4774,21 @@ class RubiksCubeBoss:
         """Check if bullet hit any square and apply damage"""
         bullet_center = (bullet_rect.centerx, bullet_rect.centery)
 
+        # Check if only center square remains (final phase)
+        only_center_remains = all(sq['destroyed'] for sq in self.squares if not sq['is_center'])
+
         # Check each square
         for square in self.squares:
             if square['destroyed']:
                 continue
 
-            # Get rotated corners for this square
-            corners = self.get_rotated_square_corners(square['row'], square['col'])
+            # Final phase: use enlarged size for center square
+            size_override = None
+            if square['is_center'] and only_center_remains:
+                size_override = 100  # Double from 50px to 100px
+
+            # Get rotated corners for this square (with size override for final phase)
+            corners = self.get_rotated_square_corners(square['row'], square['col'], size_override)
 
             # Check if bullet center is inside this square's polygon
             if self.point_in_polygon(bullet_center, corners):
@@ -4775,7 +4798,7 @@ class RubiksCubeBoss:
                     square['destroyed'] = True
 
                     # Create particle explosion
-                    self.create_square_explosion(square)
+                    self.create_square_explosion(square, size_override)
 
                     # Check if center was destroyed (win condition)
                     if square['is_center']:
@@ -4785,15 +4808,18 @@ class RubiksCubeBoss:
 
         return False
 
-    def create_square_explosion(self, square):
+    def create_square_explosion(self, square, size_override=None):
         """Create particle explosion for destroyed square"""
-        # Get center of square
-        corners = self.get_rotated_square_corners(square['row'], square['col'])
+        # Get center of square (use size override for enlarged final phase center)
+        corners = self.get_rotated_square_corners(square['row'], square['col'], size_override)
         center_x = sum(c[0] for c in corners) / 4
         center_y = sum(c[1] for c in corners) / 4
 
+        # Create more particles for enlarged squares
+        num_particles = 30 if size_override else 15
+
         # Create particles (similar to enemy explosions)
-        for _ in range(15):
+        for _ in range(num_particles):
             angle = random.uniform(0, 2 * math.pi)
             speed = random.uniform(1, 4)
             particle = {
@@ -4809,11 +4835,19 @@ class RubiksCubeBoss:
 
     def get_turret_rects(self):
         """Return rects for all non-destroyed squares (for hit detection)"""
+        # Check if only center square remains (final phase)
+        only_center_remains = all(sq['destroyed'] for sq in self.squares if not sq['is_center'])
+
         rects = []
         for i, square in enumerate(self.squares):
             if not square['destroyed']:
-                # Get rotated corners
-                corners = self.get_rotated_square_corners(square['row'], square['col'])
+                # Final phase: use enlarged size for center square
+                size_override = None
+                if square['is_center'] and only_center_remains:
+                    size_override = 100  # Double from 50px to 100px
+
+                # Get rotated corners (with size override for final phase)
+                corners = self.get_rotated_square_corners(square['row'], square['col'], size_override)
 
                 # Calculate bounding box for the rotated square
                 min_x = min(c[0] for c in corners)
@@ -4991,16 +5025,38 @@ class RubiksCubeBoss:
                 # Flash yellow/white (very visible against green)
                 warning_flash_color = (255, 255, 0) if (warning_elapsed // 100) % 2 == 0 else (255, 255, 255)
 
+        # Check if only center square remains (final phase)
+        only_center_remains = all(sq['destroyed'] for sq in self.squares if not sq['is_center'])
+
         # Draw each square with rotation
         for square in self.squares:
             if square['destroyed']:
                 continue
 
-            # Get rotated corners
-            corners = self.get_rotated_square_corners(square['row'], square['col'])
+            # Final phase: enlarge center square and change behavior
+            size_override = None
+            if square['is_center'] and only_center_remains:
+                size_override = 100  # Double from 50px to 100px
 
-            # Determine color to draw (flash during green laser warning)
-            if show_warning_flash and not square['is_center']:
+            # Get rotated corners (with size override for final phase center)
+            corners = self.get_rotated_square_corners(square['row'], square['col'], size_override)
+
+            # Determine color to draw
+            if square['is_center'] and only_center_remains:
+                # Final phase center: use attack color or light blue during mixed phase
+                if self.current_phase == 'attack' and self.current_attack_color:
+                    base_color = self.current_attack_color
+                else:
+                    base_color = self.center_color  # Light blue during mixed phase
+
+                # Add slow pulsing flash effect
+                current_time = pygame.time.get_ticks()
+                pulse = (math.sin(current_time / 500) + 1) / 2  # 0.0 to 1.0, slow pulse
+                flash_intensity = int(pulse * 100)  # 0 to 100
+
+                # Brighten the color based on pulse
+                draw_color = tuple(min(255, c + flash_intensity) for c in base_color)
+            elif show_warning_flash and not square['is_center']:
                 draw_color = warning_flash_color  # Flash yellow/white during warning
             else:
                 draw_color = square['color']
