@@ -126,8 +126,7 @@ ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches 
 # Rubik's Cube Boss Configuration
 RUBIKS_BOSS_SQUARE_SIZE = 50  # Size of each small square (pixels)
 RUBIKS_BOSS_GRID_SIZE = 7  # 7x7 grid (49 squares total)
-RUBIKS_BOSS_SQUARE_HEALTH_BASE = 4  # Base health for small squares (4 hits to destroy at encounter 1)
-RUBIKS_BOSS_SQUARE_HEALTH_PER_LEVEL = 1  # Health increase per encounter for small squares
+RUBIKS_BOSS_SQUARE_HEALTH_PERCENTAGE = 0.05  # Small squares have 5% of center health (adjustable)
 RUBIKS_BOSS_CENTER_HEALTH_BASE = 50  # Base health for center cube (adjustable, much higher)
 RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL = 15  # Health increase per encounter for center
 RUBIKS_BOSS_ROTATION_SPEED_BASE = 30  # Degrees per second (adjustable)
@@ -4472,8 +4471,8 @@ class RubiksCubeBoss:
 
         # Calculate center health first
         center_max_health = RUBIKS_BOSS_CENTER_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL
-        # Regular squares have 10% of center health
-        square_max_health = int(center_max_health * 0.1)
+        # Regular squares have percentage of center health (configurable)
+        square_max_health = int(center_max_health * RUBIKS_BOSS_SQUARE_HEALTH_PERCENTAGE)
 
         # Create grid
         center_pos = self.grid_size // 2  # Center position (3 for 7x7 grid)
