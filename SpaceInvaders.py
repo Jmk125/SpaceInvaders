@@ -126,8 +126,8 @@ ASTEROID_BOSS_HEALTH_LOSS_PER_ASTEROID = 1  # Health lost when asteroid reaches 
 # Rubik's Cube Boss Configuration
 RUBIKS_BOSS_SQUARE_SIZE = 50  # Size of each small square (pixels)
 RUBIKS_BOSS_GRID_SIZE = 7  # 7x7 grid (49 squares total)
-RUBIKS_BOSS_SQUARE_HEALTH_PERCENTAGE = 0.05  # Small squares have 5% of center health (adjustable)
-RUBIKS_BOSS_CENTER_HEALTH_BASE = 50  # Base health for center cube (adjustable, much higher)
+RUBIKS_BOSS_SQUARE_HEALTH_PERCENTAGE = 0.10  # Small squares have 5% of center health (adjustable)
+RUBIKS_BOSS_CENTER_HEALTH_BASE = 25  # Base health for center cube (adjustable, much higher) - 50 default
 RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL = 15  # Health increase per encounter for center
 RUBIKS_BOSS_ROTATION_SPEED_BASE = 30  # Degrees per second (adjustable)
 RUBIKS_BOSS_ROTATION_SPEED_GROWTH = 5  # Rotation speed increase per encounter (degrees/sec)
