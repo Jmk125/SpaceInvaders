@@ -4901,11 +4901,15 @@ class RubiksCubeBoss:
 
         return particles
 
-    def draw_cracks_on_square(self, screen, square, corners, health_ratio):
+    def draw_cracks_on_square(self, screen, square, corners, health_ratio, size_override=None):
         """Draw progressive crack lines on a square based on damage - rotates with square"""
         # Get center of square in world space
         center_x = sum(c[0] for c in corners) / 4
         center_y = sum(c[1] for c in corners) / 4
+
+        # Calculate scale factor for enlarged squares
+        scale = size_override / self.square_size if size_override else 1.0
+        actual_size = size_override if size_override else self.square_size
 
         # Determine crack level (0 = no cracks, 3 = heavily cracked)
         # Using 25% increments: 75%, 50%, 25%
@@ -4921,11 +4925,15 @@ class RubiksCubeBoss:
         # Draw crack lines - calculate in local space, then rotate
         crack_color = (50, 50, 50)  # Dark gray cracks
 
-        # Helper function to transform local point to world space (rotated)
+        # Helper function to transform local point to world space (rotated and scaled)
         def rotate_point(local_x, local_y):
-            # Convert from local square coords (0-50) to centered coords
-            rel_x = local_x - self.square_size // 2
-            rel_y = local_y - self.square_size // 2
+            # Scale the coordinates first (from 0-50 to 0-actual_size)
+            scaled_x = local_x * scale
+            scaled_y = local_y * scale
+
+            # Convert from local square coords to centered coords
+            rel_x = scaled_x - actual_size // 2
+            rel_y = scaled_y - actual_size // 2
 
             # Rotate by current rotation angle
             angle_rad = math.radians(self.rotation_angle)
@@ -4937,15 +4945,19 @@ class RubiksCubeBoss:
             world_y = center_y + rotated_y
             return (world_x, world_y)
 
+        # Scale line thickness with square size
+        thick_line = max(2, int(2 * scale))
+        thin_line = max(1, int(1 * scale))
+
         if crack_level >= 1:
             # First crack - diagonal from edge to edge with organic variation
             start = rotate_point(2, 2)
             mid1 = rotate_point(20, 22)
             mid2 = rotate_point(30, 28)
             end = rotate_point(48, 48)
-            pygame.draw.line(screen, crack_color, start, mid1, 2)
-            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
-            pygame.draw.line(screen, crack_color, mid2, end, 2)
+            pygame.draw.line(screen, crack_color, start, mid1, thick_line)
+            pygame.draw.line(screen, crack_color, mid1, mid2, thick_line)
+            pygame.draw.line(screen, crack_color, mid2, end, thick_line)
 
         if crack_level >= 2:
             # Second crack - another diagonal edge to edge with branching
@@ -4953,14 +4965,14 @@ class RubiksCubeBoss:
             mid1 = rotate_point(32, 18)
             mid2 = rotate_point(18, 32)
             end = rotate_point(2, 48)
-            pygame.draw.line(screen, crack_color, start, mid1, 2)
-            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
-            pygame.draw.line(screen, crack_color, mid2, end, 2)
+            pygame.draw.line(screen, crack_color, start, mid1, thick_line)
+            pygame.draw.line(screen, crack_color, mid1, mid2, thick_line)
+            pygame.draw.line(screen, crack_color, mid2, end, thick_line)
 
             # Branch from middle extending to edge
             branch_start = rotate_point(25, 25)
             branch_end = rotate_point(48, 8)
-            pygame.draw.line(screen, crack_color, branch_start, branch_end, 1)
+            pygame.draw.line(screen, crack_color, branch_start, branch_end, thin_line)
 
         if crack_level >= 3:
             # Third set - edge to edge cracks with curves
@@ -4969,27 +4981,27 @@ class RubiksCubeBoss:
             mid1 = rotate_point(15, 20)
             mid2 = rotate_point(35, 30)
             end = rotate_point(50, 25)
-            pygame.draw.line(screen, crack_color, start, mid1, 2)
-            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
-            pygame.draw.line(screen, crack_color, mid2, end, 2)
+            pygame.draw.line(screen, crack_color, start, mid1, thick_line)
+            pygame.draw.line(screen, crack_color, mid1, mid2, thick_line)
+            pygame.draw.line(screen, crack_color, mid2, end, thick_line)
 
             # Vertical crack from top edge to bottom edge
             start = rotate_point(25, 0)
             mid1 = rotate_point(30, 15)
             mid2 = rotate_point(20, 35)
             end = rotate_point(25, 50)
-            pygame.draw.line(screen, crack_color, start, mid1, 2)
-            pygame.draw.line(screen, crack_color, mid1, mid2, 2)
-            pygame.draw.line(screen, crack_color, mid2, end, 2)
+            pygame.draw.line(screen, crack_color, start, mid1, thick_line)
+            pygame.draw.line(screen, crack_color, mid1, mid2, thick_line)
+            pygame.draw.line(screen, crack_color, mid2, end, thick_line)
 
             # More branches extending to edges
             b1_start = rotate_point(25, 25)
             b1_end = rotate_point(2, 40)
-            pygame.draw.line(screen, crack_color, b1_start, b1_end, 1)
+            pygame.draw.line(screen, crack_color, b1_start, b1_end, thin_line)
 
             b2_start = rotate_point(25, 25)
             b2_end = rotate_point(40, 2)
-            pygame.draw.line(screen, crack_color, b2_start, b2_end, 1)
+            pygame.draw.line(screen, crack_color, b2_start, b2_end, thin_line)
 
     def draw(self, screen):
         """Draw the Rubik's Cube boss"""
@@ -5074,7 +5086,7 @@ class RubiksCubeBoss:
             # Draw cracks on damaged squares
             health_ratio = square['health'] / square['max_health']
             if health_ratio < 1.0:
-                self.draw_cracks_on_square(screen, square, corners, health_ratio)
+                self.draw_cracks_on_square(screen, square, corners, health_ratio, size_override)
 
         # Draw explosion particles on top
         for particle in self.explosion_effects:
