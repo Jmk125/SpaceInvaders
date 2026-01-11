@@ -137,7 +137,9 @@ RUBIKS_BOSS_ATTACK_PHASE_DURATION = 10000  # Single color attack phase duration 
 RUBIKS_BOSS_RED_SHOOT_COOLDOWN = 1000  # Red spinning squares shoot interval (ms, adjustable)
 RUBIKS_BOSS_BLUE_SHOOT_COOLDOWN = 200  # Blue rapid fire interval (ms)
 RUBIKS_BOSS_YELLOW_SHOOT_COOLDOWN = 300  # Yellow slow balls interval (ms)
-RUBIKS_BOSS_ORANGE_SHOOT_COOLDOWN = 800  # Orange large fireballs interval (ms)
+RUBIKS_BOSS_ORANGE_SHOOT_COOLDOWN = 150  # Orange rotating fireballs interval (ms, adjustable)
+RUBIKS_BOSS_ORANGE_ROTATION_SPEED = 180  # Rotation speed during orange attack (degrees/sec, adjustable)
+RUBIKS_BOSS_ORANGE_FIREBALL_RADIUS = 18  # Orange fireball radius (pixels, adjustable)
 RUBIKS_BOSS_WHITE_SHOOT_COOLDOWN = 3000  # White bouncing ball interval (ms)
 
 # High scores files
@@ -1897,21 +1899,19 @@ class WhiteBall:
         pygame.draw.circle(screen, (255, 255, 255), (int(self.x - 8), int(self.y - 8)), 8)
 
 class OrangeFireball:
-    """Large orange fireball for Rubik's Cube Boss orange attack"""
-    def __init__(self, x, y, target_x, target_y, speed):
+    """Orange fireball for Rubik's Cube Boss orange attack - shoots from rotating barrel"""
+    def __init__(self, x, y, angle_degrees, speed, radius=None):
         self.x = x
         self.y = y
-        self.radius = 35  # Very large fireball
+        self.radius = radius if radius is not None else RUBIKS_BOSS_ORANGE_FIREBALL_RADIUS
         self.width = self.radius * 2
         self.height = self.radius * 2
         self.speed = speed
 
-        # Calculate velocity toward target
-        dx = target_x - x
-        dy = target_y - y
-        distance = math.hypot(dx, dy) or 1
-        self.vel_x = (dx / distance) * speed
-        self.vel_y = (dy / distance) * speed
+        # Calculate velocity based on angle
+        angle_rad = math.radians(angle_degrees)
+        self.vel_x = math.cos(angle_rad) * speed
+        self.vel_y = math.sin(angle_rad) * speed
         self.rect = pygame.Rect(int(self.x - self.radius), int(self.y - self.radius), self.width, self.height)
 
     def move(self):
@@ -1926,11 +1926,14 @@ class OrangeFireball:
 
     def draw(self, screen):
         center = (int(self.x), int(self.y))
-        # Large layered fireball
+        # Layered fireball - scaled to radius
         pygame.draw.circle(screen, (255, 100, 0), center, self.radius)  # Outer orange
-        pygame.draw.circle(screen, (255, 150, 0), center, self.radius - 7)  # Mid orange
-        pygame.draw.circle(screen, (255, 200, 50), center, self.radius - 14)  # Inner yellow
-        pygame.draw.circle(screen, (255, 255, 150), center, self.radius - 21)  # Core white-yellow
+        if self.radius > 7:
+            pygame.draw.circle(screen, (255, 150, 0), center, max(1, self.radius - 7))  # Mid orange
+        if self.radius > 10:
+            pygame.draw.circle(screen, (255, 200, 50), center, max(1, self.radius - 10))  # Inner yellow
+        if self.radius > 13:
+            pygame.draw.circle(screen, (255, 255, 150), center, max(1, self.radius - 13))  # Core white-yellow
 
 class Boss:
     def __init__(self, encounter):
@@ -4523,6 +4526,10 @@ class RubiksCubeBoss:
         self.green_laser_warning_start_time = 0
         self.green_warning_duration = 3000  # 3 seconds warning
 
+        # Orange attack state (stops movement, spins fast)
+        self.orange_attack_active = False
+        self.normal_rotation_speed = self.rotation_speed  # Store normal speed
+
         # Destruction state
         self.destruction_complete = False
         self.destruction_start_time = 0
@@ -4548,27 +4555,35 @@ class RubiksCubeBoss:
         # Check if only center square remains (final phase)
         only_center_remains = all(sq['destroyed'] for sq in self.squares if not sq['is_center'])
 
-        # Movement (left/right like UFO boss)
-        # Double speed when only center remains
-        current_speed = self.speed * 2 if only_center_remains else self.speed
-        self.x += current_speed * self.direction
-
-        if self.x <= 0 or self.x >= SCREEN_WIDTH - self.total_size:
-            self.direction *= -1
-
         current_time = pygame.time.get_ticks()
-        if current_time - self.last_direction_change > self.direction_change_cooldown:
-            if random.randint(1, 100) <= 15:  # Reduced from 30% to 15% chance
+
+        # Movement (left/right like UFO boss)
+        # Stop movement during orange attack, double speed when only center remains
+        if self.orange_attack_active:
+            # Don't move during orange attack
+            pass
+        else:
+            current_speed = self.speed * 2 if only_center_remains else self.speed
+            self.x += current_speed * self.direction
+
+            if self.x <= 0 or self.x >= SCREEN_WIDTH - self.total_size:
                 self.direction *= -1
-                self.last_direction_change = current_time
-                self.direction_change_cooldown = random.randint(2000, 6000)  # Changed from (1000, 3000)
+
+            if current_time - self.last_direction_change > self.direction_change_cooldown:
+                if random.randint(1, 100) <= 15:  # Reduced from 30% to 15% chance
+                    self.direction *= -1
+                    self.last_direction_change = current_time
+                    self.direction_change_cooldown = random.randint(2000, 6000)  # Changed from (1000, 3000)
 
         # Update center position
         self.center_x = self.x + self.total_size // 2
         self.center_y = self.y + self.total_size // 2
 
-        # Rotation
-        self.rotation_angle = (self.rotation_angle + self.rotation_speed / 60) % 360  # Assuming 60 FPS
+        # Rotation - faster during orange attack
+        if self.orange_attack_active:
+            self.rotation_angle = (self.rotation_angle + RUBIKS_BOSS_ORANGE_ROTATION_SPEED / 60) % 360
+        else:
+            self.rotation_angle = (self.rotation_angle + self.normal_rotation_speed / 60) % 360
 
         # Update rect
         self.rect.x = self.x
@@ -4587,6 +4602,10 @@ class RubiksCubeBoss:
                 self.last_attack_time = current_time
                 self.last_white_ball_time = current_time - self.white_cooldown  # Allow immediate white ball shot
 
+                # Enable orange attack mode if orange color selected
+                if self.current_attack_color == (255, 140, 0):  # Orange
+                    self.orange_attack_active = True
+
                 # Apply color to all non-destroyed, non-center squares
                 for square in self.squares:
                     if not square['destroyed'] and not square['is_center']:
@@ -4597,6 +4616,7 @@ class RubiksCubeBoss:
                 self.current_phase = 'mixed'
                 self.current_attack_color = None
                 self.phase_start_time = current_time
+                self.orange_attack_active = False  # Disable orange attack mode
 
                 # Randomize colors for non-destroyed, non-center squares
                 for square in self.squares:
@@ -4684,14 +4704,24 @@ class RubiksCubeBoss:
                 if sound_manager:
                     sound_manager.play_sound('enemy_shoot', volume_override=0.5)
 
-        elif self.current_attack_color == (255, 140, 0):  # Orange - large fireballs
+        elif self.current_attack_color == (255, 140, 0):  # Orange - rotating fireball spray
             if current_time - self.last_attack_time >= self.orange_cooldown:
-                bullet = OrangeFireball(self.center_x, self.center_y, target_x, target_y, 3.0)
+                # Calculate "barrel" position - right edge of center square at current rotation
+                # The barrel rotates with the cube, shooting fireballs outward
+                barrel_distance = self.total_size // 2  # Distance from center to edge
+                angle_rad = math.radians(self.rotation_angle)
+
+                # Barrel position rotates around center
+                barrel_x = self.center_x + math.cos(angle_rad) * barrel_distance
+                barrel_y = self.center_y + math.sin(angle_rad) * barrel_distance
+
+                # Shoot fireball in the direction the barrel is pointing
+                bullet = OrangeFireball(barrel_x, barrel_y, self.rotation_angle, 5.0)
                 bullets.append(bullet)
                 self.last_attack_time = current_time
 
                 if sound_manager:
-                    sound_manager.play_sound('enemy_shoot', volume_override=0.5)
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.4)
 
         return bullets
 
