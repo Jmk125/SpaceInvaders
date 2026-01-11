@@ -4530,6 +4530,9 @@ class RubiksCubeBoss:
         self.orange_attack_active = False
         self.normal_rotation_speed = self.rotation_speed  # Store normal speed
 
+        # Debug mode forced attack color (set externally by debug menu)
+        self.debug_forced_attack_color = None
+
         # Destruction state
         self.destruction_complete = False
         self.destruction_start_time = 0
@@ -4595,9 +4598,23 @@ class RubiksCubeBoss:
         if self.current_phase == 'mixed':
             # Mixed colors, no attack
             if time_in_phase >= self.mixed_phase_duration:
-                # Switch to attack phase with random color
+                # Switch to attack phase with color (debug forced or random)
                 self.current_phase = 'attack'
-                self.current_attack_color = random.choice(self.rubiks_colors)
+
+                # Check for debug forced attack color
+                if self.debug_forced_attack_color:
+                    color_map = {
+                        'Red': (255, 0, 0),
+                        'Blue': (0, 0, 255),
+                        'Green': (0, 255, 0),
+                        'Yellow': (255, 255, 0),
+                        'White': (255, 255, 255),
+                        'Orange': (255, 140, 0)
+                    }
+                    self.current_attack_color = color_map.get(self.debug_forced_attack_color, random.choice(self.rubiks_colors))
+                else:
+                    self.current_attack_color = random.choice(self.rubiks_colors)
+
                 self.phase_start_time = current_time
                 self.last_attack_time = current_time
                 self.last_white_ball_time = current_time - self.white_cooldown  # Allow immediate white ball shot
@@ -6379,6 +6396,7 @@ class DebugMenu:
             'force_boss_level': False,
             'force_boss_type': 'Random',
             'boss_encounter_level': 1,
+            'force_rubiks_attack_color': 'Random',
             'players': [self._default_player_config(), self._default_player_config(player_id=2)],
         }
 
@@ -6412,6 +6430,15 @@ class DebugMenu:
             {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss'], 'path': ('force_boss_type',)},
             {'type': 'int', 'label': 'Boss Encounter Level', 'path': ('boss_encounter_level',), 'min': 1, 'max': 50, 'step': 1},
         ]
+
+        # Conditionally add Rubik's Cube attack color selector if RubiksCubeBoss is selected
+        if self.config.get('force_boss_type') == 'RubiksCubeBoss':
+            self.menu_items.append({
+                'type': 'choice',
+                'label': 'Force Attack Color',
+                'choices': ['Random', 'Red', 'Blue', 'Green', 'Yellow', 'White', 'Orange'],
+                'path': ('force_rubiks_attack_color',)
+            })
 
         for idx in range(2):
             player_label = f"Player {idx + 1} Overrides"
@@ -6484,6 +6511,9 @@ class DebugMenu:
         return ''
 
     def _adjust_value(self, item, delta):
+        # Store old boss type to detect changes
+        old_boss_type = self.config.get('force_boss_type')
+
         if item['type'] == 'bool':
             self._set_value(item['path'], not self._get_value(item['path']))
         elif item['type'] == 'choice':
@@ -6496,6 +6526,15 @@ class DebugMenu:
             value = self._get_value(item['path']) + (item.get('step', 1) * delta)
             value = max(item.get('min', value), min(item.get('max', value), value))
             self._set_value(item['path'], value)
+
+        # Rebuild menu if boss type changed (to show/hide Rubik's attack color option)
+        new_boss_type = self.config.get('force_boss_type')
+        if old_boss_type != new_boss_type:
+            current_selection = self.selected_index
+            self._build_menu_items()
+            # Try to keep selection close to where it was
+            self.selected_index = min(current_selection, len(self.menu_items) - 1)
+            self._move_selection(0)  # Ensure valid selection
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -6825,6 +6864,9 @@ class Game:
         # Set boss encounter level override
         self.debug_boss_encounter_level = debug_config.get('boss_encounter_level', None)
 
+        # Set Rubik's Cube attack color override
+        self.debug_force_rubiks_attack_color = debug_config.get('force_rubiks_attack_color', 'Random')
+
         player_configs = debug_config.get('players', [])
         for idx, player in enumerate(self.players):
             if idx >= len(player_configs):
@@ -7146,7 +7188,15 @@ class Game:
             self.boss_encounters[boss_class] = self.boss_encounters.get(boss_class, 0) + 1
             encounter_number = self.boss_encounters[boss_class]
 
-        return boss_class(encounter_number)
+        # Create boss instance
+        boss = boss_class(encounter_number)
+
+        # Apply debug forced attack color for RubiksCubeBoss
+        if boss_class == RubiksCubeBoss and hasattr(self, 'debug_force_rubiks_attack_color'):
+            if self.debug_force_rubiks_attack_color != 'Random':
+                boss.debug_forced_attack_color = self.debug_force_rubiks_attack_color
+
+        return boss
         
     def create_barriers(self):
         self.barriers = []
