@@ -4472,8 +4472,8 @@ class RubiksCubeBoss:
 
         # Calculate center health first
         center_max_health = RUBIKS_BOSS_CENTER_HEALTH_BASE + (self.encounter - 1) * RUBIKS_BOSS_CENTER_HEALTH_PER_LEVEL
-        # Regular squares have 20% of center health
-        square_max_health = int(center_max_health * 0.2)
+        # Regular squares have 10% of center health
+        square_max_health = int(center_max_health * 0.1)
 
         # Create grid
         center_pos = self.grid_size // 2  # Center position (3 for 7x7 grid)
