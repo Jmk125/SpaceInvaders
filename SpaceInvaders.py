@@ -1695,6 +1695,10 @@ class SpinningRedSquare:
         self.vel_y = (dy / distance) * speed
         self.rect = pygame.Rect(int(self.x - self.width // 2), int(self.y - self.height // 2), self.width, self.height)
 
+        # Afterimage tracking
+        self.afterimage_positions = []
+        self.last_afterimage_time = pygame.time.get_ticks()
+
     def move(self):
         self.x += self.vel_x
         self.y += self.vel_y
@@ -1702,12 +1706,38 @@ class SpinningRedSquare:
         self.rect.x = int(self.x - self.width // 2)
         self.rect.y = int(self.y - self.height // 2)
 
+        # Record afterimage positions
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_afterimage_time >= AFTERIMAGE_INTERVAL:
+            self.afterimage_positions.append((self.x, self.y, self.rotation, current_time))
+            self.last_afterimage_time = current_time
+
+        # Clean up old afterimages (keep only those less than 500ms old)
+        self.afterimage_positions = [(x, y, rot, t) for x, y, rot, t in self.afterimage_positions
+                                     if current_time - t < 500]
+
     def is_off_screen(self):
         return (self.x < -100 or self.x > SCREEN_WIDTH + 100 or
                 self.y < -100 or self.y > SCREEN_HEIGHT + 100)
 
     def draw(self, screen):
-        # Create a rotating red square
+        # Draw afterimages first (behind the main square)
+        current_time = pygame.time.get_ticks()
+        for x, y, rotation, timestamp in self.afterimage_positions:
+            age = current_time - timestamp
+            alpha = max(0, 255 - (age * 255 // 500))
+
+            # Create afterimage surface with red color and alpha
+            afterimage_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            pygame.draw.rect(afterimage_surface, (255, 0, 0, alpha), (0, 0, self.width, self.height))
+            pygame.draw.rect(afterimage_surface, (180, 0, 0, alpha), (4, 4, self.width - 8, self.height - 8))
+
+            # Rotate the afterimage
+            rotated_afterimage = pygame.transform.rotate(afterimage_surface, rotation)
+            afterimage_rect = rotated_afterimage.get_rect(center=(int(x), int(y)))
+            screen.blit(rotated_afterimage, afterimage_rect.topleft)
+
+        # Create a rotating red square (main projectile)
         surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         pygame.draw.rect(surface, (255, 0, 0), (0, 0, self.width, self.height))
         pygame.draw.rect(surface, (180, 0, 0), (4, 4, self.width - 8, self.height - 8))
