@@ -7223,7 +7223,7 @@ class Game:
         self.current_boss = None
         self.is_boss_level = False
         self.boss_shield_granted = False
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0}
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0}
         self.last_boss_type = None  # Track last boss to prevent consecutive repeats
 
         # Debug overrides for boss testing
@@ -7327,7 +7327,8 @@ class Game:
                 'AlienOverlordBoss': AlienOverlordBoss,
                 'BulletHellBoss': BulletHellBoss,
                 'AsteroidFieldBoss': AsteroidFieldBoss,
-                'RubiksCubeBoss': RubiksCubeBoss
+                'RubiksCubeBoss': RubiksCubeBoss,
+                'SnakeBoss': SnakeBoss
             }
             self.debug_force_boss_type = boss_map.get(boss_type_name)
 
