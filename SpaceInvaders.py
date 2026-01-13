@@ -5434,6 +5434,12 @@ class SnakeBoss:
         current_time = pygame.time.get_ticks()
         bullets = []
 
+        # Don't fire if snake is in bottom 25% of screen (prevents undodgeable lateral shots)
+        head = self.segments[0]
+        bottom_threshold = SCREEN_HEIGHT * 0.75
+        if head['y'] >= bottom_threshold:
+            return bullets  # Too low to fire
+
         if current_time - self.last_fireball_time > self.fireball_cooldown:
             nearest_player = self.get_nearest_player(players)
             if nearest_player:
