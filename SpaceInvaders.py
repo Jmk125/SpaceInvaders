@@ -5536,6 +5536,11 @@ class SnakeBoss:
             return self.head_health <= 0
         return len(self.segments) == 0
 
+    def is_destruction_complete(self):
+        """Check if destruction sequence is finished - SnakeBoss destroys instantly"""
+        # SnakeBoss doesn't have a destruction animation, it's destroyed immediately
+        return True
+
     def get_turret_rects(self):
         """This boss has no turrets, return empty list for compatibility"""
         return []
