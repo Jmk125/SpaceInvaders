@@ -5247,6 +5247,10 @@ class SnakeBoss:
         self.turn_direction = random.choice([-1, 1])  # -1 = turn left, 1 = turn right
         self.turn_speed = 0  # Will be calculated in initialization
 
+        # Random direction changes for erratic movement
+        self.last_direction_change = pygame.time.get_ticks()
+        self.direction_change_interval = random.randint(1000, 2500)  # 1-2.5 seconds
+
         # Initialize segments (list of positions, head is first)
         # Start in middle of screen
         start_x = SCREEN_WIDTH // 2
@@ -5329,6 +5333,12 @@ class SnakeBoss:
             self.fireball_cooldown = int(self.fireball_cooldown / SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER)
             # Recalculate turn speed for doubled speed (turn radius stays constant)
             self.turn_speed = (self.speed / self.turn_radius) * 57.2958
+
+        # Randomly change turn direction (left <-> right) for erratic movement
+        if current_time - self.last_direction_change > self.direction_change_interval:
+            self.turn_direction *= -1  # Flip between left (-1) and right (1)
+            self.last_direction_change = current_time
+            self.direction_change_interval = random.randint(1000, 2500)  # 1-2.5 seconds
 
         # Moldorm-style movement: Always turning in a circle
         # Apply constant turning
