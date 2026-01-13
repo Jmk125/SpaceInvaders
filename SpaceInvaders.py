@@ -151,8 +151,9 @@ SNAKE_BOSS_SPEED_GROWTH = 0.3  # Speed increase per encounter
 SNAKE_BOSS_FIREBALL_COOLDOWN = 1000  # Time between fireballs in ms (adjustable, 1 per second)
 SNAKE_BOSS_HEAD_HEALTH_BASE = 20  # Base health for head final phase (adjustable)
 SNAKE_BOSS_HEAD_HEALTH_GROWTH = 3  # Health increase per encounter for head
-SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER = 2.0  # Speed multiplier when down to head only (adjustable)
+SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER = 1.5  # Speed multiplier when down to head only (adjustable)
 SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER = 2.0  # Fireball frequency multiplier for final phase
+SNAKE_BOSS_FIREBALL_RADIUS = 27  # Fireball size (same as Rubik's orange fireballs)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN = 1000  # Minimum time between direction changes (ms)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX = 3000  # Maximum time between direction changes (ms)
 SNAKE_BOSS_CURVE_STRENGTH = 0.08  # How sharply the snake curves (adjustable)
@@ -5278,10 +5279,10 @@ class SnakeBoss:
             })
 
         # Calculate turn radius and turn speed based on initial segment count (stays constant)
-        # Turn radius = starting segments * segment radius * 1.5
-        # This gives a good balance - tight enough for dynamic movement but not spinning in place
+        # Turn radius = starting segments * segment radius * 1.0
+        # Tighter turns relative to body size for more dynamic movement
         self.initial_segment_count = len(self.segments)
-        self.turn_radius = self.initial_segment_count * self.segment_radius * 1.5
+        self.turn_radius = self.initial_segment_count * self.segment_radius * 1.0
 
         # Calculate turn speed based on movement speed and turn radius
         # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
@@ -5360,7 +5361,7 @@ class SnakeBoss:
             # Hit left or right edge - reflect horizontally
             hit_left_or_right = True
 
-        if new_y - margin < 100 or new_y + margin > SCREEN_HEIGHT - 200:
+        if new_y - margin < 100 or new_y + margin > SCREEN_HEIGHT:
             # Hit top or bottom edge - reflect vertically
             hit_top_or_bottom = True
 
@@ -5375,9 +5376,9 @@ class SnakeBoss:
             self.angle = (360 - self.angle) % 360
             self.turn_direction *= -1  # Also reverse turn direction
 
-        # Clamp position to screen bounds
+        # Clamp position to screen bounds (full screen access)
         head['x'] = max(margin, min(SCREEN_WIDTH - margin, new_x))
-        head['y'] = max(100 + margin, min(SCREEN_HEIGHT - 200 - margin, new_y))
+        head['y'] = max(100 + margin, min(SCREEN_HEIGHT - margin, new_y))
 
         # Store head position in history for followers
         self.position_history.append({'x': head['x'], 'y': head['y']})
@@ -5445,7 +5446,7 @@ class SnakeBoss:
         return bullets
 
     def shoot_fireball(self, target_player):
-        """Shoot a fireball from head toward target player"""
+        """Shoot a large fireball from head toward target player"""
         head = self.segments[0]
 
         # Calculate direction to player
@@ -5454,15 +5455,13 @@ class SnakeBoss:
         dist = math.sqrt(dx * dx + dy * dy)
 
         if dist > 0:
-            # Normalize direction
-            dx /= dist
-            dy /= dist
+            # Calculate angle to player
+            angle_degrees = math.degrees(math.atan2(dy, dx))
 
-            # Create fireball using TargetedBullet
+            # Create large fireball (same size as Rubik's orange fireballs)
             fireball_speed = 5
-            vel_x = dx * fireball_speed
-            vel_y = dy * fireball_speed
-            return TargetedBullet(head['x'], head['y'], vel_x, vel_y)
+            return OrangeFireball(head['x'], head['y'], angle_degrees, fireball_speed,
+                                radius=SNAKE_BOSS_FIREBALL_RADIUS)
         return None
 
     def hit_by_bullet(self, bullet_x, bullet_y):
