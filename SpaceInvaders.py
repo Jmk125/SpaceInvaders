@@ -5534,7 +5534,7 @@ class SnakeBoss:
         """Check if boss is defeated"""
         if self.final_phase:
             return self.head_health <= 0
-        return len(self.segments) == 0
+        return False  # Not defeated until final phase and head health is depleted
 
     def is_destruction_complete(self):
         """Check if destruction sequence is finished - SnakeBoss destroys instantly"""
