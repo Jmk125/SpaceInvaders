@@ -5442,15 +5442,11 @@ class SnakeBoss:
             dx /= dist
             dy /= dist
 
-            # Create fireball
+            # Create fireball using TargetedBullet
             fireball_speed = 5
-            return {
-                'x': head['x'],
-                'y': head['y'],
-                'vx': dx * fireball_speed,
-                'vy': dy * fireball_speed,
-                'radius': 8
-            }
+            vel_x = dx * fireball_speed
+            vel_y = dy * fireball_speed
+            return TargetedBullet(head['x'], head['y'], vel_x, vel_y)
         return None
 
     def hit_by_bullet(self, bullet_x, bullet_y):
