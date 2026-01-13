@@ -5304,7 +5304,7 @@ class SnakeBoss:
         min_dist = float('inf')
 
         for player in players:
-            if player.alive:
+            if player.is_alive:
                 dist = math.sqrt((player.x - head['x'])**2 + (player.y - head['y'])**2)
                 if dist < min_dist:
                     min_dist = dist
@@ -5499,7 +5499,7 @@ class SnakeBoss:
 
     def collides_with_player(self, player):
         """Check if any part of snake collides with player"""
-        if not player.alive:
+        if not player.is_alive:
             return False
 
         for segment in self.segments:
