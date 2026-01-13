@@ -5245,7 +5245,7 @@ class SnakeBoss:
         # Movement state - Moldorm-style constant turning
         self.angle = random.uniform(0, 360)  # Current movement direction in degrees
         self.turn_direction = random.choice([-1, 1])  # -1 = turn left, 1 = turn right
-        self.turn_speed = 2.0  # Degrees to turn per frame
+        self.turn_speed = 0  # Will be calculated by calculate_turn_radius()
 
         # Initialize segments (list of positions, head is first)
         # Start in middle of screen
@@ -5273,7 +5273,7 @@ class SnakeBoss:
                 'radius': self.segment_radius
             })
 
-        # Calculate turn radius as sum of all segment diameters
+        # Calculate turn radius and turn speed based on segment count
         self.calculate_turn_radius()
 
         # Position history for smooth segment following
@@ -5297,9 +5297,17 @@ class SnakeBoss:
         self.height = self.head_radius * 2
 
     def calculate_turn_radius(self):
-        """Calculate turn radius as sum of all segment diameters"""
-        total_diameter = sum(segment['radius'] * 2 for segment in self.segments)
-        self.turn_radius = total_diameter
+        """Calculate turn radius as sum of all segment radiuses"""
+        # Use sum of radiuses instead of diameters for tighter turns
+        total_radius = sum(segment['radius'] for segment in self.segments)
+        self.turn_radius = total_radius
+
+        # Calculate turn speed based on movement speed and turn radius
+        # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
+        if self.turn_radius > 0:
+            self.turn_speed = (self.speed / self.turn_radius) * 57.2958  # 180/pi ≈ 57.2958
+        else:
+            self.turn_speed = 2.0  # Fallback
 
     def get_nearest_player(self, players):
         """Find the nearest living player to the head"""
