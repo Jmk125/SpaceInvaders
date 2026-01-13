@@ -5346,19 +5346,29 @@ class SnakeBoss:
         new_x = head['x'] + math.cos(angle_rad) * self.speed
         new_y = head['y'] + math.sin(angle_rad) * self.speed
 
-        # Check for screen edge collisions and bounce (reverse turn direction)
+        # Check for screen edge collisions and bounce (reflect angle + reverse turn)
         margin = head['radius']
-        hit_edge = False
+        hit_left_or_right = False
+        hit_top_or_bottom = False
 
         if new_x - margin < 0 or new_x + margin > SCREEN_WIDTH:
-            # Hit left or right edge
-            self.turn_direction *= -1
-            hit_edge = True
+            # Hit left or right edge - reflect horizontally
+            hit_left_or_right = True
 
         if new_y - margin < 100 or new_y + margin > SCREEN_HEIGHT - 200:
-            # Hit top or bottom edge
-            self.turn_direction *= -1
-            hit_edge = True
+            # Hit top or bottom edge - reflect vertically
+            hit_top_or_bottom = True
+
+        # Reflect angle off walls (like a bouncing ball)
+        if hit_left_or_right:
+            # Horizontal reflection: angle = 180 - angle
+            self.angle = (180 - self.angle) % 360
+            self.turn_direction *= -1  # Also reverse turn direction
+
+        if hit_top_or_bottom:
+            # Vertical reflection: angle = -angle (or 360 - angle)
+            self.angle = (360 - self.angle) % 360
+            self.turn_direction *= -1  # Also reverse turn direction
 
         # Clamp position to screen bounds
         head['x'] = max(margin, min(SCREEN_WIDTH - margin, new_x))
