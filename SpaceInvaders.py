@@ -142,6 +142,21 @@ RUBIKS_BOSS_ORANGE_ROTATION_SPEED = 720  # Rotation speed during orange attack (
 RUBIKS_BOSS_ORANGE_FIREBALL_RADIUS = 27  # Orange fireball radius (pixels, adjustable)
 RUBIKS_BOSS_WHITE_SHOOT_COOLDOWN = 3000  # White bouncing ball interval (ms)
 
+# Snake Boss Configuration
+SNAKE_BOSS_SEGMENT_RADIUS = 30  # Radius of body segments (pixels, adjustable)
+SNAKE_BOSS_HEAD_RADIUS_MULTIPLIER = 1.5  # Head is 1.5x larger than body segments
+SNAKE_BOSS_START_SEGMENTS = 6  # Starting number of body segments (not including head, adjustable)
+SNAKE_BOSS_SPEED_BASE = 3.5  # Base movement speed (adjustable)
+SNAKE_BOSS_SPEED_GROWTH = 0.3  # Speed increase per encounter
+SNAKE_BOSS_FIREBALL_COOLDOWN = 1000  # Time between fireballs in ms (adjustable, 1 per second)
+SNAKE_BOSS_HEAD_HEALTH_BASE = 20  # Base health for head final phase (adjustable)
+SNAKE_BOSS_HEAD_HEALTH_GROWTH = 3  # Health increase per encounter for head
+SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER = 2.0  # Speed multiplier when down to head only (adjustable)
+SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER = 2.0  # Fireball frequency multiplier for final phase
+SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN = 1000  # Minimum time between direction changes (ms)
+SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX = 3000  # Maximum time between direction changes (ms)
+SNAKE_BOSS_CURVE_STRENGTH = 0.08  # How sharply the snake curves (adjustable)
+
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
@@ -5210,6 +5225,431 @@ class RubiksCubeBoss:
                 self.explosion_effects.remove(particle)
 
 
+class SnakeBoss:
+    """Sixth boss - Snake/Dragon with segmented body, serpentine movement, and fireball attacks"""
+    def __init__(self, encounter):
+        self.encounter = max(1, encounter)
+
+        # Configuration
+        self.segment_radius = SNAKE_BOSS_SEGMENT_RADIUS
+        self.head_radius = int(self.segment_radius * SNAKE_BOSS_HEAD_RADIUS_MULTIPLIER)
+        self.num_segments = SNAKE_BOSS_START_SEGMENTS + (self.encounter - 1)  # Add 1 segment per encounter
+
+        # Speed increases with each encounter
+        self.speed = SNAKE_BOSS_SPEED_BASE + (self.encounter - 1) * SNAKE_BOSS_SPEED_GROWTH
+
+        # Head health (only used in final phase)
+        self.head_health = SNAKE_BOSS_HEAD_HEALTH_BASE + (self.encounter - 1) * SNAKE_BOSS_HEAD_HEALTH_GROWTH
+        self.head_max_health = self.head_health
+
+        # Movement state
+        self.angle = 0  # Current movement angle in degrees
+        self.target_angle = 0  # Target angle for smooth turning
+        self.last_curve_change = pygame.time.get_ticks()
+        self.curve_change_interval = random.randint(
+            SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN,
+            SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX
+        )
+
+        # Initialize segments (list of positions, head is first)
+        # Start in middle of screen
+        start_x = SCREEN_WIDTH // 2
+        start_y = 200
+
+        # Segments store position history for smooth following
+        self.segments = []
+
+        # Head
+        self.segments.append({
+            'x': start_x,
+            'y': start_y,
+            'is_head': True,
+            'radius': self.head_radius
+        })
+
+        # Body segments - slightly overlapping spacing
+        spacing = self.segment_radius * 1.8  # Slight overlap
+        for i in range(self.num_segments):
+            self.segments.append({
+                'x': start_x - spacing * (i + 1),
+                'y': start_y,
+                'is_head': False,
+                'radius': self.segment_radius
+            })
+
+        # Position history for smooth segment following
+        self.position_history = []
+
+        # Attack state
+        self.last_fireball_time = pygame.time.get_ticks()
+        self.fireball_cooldown = SNAKE_BOSS_FIREBALL_COOLDOWN
+
+        # Final phase (when only head remains)
+        self.final_phase = False
+
+        # Particles for segment destruction
+        self.particles = []
+
+        # Boss system compatibility attributes
+        self.destruction_complete = False
+        self.x = start_x - self.head_radius  # Left edge of head
+        self.y = start_y - self.head_radius  # Top edge of head
+        self.width = self.head_radius * 2
+        self.height = self.head_radius * 2
+
+    def get_nearest_player(self, players):
+        """Find the nearest living player to the head"""
+        head = self.segments[0]
+        nearest = None
+        min_dist = float('inf')
+
+        for player in players:
+            if player.alive:
+                dist = math.sqrt((player.x - head['x'])**2 + (player.y - head['y'])**2)
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest = player
+
+        return nearest
+
+    def update(self, players, sound_manager):
+        """Update snake position, movement, and attacks"""
+        current_time = pygame.time.get_ticks()
+
+        # Check if in final phase (only head remains)
+        if len(self.segments) == 1 and not self.final_phase:
+            self.final_phase = True
+            self.speed *= SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER
+            self.fireball_cooldown = int(self.fireball_cooldown / SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER)
+
+        # Update curve direction periodically for serpentine movement
+        if current_time - self.last_curve_change > self.curve_change_interval:
+            # Pick a new target angle with some randomness
+            angle_change = random.uniform(-60, 60)
+            self.target_angle = (self.target_angle + angle_change) % 360
+            self.last_curve_change = current_time
+            self.curve_change_interval = random.randint(
+                SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN,
+                SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX
+            )
+
+        # Smoothly interpolate current angle toward target for curves
+        angle_diff = self.target_angle - self.angle
+        # Normalize angle difference to [-180, 180]
+        if angle_diff > 180:
+            angle_diff -= 360
+        elif angle_diff < -180:
+            angle_diff += 360
+
+        self.angle += angle_diff * SNAKE_BOSS_CURVE_STRENGTH
+        self.angle = self.angle % 360
+
+        # Move head
+        head = self.segments[0]
+
+        # Convert angle to radians and calculate velocity
+        angle_rad = math.radians(self.angle)
+        head['x'] += math.cos(angle_rad) * self.speed
+        head['y'] += math.sin(angle_rad) * self.speed
+
+        # Keep head on screen with wrapping
+        if head['x'] < 0:
+            head['x'] = SCREEN_WIDTH
+        elif head['x'] > SCREEN_WIDTH:
+            head['x'] = 0
+
+        if head['y'] < 100:
+            head['y'] = 100
+        elif head['y'] > SCREEN_HEIGHT - 200:
+            head['y'] = SCREEN_HEIGHT - 200
+
+        # Store head position in history for followers
+        self.position_history.append({'x': head['x'], 'y': head['y']})
+
+        # Keep history length manageable (enough for all segments to follow)
+        max_history = len(self.segments) * 10
+        if len(self.position_history) > max_history:
+            self.position_history.pop(0)
+
+        # Update body segments to follow the path
+        spacing = self.segment_radius * 1.8
+        for i in range(1, len(self.segments)):
+            segment = self.segments[i]
+
+            # Calculate desired distance from previous segment
+            prev_segment = self.segments[i - 1]
+
+            # Move toward previous segment's position
+            dx = prev_segment['x'] - segment['x']
+            dy = prev_segment['y'] - segment['y']
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            if dist > 0:
+                # Move to maintain spacing
+                if dist > spacing:
+                    move_x = (dx / dist) * (dist - spacing)
+                    move_y = (dy / dist) * (dist - spacing)
+                    segment['x'] += move_x
+                    segment['y'] += move_y
+
+        # Update particles
+        for particle in self.particles[:]:
+            particle['x'] += particle['vx']
+            particle['y'] += particle['vy']
+            particle['life'] -= 1
+
+            if particle['life'] <= 0:
+                self.particles.remove(particle)
+
+        # Update position attributes for boss system compatibility
+        if self.segments:
+            head = self.segments[0]
+            self.x = head['x'] - head['radius']
+            self.y = head['y'] - head['radius']
+            self.width = head['radius'] * 2
+            self.height = head['radius'] * 2
+
+        # Return None (no explosion particles for now)
+        return None
+
+    def shoot(self, players, sound_manager):
+        """Shoot fireballs at nearest player - called by game loop"""
+        current_time = pygame.time.get_ticks()
+        bullets = []
+
+        if current_time - self.last_fireball_time > self.fireball_cooldown:
+            nearest_player = self.get_nearest_player(players)
+            if nearest_player:
+                fireball = self.shoot_fireball(nearest_player)
+                if fireball:
+                    bullets.append(fireball)
+                    sound_manager.play_sound('enemy_shoot', volume_override=0.3)
+                self.last_fireball_time = current_time
+
+        return bullets
+
+    def shoot_fireball(self, target_player):
+        """Shoot a fireball from head toward target player"""
+        head = self.segments[0]
+
+        # Calculate direction to player
+        dx = target_player.x - head['x']
+        dy = target_player.y - head['y']
+        dist = math.sqrt(dx * dx + dy * dy)
+
+        if dist > 0:
+            # Normalize direction
+            dx /= dist
+            dy /= dist
+
+            # Create fireball
+            fireball_speed = 5
+            return {
+                'x': head['x'],
+                'y': head['y'],
+                'vx': dx * fireball_speed,
+                'vy': dy * fireball_speed,
+                'radius': 8
+            }
+        return None
+
+    def hit_by_bullet(self, bullet_x, bullet_y):
+        """Check if bullet hits any segment, return True if tail is hit"""
+        # Only the tail (last segment) can be damaged
+        tail = self.segments[-1]
+
+        # Check each segment for collision
+        for i, segment in enumerate(self.segments):
+            dx = bullet_x - segment['x']
+            dy = bullet_y - segment['y']
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            if dist < segment['radius']:
+                # Hit a segment
+                if i == len(self.segments) - 1:
+                    # Hit the tail - this is valid damage
+                    if self.final_phase:
+                        # In final phase, head takes damage
+                        self.head_health -= 1
+                        return True
+                    else:
+                        # Remove tail segment
+                        self.create_segment_explosion(segment['x'], segment['y'])
+                        self.segments.pop()
+                        return True
+                else:
+                    # Hit a non-tail segment - just consume the bullet
+                    return True
+
+        return False
+
+    def create_segment_explosion(self, x, y):
+        """Create particle explosion when segment is destroyed"""
+        for _ in range(15):
+            angle = random.uniform(0, 2 * math.pi)
+            speed = random.uniform(1, 4)
+            self.particles.append({
+                'x': x,
+                'y': y,
+                'vx': math.cos(angle) * speed,
+                'vy': math.sin(angle) * speed,
+                'life': random.randint(20, 40),
+                'color': (255, 255, 0)  # Yellow
+            })
+
+    def collides_with_player(self, player):
+        """Check if any part of snake collides with player"""
+        if not player.alive:
+            return False
+
+        for segment in self.segments:
+            dx = player.x - segment['x']
+            dy = player.y - segment['y']
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            # Player collision radius is roughly half their width
+            player_radius = 20
+            if dist < segment['radius'] + player_radius:
+                return True
+
+        return False
+
+    def collides_with_barrier(self, barrier):
+        """Check if any segment collides with a barrier"""
+        for segment in self.segments:
+            # Check if segment circle intersects with barrier rectangle
+            closest_x = max(barrier.x, min(segment['x'], barrier.x + barrier.width))
+            closest_y = max(barrier.y, min(segment['y'], barrier.y + barrier.height))
+
+            dx = segment['x'] - closest_x
+            dy = segment['y'] - closest_y
+            dist = math.sqrt(dx * dx + dy * dy)
+
+            if dist < segment['radius']:
+                return True
+
+        return False
+
+    def is_defeated(self):
+        """Check if boss is defeated"""
+        if self.final_phase:
+            return self.head_health <= 0
+        return len(self.segments) == 0
+
+    def get_turret_rects(self):
+        """This boss has no turrets, return empty list for compatibility"""
+        return []
+
+    def get_main_body_rect(self):
+        """Get collision rectangle for the main body (not used for snake, uses segment collision)"""
+        if self.destruction_complete or len(self.segments) == 0:
+            return None
+        # Return None since we use custom segment collision detection
+        return None
+
+    def create_final_explosion(self):
+        """Create a massive particle explosion when boss is completely destroyed"""
+        explosion_particles = []
+
+        # Create explosion at head position
+        if self.segments:
+            head = self.segments[0]
+            center_x = int(head['x'])
+            center_y = int(head['y'])
+        else:
+            center_x = SCREEN_WIDTH // 2
+            center_y = 200
+
+        for _ in range(50):
+            particle = {
+                'x': center_x + random.randint(-50, 50),
+                'y': center_y + random.randint(-50, 50),
+                'vel_x': random.uniform(-8, 8),
+                'vel_y': random.uniform(-8, 3),
+                'color': random.choice([
+                    (255, 255, 0),   # Yellow
+                    (255, 150, 0),   # Orange
+                    (255, 0, 0),     # Red
+                    (255, 255, 255), # White
+                ]),
+                'size': random.randint(4, 12),
+                'life': random.randint(1000, 1800),
+                'gravity': random.uniform(0.1, 0.3)
+            }
+            explosion_particles.append(particle)
+
+        return explosion_particles
+
+    def draw(self, screen):
+        """Draw the snake boss"""
+        # Draw body segments (in reverse so head is on top)
+        for i in range(len(self.segments) - 1, -1, -1):
+            segment = self.segments[i]
+
+            if segment['is_head']:
+                # Draw head (yellow with eyes)
+                pygame.draw.circle(screen, (255, 255, 0),
+                                 (int(segment['x']), int(segment['y'])),
+                                 segment['radius'])
+
+                # Draw mean eyes
+                eye_offset_x = segment['radius'] // 3
+                eye_offset_y = segment['radius'] // 4
+                eye_radius = segment['radius'] // 6
+
+                # Determine eye direction based on movement angle
+                angle_rad = math.radians(self.angle)
+                eye_forward_x = math.cos(angle_rad) * (segment['radius'] // 3)
+                eye_forward_y = math.sin(angle_rad) * (segment['radius'] // 3)
+
+                # Left eye
+                left_eye_x = int(segment['x'] + eye_forward_x - eye_offset_y * math.sin(angle_rad))
+                left_eye_y = int(segment['y'] + eye_forward_y + eye_offset_y * math.cos(angle_rad))
+                pygame.draw.circle(screen, (255, 0, 0), (left_eye_x, left_eye_y), eye_radius)
+
+                # Right eye
+                right_eye_x = int(segment['x'] + eye_forward_x + eye_offset_y * math.sin(angle_rad))
+                right_eye_y = int(segment['y'] + eye_forward_y - eye_offset_y * math.cos(angle_rad))
+                pygame.draw.circle(screen, (255, 0, 0), (right_eye_x, right_eye_y), eye_radius)
+
+            elif i == len(self.segments) - 1:
+                # Draw tail (red - vulnerable)
+                pygame.draw.circle(screen, (255, 0, 0),
+                                 (int(segment['x']), int(segment['y'])),
+                                 segment['radius'])
+            else:
+                # Draw body segment (yellow)
+                pygame.draw.circle(screen, (255, 255, 0),
+                                 (int(segment['x']), int(segment['y'])),
+                                 segment['radius'])
+
+        # Draw particles
+        for particle in self.particles:
+            pygame.draw.circle(screen, particle['color'],
+                             (int(particle['x']), int(particle['y'])),
+                             3)
+
+        # Draw health bar only in final phase
+        if self.final_phase and self.head_health > 0:
+            bar_width = 400
+            bar_height = 30
+            bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+            bar_y = 60
+
+            health_ratio = self.head_health / self.head_max_health
+
+            pygame.draw.rect(screen, (255, 0, 0), (bar_x, bar_y, bar_width, bar_height))
+            pygame.draw.rect(screen, (0, 255, 0), (bar_x, bar_y, int(bar_width * health_ratio), bar_height))
+            pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_width, bar_height), 3)
+
+            # Label
+            font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+            label = f"SNAKE HEAD: {self.head_health}/{self.head_max_health}"
+            text = font.render(label, True, (255, 255, 255))
+            text_rect = text.get_rect(center=(SCREEN_WIDTH // 2, bar_y - 20))
+            screen.blit(text, text_rect)
+
+
 class Enemy:
     def __init__(self, x, y, enemy_type=0):
         self.x = x
@@ -6457,7 +6897,7 @@ class DebugMenu:
             {'type': 'int', 'label': 'XP Current', 'path': ('xp_current',), 'min': 0, 'max': 50000, 'step': 250},
             {'type': 'label', 'label': 'Boss Testing'},
             {'type': 'bool', 'label': 'Force Boss Level', 'path': ('force_boss_level',)},
-            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss'], 'path': ('force_boss_type',)},
+            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss', 'SnakeBoss'], 'path': ('force_boss_type',)},
             {'type': 'int', 'label': 'Boss Encounter Level', 'path': ('boss_encounter_level',), 'min': 1, 'max': 50, 'step': 1},
         ]
 
@@ -6811,7 +7251,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss]
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss, SnakeBoss]
 
         self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.small_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -8071,6 +8511,66 @@ class Game:
                             bullet.pierce_hits -= 1
                     continue  # Skip normal boss collision logic
 
+                # Special handling for SnakeBoss
+                if isinstance(self.current_boss, SnakeBoss):
+                    if self.current_boss.hit_by_bullet(bullet.rect.centerx, bullet.rect.centery):
+                        # Hit a segment (tail or head in final phase)
+                        if bullet.pierce_hits <= 0:
+                            self.player_bullets.remove(bullet)
+                        self.sound_manager.play_sound('ufo_hit', volume_override=0.5)
+
+                        # Check if boss is defeated
+                        if self.current_boss.is_defeated():
+                            # Boss completely destroyed - EPIC EXPLOSION SEQUENCE
+                            self.score += 1000
+                            head = self.current_boss.segments[0] if self.current_boss.segments else {'x': SCREEN_WIDTH // 2, 'y': 200}
+                            self.add_xp(200, int(head['x']), int(head['y']))
+
+                            # Clear all enemy bullets
+                            self.enemy_bullets.clear()
+
+                            # Play explosion sound
+                            self.sound_manager.play_sound('explosion_large')
+
+                            # CREATE MASSIVE BOSS EXPLOSION
+                            self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+
+                            # Grant post-boss shield
+                            self.grant_post_boss_shield()
+
+                            # Screen effects
+                            self.screen_shake_intensity = 20
+                            self.screen_shake_duration = 1500
+                            self.screen_flash_intensity = 200
+                            self.screen_flash_duration = 1000
+
+                            # CREATE EXPLOSION WAVES
+                            head_x = int(head['x'])
+                            head_y = int(head['y'])
+
+                            for i in range(3):  # 3 expanding shock waves
+                                wave = {
+                                    'x': head_x,
+                                    'y': head_y,
+                                    'radius': 0,
+                                    'max_radius': 200 + i * 75,
+                                    'growth_speed': 6 + i * 2,
+                                    'life': 80,
+                                    'color': (255, 255, 0, 128)  # Yellow with transparency
+                                }
+                                self.boss_explosion_waves.append(wave)
+
+                            # Mark boss as defeated
+                            self.current_boss = None
+                        else:
+                            # Hit but not defeated
+                            self.score += 10
+                            self.add_xp(5, bullet.rect.centerx, bullet.rect.centery)
+
+                        if bullet.pierce_hits > 0:
+                            bullet.pierce_hits -= 1
+                    continue  # Skip normal boss collision logic
+
                 # Check turret collisions first (for other bosses)
                 turret_rects = self.current_boss.get_turret_rects()
                 hit_turret = False
@@ -8341,6 +8841,27 @@ class Game:
                                 self.sound_manager.play_sound('explosion_small', volume_override=0.5)
                                 break
 
+        # Snake vs players and barriers (for Snake Boss)
+        if self.is_boss_level and self.current_boss and isinstance(self.current_boss, SnakeBoss):
+            # Check player collisions
+            for i, player in enumerate(self.players):
+                if player.is_alive and self.current_boss.collides_with_player(player):
+                    was_alive = player.lives > 0
+                    took_damage, explosion_particles = player.take_damage(self.sound_manager)
+                    if took_damage:
+                        # Track death if player died
+                        if was_alive and player.lives <= 0 and i < len(self.player_stats):
+                            self.player_stats[i].record_death()
+                        # Add explosion particles if player died
+                        if explosion_particles:
+                            self.player_explosion_particles.extend(explosion_particles)
+
+            # Check barrier collisions - snake destroys barriers on contact
+            for barrier in self.barriers[:]:
+                if self.current_boss.collides_with_barrier(barrier):
+                    self.barriers.remove(barrier)
+                    self.sound_manager.play_sound('explosion_small', volume_override=0.3)
+
     def restart_game(self):
         self.game_over = False
         self.awaiting_name_input = False
@@ -8374,8 +8895,8 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss]
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0}
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss, SnakeBoss]
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0}
 
         # Reset all players with new individual upgrades
         for player in self.players:
