@@ -8495,19 +8495,20 @@ class Game:
                     if i < len(current_speeds):
                         enemy.speed = current_speeds[i]
         elif self.current_boss:
-            # Check if boss reached player
-            for player in self.players:
-                if player.is_alive and self.current_boss.y + self.current_boss.height >= player.y:
-                    # Kill the player first with sound
-                    took_damage, explosion_particles = player.take_damage(self.sound_manager)
-                    # Add explosion particles if player died
-                    if explosion_particles:
-                        self.player_explosion_particles.extend(explosion_particles)
-                    self.game_over = True
-                    self.game_over_time = pygame.time.get_ticks()
-                    if self.score_manager.is_high_score(self.score, self.coop_mode):
-                        self.awaiting_name_input = True
-                        self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode, self.key_bindings)
+            # Check if boss reached player (not applicable to SnakeBoss which uses collision detection)
+            if not isinstance(self.current_boss, SnakeBoss):
+                for player in self.players:
+                    if player.is_alive and self.current_boss.y + self.current_boss.height >= player.y:
+                        # Kill the player first with sound
+                        took_damage, explosion_particles = player.take_damage(self.sound_manager)
+                        # Add explosion particles if player died
+                        if explosion_particles:
+                            self.player_explosion_particles.extend(explosion_particles)
+                        self.game_over = True
+                        self.game_over_time = pygame.time.get_ticks()
+                        if self.score_manager.is_high_score(self.score, self.coop_mode):
+                            self.awaiting_name_input = True
+                            self.name_input_screen = NameInputScreen(self.screen, self.score, self.level, self.coop_mode, self.key_bindings)
                     
     def check_collisions(self):
         # Player bullets vs enemies
