@@ -146,7 +146,7 @@ RUBIKS_BOSS_WHITE_SHOOT_COOLDOWN = 3000  # White bouncing ball interval (ms)
 SNAKE_BOSS_SEGMENT_RADIUS = 30  # Radius of body segments (pixels, adjustable)
 SNAKE_BOSS_HEAD_RADIUS_MULTIPLIER = 1.5  # Head is 1.5x larger than body segments
 SNAKE_BOSS_START_SEGMENTS = 6  # Starting number of body segments (not including head, adjustable)
-SNAKE_BOSS_SPEED_BASE = 3.5  # Base movement speed (adjustable)
+SNAKE_BOSS_SPEED_BASE = 7.0  # Base movement speed (adjustable, doubled for better action)
 SNAKE_BOSS_SPEED_GROWTH = 0.3  # Speed increase per encounter
 SNAKE_BOSS_FIREBALL_COOLDOWN = 1000  # Time between fireballs in ms (adjustable, 1 per second)
 SNAKE_BOSS_HEAD_HEALTH_BASE = 20  # Base health for head final phase (adjustable)
@@ -5297,10 +5297,15 @@ class SnakeBoss:
         self.height = self.head_radius * 2
 
     def calculate_turn_radius(self):
-        """Calculate turn radius as sum of all segment radiuses"""
-        # Use sum of radiuses instead of diameters for tighter turns
-        total_radius = sum(segment['radius'] for segment in self.segments)
-        self.turn_radius = total_radius
+        """Calculate turn radius for tight Moldorm-style turns"""
+        # Use a much smaller turn radius for tighter, more erratic movement
+        # Formula: segment_count * average_radius / 3
+        # This prevents self-overlap while keeping turns tight
+        avg_radius = sum(segment['radius'] for segment in self.segments) / len(self.segments)
+        self.turn_radius = len(self.segments) * avg_radius / 3.0
+
+        # Ensure minimum turn radius
+        self.turn_radius = max(self.turn_radius, 50)
 
         # Calculate turn speed based on movement speed and turn radius
         # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
