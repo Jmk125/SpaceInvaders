@@ -5538,8 +5538,8 @@ class SnakeBoss:
 
     def is_destruction_complete(self):
         """Check if destruction sequence is finished - SnakeBoss destroys instantly"""
-        # SnakeBoss doesn't have a destruction animation, it's destroyed immediately
-        return True
+        # SnakeBoss is only destroyed when destruction_complete flag is set
+        return self.destruction_complete
 
     def get_turret_rects(self):
         """This boss has no turrets, return empty list for compatibility"""
@@ -8566,8 +8566,8 @@ class Game:
                                 }
                                 self.boss_explosion_waves.append(wave)
 
-                            # Mark boss as defeated
-                            self.current_boss = None
+                            # Mark boss as destroyed (don't set to None - let game loop handle it)
+                            self.current_boss.destruction_complete = True
                         else:
                             # Hit but not defeated
                             self.score += 10
