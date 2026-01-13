@@ -5245,7 +5245,7 @@ class SnakeBoss:
         # Movement state - Moldorm-style constant turning
         self.angle = random.uniform(0, 360)  # Current movement direction in degrees
         self.turn_direction = random.choice([-1, 1])  # -1 = turn left, 1 = turn right
-        self.turn_speed = 0  # Will be calculated by calculate_turn_radius()
+        self.turn_speed = 0  # Will be calculated in initialization
 
         # Initialize segments (list of positions, head is first)
         # Start in middle of screen
@@ -5273,8 +5273,15 @@ class SnakeBoss:
                 'radius': self.segment_radius
             })
 
-        # Calculate turn radius and turn speed based on segment count
-        self.calculate_turn_radius()
+        # Calculate turn radius and turn speed based on initial segment count (stays constant)
+        # Turn radius = starting segments * segment radius * 1.5
+        # This gives a good balance - tight enough for dynamic movement but not spinning in place
+        self.initial_segment_count = len(self.segments)
+        self.turn_radius = self.initial_segment_count * self.segment_radius * 1.5
+
+        # Calculate turn speed based on movement speed and turn radius
+        # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
+        self.turn_speed = (self.speed / self.turn_radius) * 57.2958  # 180/pi ≈ 57.2958
 
         # Position history for smooth segment following
         self.position_history = []
@@ -5295,24 +5302,6 @@ class SnakeBoss:
         self.y = start_y - self.head_radius  # Top edge of head
         self.width = self.head_radius * 2
         self.height = self.head_radius * 2
-
-    def calculate_turn_radius(self):
-        """Calculate turn radius for tight Moldorm-style turns"""
-        # Use a much smaller turn radius for tighter, more erratic movement
-        # Formula: segment_count * average_radius / 3
-        # This prevents self-overlap while keeping turns tight
-        avg_radius = sum(segment['radius'] for segment in self.segments) / len(self.segments)
-        self.turn_radius = len(self.segments) * avg_radius / 3.0
-
-        # Ensure minimum turn radius
-        self.turn_radius = max(self.turn_radius, 50)
-
-        # Calculate turn speed based on movement speed and turn radius
-        # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
-        if self.turn_radius > 0:
-            self.turn_speed = (self.speed / self.turn_radius) * 57.2958  # 180/pi ≈ 57.2958
-        else:
-            self.turn_speed = 2.0  # Fallback
 
     def get_nearest_player(self, players):
         """Find the nearest living player to the head"""
@@ -5338,7 +5327,8 @@ class SnakeBoss:
             self.final_phase = True
             self.speed *= SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER
             self.fireball_cooldown = int(self.fireball_cooldown / SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER)
-            self.calculate_turn_radius()  # Recalculate for final phase
+            # Recalculate turn speed for doubled speed (turn radius stays constant)
+            self.turn_speed = (self.speed / self.turn_radius) * 57.2958
 
         # Moldorm-style movement: Always turning in a circle
         # Apply constant turning
@@ -5466,9 +5456,8 @@ class SnakeBoss:
         return None
 
     def hit_by_bullet(self, bullet_x, bullet_y):
-        """Check if bullet hits any segment, return True if tail is hit"""
-        # Only the tail (last segment) can be damaged
-        tail = self.segments[-1]
+        """Check if bullet hits any segment, returns 'damaged', 'blocked', or None"""
+        # Only the tail (last segment) can be damaged, or head in final phase
 
         # Check each segment for collision
         for i, segment in enumerate(self.segments):
@@ -5483,18 +5472,17 @@ class SnakeBoss:
                     if self.final_phase:
                         # In final phase, head takes damage
                         self.head_health -= 1
-                        return True
+                        return 'damaged'  # Hit vulnerable part - award XP
                     else:
                         # Remove tail segment
                         self.create_segment_explosion(segment['x'], segment['y'])
                         self.segments.pop()
-                        self.calculate_turn_radius()  # Update turn radius after losing a segment
-                        return True
+                        return 'damaged'  # Hit vulnerable part - award XP
                 else:
-                    # Hit a non-tail segment - just consume the bullet
-                    return True
+                    # Hit a non-tail segment - consume bullet but no damage/XP
+                    return 'blocked'  # Hit invulnerable part - no XP
 
-        return False
+        return None  # Missed entirely
 
     def create_segment_explosion(self, x, y):
         """Create particle explosion when segment is destroyed"""
@@ -8532,59 +8520,65 @@ class Game:
 
                 # Special handling for SnakeBoss
                 if isinstance(self.current_boss, SnakeBoss):
-                    if self.current_boss.hit_by_bullet(bullet.rect.centerx, bullet.rect.centery):
-                        # Hit a segment (tail or head in final phase)
+                    hit_result = self.current_boss.hit_by_bullet(bullet.rect.centerx, bullet.rect.centery)
+
+                    if hit_result:  # 'damaged' or 'blocked'
+                        # Remove bullet (pierce check)
                         if bullet.pierce_hits <= 0:
                             self.player_bullets.remove(bullet)
-                        self.sound_manager.play_sound('ufo_hit', volume_override=0.5)
 
-                        # Check if boss is defeated
-                        if self.current_boss.is_defeated():
-                            # Boss completely destroyed - EPIC EXPLOSION SEQUENCE
-                            self.score += 1000
-                            head = self.current_boss.segments[0] if self.current_boss.segments else {'x': SCREEN_WIDTH // 2, 'y': 200}
-                            self.add_xp(200, int(head['x']), int(head['y']))
+                        if hit_result == 'damaged':
+                            # Hit vulnerable part - play sound and award XP
+                            self.sound_manager.play_sound('ufo_hit', volume_override=0.5)
 
-                            # Clear all enemy bullets
-                            self.enemy_bullets.clear()
+                            # Check if boss is defeated
+                            if self.current_boss.is_defeated():
+                                # Boss completely destroyed - EPIC EXPLOSION SEQUENCE
+                                self.score += 1000
+                                head = self.current_boss.segments[0] if self.current_boss.segments else {'x': SCREEN_WIDTH // 2, 'y': 200}
+                                self.add_xp(200, int(head['x']), int(head['y']))
 
-                            # Play explosion sound
-                            self.sound_manager.play_sound('explosion_large')
+                                # Clear all enemy bullets
+                                self.enemy_bullets.clear()
 
-                            # CREATE MASSIVE BOSS EXPLOSION
-                            self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+                                # Play explosion sound
+                                self.sound_manager.play_sound('explosion_large')
 
-                            # Grant post-boss shield
-                            self.grant_post_boss_shield()
+                                # CREATE MASSIVE BOSS EXPLOSION
+                                self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
 
-                            # Screen effects
-                            self.screen_shake_intensity = 20
-                            self.screen_shake_duration = 1500
-                            self.screen_flash_intensity = 200
-                            self.screen_flash_duration = 1000
+                                # Grant post-boss shield
+                                self.grant_post_boss_shield()
 
-                            # CREATE EXPLOSION WAVES
-                            head_x = int(head['x'])
-                            head_y = int(head['y'])
+                                # Screen effects
+                                self.screen_shake_intensity = 20
+                                self.screen_shake_duration = 1500
+                                self.screen_flash_intensity = 200
+                                self.screen_flash_duration = 1000
 
-                            for i in range(3):  # 3 expanding shock waves
-                                wave = {
-                                    'x': head_x,
-                                    'y': head_y,
-                                    'radius': 0,
-                                    'max_radius': 200 + i * 75,
-                                    'growth_speed': 6 + i * 2,
-                                    'life': 80,
-                                    'color': (255, 255, 0, 128)  # Yellow with transparency
-                                }
-                                self.boss_explosion_waves.append(wave)
+                                # CREATE EXPLOSION WAVES
+                                head_x = int(head['x'])
+                                head_y = int(head['y'])
 
-                            # Mark boss as destroyed (don't set to None - let game loop handle it)
-                            self.current_boss.destruction_complete = True
-                        else:
-                            # Hit but not defeated
-                            self.score += 10
-                            self.add_xp(5, bullet.rect.centerx, bullet.rect.centery)
+                                for i in range(3):  # 3 expanding shock waves
+                                    wave = {
+                                        'x': head_x,
+                                        'y': head_y,
+                                        'radius': 0,
+                                        'max_radius': 200 + i * 75,
+                                        'growth_speed': 6 + i * 2,
+                                        'life': 80,
+                                        'color': (255, 255, 0, 128)  # Yellow with transparency
+                                    }
+                                    self.boss_explosion_waves.append(wave)
+
+                                # Mark boss as destroyed (don't set to None - let game loop handle it)
+                                self.current_boss.destruction_complete = True
+                            else:
+                                # Hit vulnerable part but not defeated - award small XP
+                                self.score += 10
+                                self.add_xp(5, bullet.rect.centerx, bullet.rect.centery)
+                        # else: hit_result == 'blocked', bullet consumed but no sound/XP
 
                         if bullet.pierce_hits > 0:
                             bullet.pierce_hits -= 1
