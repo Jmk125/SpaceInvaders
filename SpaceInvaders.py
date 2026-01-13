@@ -5242,14 +5242,10 @@ class SnakeBoss:
         self.head_health = SNAKE_BOSS_HEAD_HEALTH_BASE + (self.encounter - 1) * SNAKE_BOSS_HEAD_HEALTH_GROWTH
         self.head_max_health = self.head_health
 
-        # Movement state
-        self.angle = 0  # Current movement angle in degrees
-        self.target_angle = 0  # Target angle for smooth turning
-        self.last_curve_change = pygame.time.get_ticks()
-        self.curve_change_interval = random.randint(
-            SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN,
-            SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX
-        )
+        # Movement state - Moldorm-style constant turning
+        self.angle = random.uniform(0, 360)  # Current movement direction in degrees
+        self.turn_direction = random.choice([-1, 1])  # -1 = turn left, 1 = turn right
+        self.turn_speed = 2.0  # Degrees to turn per frame
 
         # Initialize segments (list of positions, head is first)
         # Start in middle of screen
@@ -5277,6 +5273,9 @@ class SnakeBoss:
                 'radius': self.segment_radius
             })
 
+        # Calculate turn radius as sum of all segment diameters
+        self.calculate_turn_radius()
+
         # Position history for smooth segment following
         self.position_history = []
 
@@ -5296,6 +5295,11 @@ class SnakeBoss:
         self.y = start_y - self.head_radius  # Top edge of head
         self.width = self.head_radius * 2
         self.height = self.head_radius * 2
+
+    def calculate_turn_radius(self):
+        """Calculate turn radius as sum of all segment diameters"""
+        total_diameter = sum(segment['radius'] * 2 for segment in self.segments)
+        self.turn_radius = total_diameter
 
     def get_nearest_player(self, players):
         """Find the nearest living player to the head"""
@@ -5321,47 +5325,36 @@ class SnakeBoss:
             self.final_phase = True
             self.speed *= SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER
             self.fireball_cooldown = int(self.fireball_cooldown / SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER)
+            self.calculate_turn_radius()  # Recalculate for final phase
 
-        # Update curve direction periodically for serpentine movement
-        if current_time - self.last_curve_change > self.curve_change_interval:
-            # Pick a new target angle with some randomness
-            angle_change = random.uniform(-60, 60)
-            self.target_angle = (self.target_angle + angle_change) % 360
-            self.last_curve_change = current_time
-            self.curve_change_interval = random.randint(
-                SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN,
-                SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX
-            )
-
-        # Smoothly interpolate current angle toward target for curves
-        angle_diff = self.target_angle - self.angle
-        # Normalize angle difference to [-180, 180]
-        if angle_diff > 180:
-            angle_diff -= 360
-        elif angle_diff < -180:
-            angle_diff += 360
-
-        self.angle += angle_diff * SNAKE_BOSS_CURVE_STRENGTH
+        # Moldorm-style movement: Always turning in a circle
+        # Apply constant turning
+        self.angle += self.turn_speed * self.turn_direction
         self.angle = self.angle % 360
 
-        # Move head
+        # Move head in current direction
         head = self.segments[0]
-
-        # Convert angle to radians and calculate velocity
         angle_rad = math.radians(self.angle)
-        head['x'] += math.cos(angle_rad) * self.speed
-        head['y'] += math.sin(angle_rad) * self.speed
+        new_x = head['x'] + math.cos(angle_rad) * self.speed
+        new_y = head['y'] + math.sin(angle_rad) * self.speed
 
-        # Keep head on screen with wrapping
-        if head['x'] < 0:
-            head['x'] = SCREEN_WIDTH
-        elif head['x'] > SCREEN_WIDTH:
-            head['x'] = 0
+        # Check for screen edge collisions and bounce (reverse turn direction)
+        margin = head['radius']
+        hit_edge = False
 
-        if head['y'] < 100:
-            head['y'] = 100
-        elif head['y'] > SCREEN_HEIGHT - 200:
-            head['y'] = SCREEN_HEIGHT - 200
+        if new_x - margin < 0 or new_x + margin > SCREEN_WIDTH:
+            # Hit left or right edge
+            self.turn_direction *= -1
+            hit_edge = True
+
+        if new_y - margin < 100 or new_y + margin > SCREEN_HEIGHT - 200:
+            # Hit top or bottom edge
+            self.turn_direction *= -1
+            hit_edge = True
+
+        # Clamp position to screen bounds
+        head['x'] = max(margin, min(SCREEN_WIDTH - margin, new_x))
+        head['y'] = max(100 + margin, min(SCREEN_HEIGHT - 200 - margin, new_y))
 
         # Store head position in history for followers
         self.position_history.append({'x': head['x'], 'y': head['y']})
@@ -5472,6 +5465,7 @@ class SnakeBoss:
                         # Remove tail segment
                         self.create_segment_explosion(segment['x'], segment['y'])
                         self.segments.pop()
+                        self.calculate_turn_radius()  # Update turn radius after losing a segment
                         return True
                 else:
                     # Hit a non-tail segment - just consume the bullet
