@@ -156,7 +156,7 @@ SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER = 2.0  # Fireball frequency multiplie
 SNAKE_BOSS_FIREBALL_RADIUS = 27  # Fireball size (same as Rubik's orange fireballs)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN = 1000  # Minimum time between direction changes (ms)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX = 3000  # Maximum time between direction changes (ms)
-SNAKE_BOSS_CURVE_STRENGTH = 0.06  # How sharply the snake curves (adjustable)
+SNAKE_BOSS_CURVE_STRENGTH = 1.0  # How sharply the snake curves during movement (higher = tighter curves, 0.5 = gentle, 1.0 = normal, 2.0 = sharp)
 
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
@@ -5279,10 +5279,10 @@ class SnakeBoss:
             })
 
         # Calculate turn radius and turn speed based on initial segment count (stays constant)
-        # Turn radius = starting segments * segment radius * 1.0
-        # Tighter turns relative to body size for more dynamic movement
+        # Turn radius affected by curve strength: higher curve strength = sharper turns = smaller radius
+        # Turn radius = (starting segments * segment radius) / curve_strength
         self.initial_segment_count = len(self.segments)
-        self.turn_radius = self.initial_segment_count * self.segment_radius * 1.0
+        self.turn_radius = (self.initial_segment_count * self.segment_radius) / SNAKE_BOSS_CURVE_STRENGTH
 
         # Calculate turn speed based on movement speed and turn radius
         # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
