@@ -5330,6 +5330,18 @@ class SnakeBoss:
 
     def update(self, players, sound_manager):
         """Update snake position, movement, and attacks"""
+        # Don't update movement if boss is destroyed
+        if self.destruction_complete:
+            # Only update particles during destruction
+            for particle in self.particles[:]:
+                particle['x'] += particle['vx']
+                particle['y'] += particle['vy']
+                particle['life'] -= 1
+
+                if particle['life'] <= 0:
+                    self.particles.remove(particle)
+            return None
+
         current_time = pygame.time.get_ticks()
 
         # Check if in final phase (only head remains)
@@ -5436,6 +5448,10 @@ class SnakeBoss:
 
     def shoot(self, players, sound_manager):
         """Shoot fireballs at nearest player - called by game loop"""
+        # Don't shoot if boss is destroyed
+        if self.destruction_complete:
+            return []
+
         current_time = pygame.time.get_ticks()
         bullets = []
 
