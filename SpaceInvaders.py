@@ -5581,20 +5581,23 @@ class SnakeBoss:
             center_x = SCREEN_WIDTH // 2
             center_y = 200
 
-        for _ in range(50):
+        # Create dramatic explosion with yellows and reds
+        for _ in range(80):
             particle = {
-                'x': center_x + random.randint(-50, 50),
-                'y': center_y + random.randint(-50, 50),
-                'vel_x': random.uniform(-8, 8),
-                'vel_y': random.uniform(-8, 3),
+                'x': center_x + random.randint(-60, 60),
+                'y': center_y + random.randint(-60, 60),
+                'vel_x': random.uniform(-10, 10),
+                'vel_y': random.uniform(-10, 4),
                 'color': random.choice([
-                    (255, 255, 0),   # Yellow
-                    (255, 150, 0),   # Orange
-                    (255, 0, 0),     # Red
-                    (255, 255, 255), # White
+                    (255, 255, 0),   # Bright Yellow
+                    (255, 220, 0),   # Golden Yellow
+                    (255, 200, 0),   # Deep Yellow
+                    (255, 0, 0),     # Bright Red
+                    (220, 0, 0),     # Deep Red
+                    (255, 50, 0),    # Red-Orange
                 ]),
-                'size': random.randint(4, 12),
-                'life': random.randint(1000, 1800),
+                'size': random.randint(5, 14),
+                'life': random.randint(1200, 2000),
                 'gravity': random.uniform(0.1, 0.3)
             }
             explosion_particles.append(particle)
