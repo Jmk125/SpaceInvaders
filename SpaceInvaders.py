@@ -5406,15 +5406,27 @@ class SnakeBoss:
             self.position_history.pop(0)
 
         # Update body segments to follow the head's historical path
-        spacing = self.segment_radius * 1.8
+        # Calculate cumulative target distances for each segment based on actual radii
+        spacing_overlap_factor = 0.9  # 0.9 = slight overlap, 1.0 = touching, >1.0 = gap
+
+        target_distances = [0]  # Head is at distance 0
+        cumulative_distance = 0
+
+        for i in range(1, len(self.segments)):
+            prev_radius = self.segments[i-1]['radius']
+            curr_radius = self.segments[i]['radius']
+            # Proper center-to-center distance accounting for both radii
+            segment_spacing = (prev_radius + curr_radius) * spacing_overlap_factor
+            cumulative_distance += segment_spacing
+            target_distances.append(cumulative_distance)
 
         # Each segment follows the exact path the head took, positioned at a specific distance behind
         if len(self.position_history) > 1:
             for i in range(1, len(self.segments)):
                 segment = self.segments[i]
 
-                # Calculate how far behind the head this segment should be
-                target_distance = i * spacing
+                # Get pre-calculated target distance for this segment
+                target_distance = target_distances[i]
 
                 # Traverse position history backwards to find the point at target_distance
                 cumulative_distance = 0.0
