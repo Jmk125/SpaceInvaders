@@ -5296,6 +5296,18 @@ class SnakeBoss:
                 'radius': self.segment_radius
             })
 
+        # Position history for smooth segment following
+        self.position_history = []
+        total_initial_distance = 0.0
+        for i in range(1, len(self.segments)):
+            prev_radius = self.segments[i - 1]['radius']
+            curr_radius = self.segments[i]['radius']
+            total_initial_distance += (prev_radius + curr_radius) * spacing_overlap_factor
+
+        max_initial_distance = int(math.ceil(total_initial_distance))
+        for dist in range(max_initial_distance, -1, -1):
+            self.position_history.append({'x': start_x - dist, 'y': start_y})
+
         # Calculate turn radius and turn speed based on initial segment count (stays constant)
         # Turn radius affected by curve strength: higher curve strength = sharper turns = smaller radius
         # Turn radius = (starting segments * segment radius) / curve_strength
@@ -5305,9 +5317,6 @@ class SnakeBoss:
         # Calculate turn speed based on movement speed and turn radius
         # angular_velocity (degrees/frame) = (linear_speed / radius) * (180/pi)
         self.turn_speed = (self.speed / self.turn_radius) * 57.2958  # 180/pi ≈ 57.2958
-
-        # Position history for smooth segment following
-        self.position_history = []
 
         # Attack state
         self.last_fireball_time = pygame.time.get_ticks()
@@ -5414,11 +5423,6 @@ class SnakeBoss:
         # Store head position in history for followers
         self.position_history.append({'x': head['x'], 'y': head['y']})
 
-        # Keep history length manageable (enough for all segments to follow)
-        max_history = len(self.segments) * 10
-        if len(self.position_history) > max_history:
-            self.position_history.pop(0)
-
         # Update body segments to follow the head's historical path
         # Calculate cumulative target distances for each segment based on actual radii
         spacing_overlap_factor = 0.9  # 0.9 = slight overlap, 1.0 = touching, >1.0 = gap
@@ -5433,6 +5437,12 @@ class SnakeBoss:
             segment_spacing = (prev_radius + curr_radius) * spacing_overlap_factor
             cumulative_distance += segment_spacing
             target_distances.append(cumulative_distance)
+
+        # Keep history length manageable (enough for all segments to follow)
+        required_history = int(math.ceil(cumulative_distance / max(self.speed, 1))) + 1
+        max_history = max(len(self.segments) * 10, required_history)
+        if len(self.position_history) > max_history:
+            self.position_history = self.position_history[-max_history:]
 
         # Each segment follows the exact path the head took, positioned at a specific distance behind
         if len(self.position_history) > 1:
