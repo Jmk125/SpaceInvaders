@@ -157,7 +157,7 @@ SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER = 2.0  # Fireball frequency multiplie
 SNAKE_BOSS_FIREBALL_RADIUS = 27  # Fireball size (same as Rubik's orange fireballs)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN = 1000  # Minimum time between direction changes (ms)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX = 3000  # Maximum time between direction changes (ms)
-SNAKE_BOSS_CURVE_STRENGTH = 2.5  # How sharply the snake curves during movement (higher = tighter curves, 0.5 = gentle, 1.0 = normal, 2.0 = sharp)
+SNAKE_BOSS_CURVE_STRENGTH = 2.0  # How sharply the snake curves during movement (higher = tighter curves, 0.5 = gentle, 1.0 = normal, 2.0 = sharp)
 
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
