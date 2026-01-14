@@ -36,6 +36,7 @@ RAPID_FIRE_COOLDOWN = 100
 AUTO_FIRE_COOLDOWN = 150  # Cooldown for auto-fire powerup (faster than normal, slower than rapid fire)
 AFTERIMAGE_INTERVAL = 80
 RESPAWN_IMMUNITY_DURATION = 3000
+SHIELD_BREAK_IMMUNITY_DURATION = 1500  # Invincibility frames after boss shield breaks to prevent instant death
 BASE_LUCKY_DROP_CHANCE = 5  # Base percentage chance for powerup drops (affected by upgrades and co-op mode)
 
 # XP and Leveling System Configuration
@@ -3231,6 +3232,9 @@ class Player:
 
         if self.boss_shield_active:
             self.clear_boss_shield()
+            # Grant invincibility frames to prevent instant death from continuous collision
+            self.respawn_immunity = True
+            self.respawn_immunity_end_time = pygame.time.get_ticks() + SHIELD_BREAK_IMMUNITY_DURATION
             if sound_manager:
                 sound_manager.play_sound('explosion_small', volume_override=0.5)
             return True, None
