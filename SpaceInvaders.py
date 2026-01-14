@@ -5405,26 +5405,55 @@ class SnakeBoss:
         if len(self.position_history) > max_history:
             self.position_history.pop(0)
 
-        # Update body segments to follow the path
+        # Update body segments to follow the head's historical path
         spacing = self.segment_radius * 1.8
-        for i in range(1, len(self.segments)):
-            segment = self.segments[i]
 
-            # Calculate desired distance from previous segment
-            prev_segment = self.segments[i - 1]
+        # Each segment follows the exact path the head took, positioned at a specific distance behind
+        if len(self.position_history) > 1:
+            for i in range(1, len(self.segments)):
+                segment = self.segments[i]
 
-            # Move toward previous segment's position
-            dx = prev_segment['x'] - segment['x']
-            dy = prev_segment['y'] - segment['y']
-            dist = math.sqrt(dx * dx + dy * dy)
+                # Calculate how far behind the head this segment should be
+                target_distance = i * spacing
 
-            if dist > 0:
-                # Move to maintain spacing
-                if dist > spacing:
-                    move_x = (dx / dist) * (dist - spacing)
-                    move_y = (dy / dist) * (dist - spacing)
-                    segment['x'] += move_x
-                    segment['y'] += move_y
+                # Traverse position history backwards to find the point at target_distance
+                cumulative_distance = 0.0
+                target_pos = None
+
+                for hist_idx in range(len(self.position_history) - 1, 0, -1):
+                    curr_pos = self.position_history[hist_idx]
+                    prev_pos = self.position_history[hist_idx - 1]
+
+                    # Calculate distance between these two history points
+                    dx = curr_pos['x'] - prev_pos['x']
+                    dy = curr_pos['y'] - prev_pos['y']
+                    segment_dist = math.sqrt(dx * dx + dy * dy)
+
+                    # Check if target distance falls within this segment
+                    if cumulative_distance + segment_dist >= target_distance:
+                        # Interpolate between prev_pos and curr_pos
+                        remaining_dist = target_distance - cumulative_distance
+                        if segment_dist > 0:
+                            t = remaining_dist / segment_dist
+                            target_pos = {
+                                'x': prev_pos['x'] + dx * t,
+                                'y': prev_pos['y'] + dy * t
+                            }
+                        else:
+                            target_pos = prev_pos
+                        break
+
+                    cumulative_distance += segment_dist
+
+                # If we found a valid position in history, move segment there
+                if target_pos:
+                    segment['x'] = target_pos['x']
+                    segment['y'] = target_pos['y']
+                else:
+                    # Fallback: not enough history yet, use oldest position
+                    if self.position_history:
+                        segment['x'] = self.position_history[0]['x']
+                        segment['y'] = self.position_history[0]['y']
 
         # Update particles
         for particle in self.particles[:]:
