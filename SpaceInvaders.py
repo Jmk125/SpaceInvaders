@@ -5272,11 +5272,25 @@ class SnakeBoss:
             'radius': self.head_radius
         })
 
-        # Body segments - slightly overlapping spacing
-        spacing = self.segment_radius * 1.8  # Slight overlap
+        # Body segments - spacing accounts for varying radii
+        spacing_overlap_factor = 0.9  # 0.9 = slight overlap
+        cumulative_x = start_x
+
         for i in range(self.num_segments):
+            # Calculate spacing from previous segment
+            if i == 0:
+                # First body segment follows the head
+                prev_radius = self.head_radius
+            else:
+                # Subsequent segments follow body segments
+                prev_radius = self.segment_radius
+
+            curr_radius = self.segment_radius
+            spacing = (prev_radius + curr_radius) * spacing_overlap_factor
+            cumulative_x -= spacing
+
             self.segments.append({
-                'x': start_x - spacing * (i + 1),
+                'x': cumulative_x,
                 'y': start_y,
                 'is_head': False,
                 'radius': self.segment_radius
