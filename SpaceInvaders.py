@@ -5303,6 +5303,7 @@ class SnakeBoss:
 
         # Boss system compatibility attributes
         self.destruction_complete = False
+        self.destruction_start_time = 0
         self.x = start_x - self.head_radius  # Left edge of head
         self.y = start_y - self.head_radius  # Top edge of head
         self.width = self.head_radius * 2
@@ -5553,9 +5554,11 @@ class SnakeBoss:
         return False  # Not defeated until final phase and head health is depleted
 
     def is_destruction_complete(self):
-        """Check if destruction sequence is finished - SnakeBoss destroys instantly"""
-        # SnakeBoss is only destroyed when destruction_complete flag is set
-        return self.destruction_complete
+        """Check if destruction sequence is finished - wait for explosion to be visible"""
+        if not self.destruction_complete:
+            return False
+        # Wait 2.5 seconds for explosion particles to be visible before transitioning
+        return pygame.time.get_ticks() - self.destruction_start_time > 2500
 
     def get_turret_rects(self):
         """This boss has no turrets, return empty list for compatibility"""
@@ -5611,24 +5614,44 @@ class SnakeBoss:
             segment = self.segments[i]
 
             if segment['is_head']:
-                # Draw head with 3D spherical effect (darker golden yellow)
+                # Draw head with 3D spherical effect (color changes from yellow to red based on health)
                 center_x = int(segment['x'])
                 center_y = int(segment['y'])
                 radius = segment['radius']
 
-                # Base color - darker golden yellow
-                base_color = (200, 180, 0)
+                # Calculate health ratio for color interpolation (only in final phase)
+                if self.final_phase and self.head_max_health > 0:
+                    health_ratio = self.head_health / self.head_max_health
+                    # Interpolate from yellow (high health) to red (low health)
+                    # health_ratio 1.0 = yellow, 0.0 = red
+                    def lerp_color(yellow_val, red_val, ratio):
+                        """Interpolate between yellow and red components"""
+                        return int(yellow_val * ratio + red_val * (1 - ratio))
+
+                    # Define yellow and red versions of each layer
+                    darkest_color = (lerp_color(120, 120, health_ratio), lerp_color(100, 0, health_ratio), 0)
+                    mid_dark_color = (lerp_color(160, 160, health_ratio), lerp_color(140, 0, health_ratio), 0)
+                    base_color = (lerp_color(200, 200, health_ratio), lerp_color(180, 0, health_ratio), 0)
+                    highlight_color = (lerp_color(240, 255, health_ratio), lerp_color(220, 50, health_ratio), lerp_color(50, 0, health_ratio))
+                    scale_color = (lerp_color(180, 180, health_ratio), lerp_color(160, 0, health_ratio), 0)
+                else:
+                    # Not in final phase - use default yellow colors
+                    darkest_color = (120, 100, 0)
+                    mid_dark_color = (160, 140, 0)
+                    base_color = (200, 180, 0)
+                    highlight_color = (240, 220, 50)
+                    scale_color = (180, 160, 0)
 
                 # Draw multiple layers for spherical gradient effect
                 # Darkest outer layer
-                pygame.draw.circle(screen, (120, 100, 0), (center_x, center_y), radius)
+                pygame.draw.circle(screen, darkest_color, (center_x, center_y), radius)
                 # Mid-dark layer
-                pygame.draw.circle(screen, (160, 140, 0), (center_x, center_y), int(radius * 0.85))
+                pygame.draw.circle(screen, mid_dark_color, (center_x, center_y), int(radius * 0.85))
                 # Main color
                 pygame.draw.circle(screen, base_color, (center_x, center_y), int(radius * 0.7))
                 # Highlight (offset toward top-left for 3D effect)
                 highlight_offset = radius // 4
-                pygame.draw.circle(screen, (240, 220, 50),
+                pygame.draw.circle(screen, highlight_color,
                                  (center_x - highlight_offset, center_y - highlight_offset),
                                  int(radius * 0.3))
 
@@ -5639,7 +5662,7 @@ class SnakeBoss:
                     angle_rad = math.radians(angle_deg)
                     scale_x = center_x + int(math.cos(angle_rad) * radius * 0.6)
                     scale_y = center_y + int(math.sin(angle_rad) * radius * 0.6)
-                    pygame.draw.circle(screen, (180, 160, 0), (scale_x, scale_y), scale_radius)
+                    pygame.draw.circle(screen, scale_color, (scale_x, scale_y), scale_radius)
 
                 # Draw mean eyes with sinister black outline
                 eye_offset_x = segment['radius'] // 3
@@ -8660,6 +8683,7 @@ class Game:
 
                                 # Mark boss as destroyed (don't set to None - let game loop handle it)
                                 self.current_boss.destruction_complete = True
+                                self.current_boss.destruction_start_time = pygame.time.get_ticks()
                             else:
                                 # Hit vulnerable part but not defeated - award small XP
                                 self.score += 10
