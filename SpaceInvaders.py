@@ -143,20 +143,20 @@ RUBIKS_BOSS_ORANGE_FIREBALL_RADIUS = 27  # Orange fireball radius (pixels, adjus
 RUBIKS_BOSS_WHITE_SHOOT_COOLDOWN = 3000  # White bouncing ball interval (ms)
 
 # Snake Boss Configuration
-SNAKE_BOSS_SEGMENT_RADIUS = 30  # Radius of body segments (pixels, adjustable)
+SNAKE_BOSS_SEGMENT_RADIUS = 50  # Radius of body segments (pixels, adjustable)
 SNAKE_BOSS_HEAD_RADIUS_MULTIPLIER = 1.5  # Head is 1.5x larger than body segments
 SNAKE_BOSS_START_SEGMENTS = 6  # Starting number of body segments (not including head, adjustable)
 SNAKE_BOSS_SPEED_BASE = 7.0  # Base movement speed (adjustable, doubled for better action)
 SNAKE_BOSS_SPEED_GROWTH = 0.3  # Speed increase per encounter
 SNAKE_BOSS_FIREBALL_COOLDOWN = 1000  # Time between fireballs in ms (adjustable, 1 per second)
-SNAKE_BOSS_HEAD_HEALTH_BASE = 20  # Base health for head final phase (adjustable)
+SNAKE_BOSS_HEAD_HEALTH_BASE = 5  # Base health for head final phase (adjustable)
 SNAKE_BOSS_HEAD_HEALTH_GROWTH = 3  # Health increase per encounter for head
-SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER = 1.5  # Speed multiplier when down to head only (adjustable)
+SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER = 1.25  # Speed multiplier when down to head only (adjustable)
 SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER = 2.0  # Fireball frequency multiplier for final phase
 SNAKE_BOSS_FIREBALL_RADIUS = 27  # Fireball size (same as Rubik's orange fireballs)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN = 1000  # Minimum time between direction changes (ms)
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX = 3000  # Maximum time between direction changes (ms)
-SNAKE_BOSS_CURVE_STRENGTH = 0.08  # How sharply the snake curves (adjustable)
+SNAKE_BOSS_CURVE_STRENGTH = 0.06  # How sharply the snake curves (adjustable)
 
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
