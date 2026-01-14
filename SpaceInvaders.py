@@ -5608,12 +5608,37 @@ class SnakeBoss:
             segment = self.segments[i]
 
             if segment['is_head']:
-                # Draw head (yellow with eyes)
-                pygame.draw.circle(screen, (255, 255, 0),
-                                 (int(segment['x']), int(segment['y'])),
-                                 segment['radius'])
+                # Draw head with 3D spherical effect (darker golden yellow)
+                center_x = int(segment['x'])
+                center_y = int(segment['y'])
+                radius = segment['radius']
 
-                # Draw mean eyes
+                # Base color - darker golden yellow
+                base_color = (200, 180, 0)
+
+                # Draw multiple layers for spherical gradient effect
+                # Darkest outer layer
+                pygame.draw.circle(screen, (120, 100, 0), (center_x, center_y), radius)
+                # Mid-dark layer
+                pygame.draw.circle(screen, (160, 140, 0), (center_x, center_y), int(radius * 0.85))
+                # Main color
+                pygame.draw.circle(screen, base_color, (center_x, center_y), int(radius * 0.7))
+                # Highlight (offset toward top-left for 3D effect)
+                highlight_offset = radius // 4
+                pygame.draw.circle(screen, (240, 220, 50),
+                                 (center_x - highlight_offset, center_y - highlight_offset),
+                                 int(radius * 0.3))
+
+                # Draw snake scale patterns
+                scale_radius = radius // 8
+                angle_step = 45  # degrees
+                for angle_deg in range(0, 360, angle_step):
+                    angle_rad = math.radians(angle_deg)
+                    scale_x = center_x + int(math.cos(angle_rad) * radius * 0.6)
+                    scale_y = center_y + int(math.sin(angle_rad) * radius * 0.6)
+                    pygame.draw.circle(screen, (180, 160, 0), (scale_x, scale_y), scale_radius)
+
+                # Draw mean eyes with sinister black outline
                 eye_offset_x = segment['radius'] // 3
                 eye_offset_y = segment['radius'] // 4
                 eye_radius = segment['radius'] // 6
@@ -5626,23 +5651,65 @@ class SnakeBoss:
                 # Left eye
                 left_eye_x = int(segment['x'] + eye_forward_x - eye_offset_y * math.sin(angle_rad))
                 left_eye_y = int(segment['y'] + eye_forward_y + eye_offset_y * math.cos(angle_rad))
-                pygame.draw.circle(screen, (255, 0, 0), (left_eye_x, left_eye_y), eye_radius)
+                # Black outline
+                pygame.draw.circle(screen, (0, 0, 0), (left_eye_x, left_eye_y), eye_radius + 2)
+                # Dark red eye
+                pygame.draw.circle(screen, (180, 0, 0), (left_eye_x, left_eye_y), eye_radius)
+                # Bright red center for menacing look
+                pygame.draw.circle(screen, (255, 0, 0), (left_eye_x, left_eye_y), eye_radius // 2)
 
                 # Right eye
                 right_eye_x = int(segment['x'] + eye_forward_x + eye_offset_y * math.sin(angle_rad))
                 right_eye_y = int(segment['y'] + eye_forward_y - eye_offset_y * math.cos(angle_rad))
-                pygame.draw.circle(screen, (255, 0, 0), (right_eye_x, right_eye_y), eye_radius)
+                # Black outline
+                pygame.draw.circle(screen, (0, 0, 0), (right_eye_x, right_eye_y), eye_radius + 2)
+                # Dark red eye
+                pygame.draw.circle(screen, (180, 0, 0), (right_eye_x, right_eye_y), eye_radius)
+                # Bright red center for menacing look
+                pygame.draw.circle(screen, (255, 0, 0), (right_eye_x, right_eye_y), eye_radius // 2)
 
             elif i == len(self.segments) - 1:
-                # Draw tail (red - vulnerable)
-                pygame.draw.circle(screen, (255, 0, 0),
-                                 (int(segment['x']), int(segment['y'])),
-                                 segment['radius'])
+                # Draw tail (red - vulnerable) with spherical shading
+                center_x = int(segment['x'])
+                center_y = int(segment['y'])
+                radius = segment['radius']
+
+                # Spherical gradient for tail
+                pygame.draw.circle(screen, (150, 0, 0), (center_x, center_y), radius)
+                pygame.draw.circle(screen, (200, 0, 0), (center_x, center_y), int(radius * 0.85))
+                pygame.draw.circle(screen, (255, 0, 0), (center_x, center_y), int(radius * 0.7))
+                # Highlight
+                highlight_offset = radius // 4
+                pygame.draw.circle(screen, (255, 100, 100),
+                                 (center_x - highlight_offset, center_y - highlight_offset),
+                                 int(radius * 0.3))
             else:
-                # Draw body segment (yellow)
-                pygame.draw.circle(screen, (255, 255, 0),
-                                 (int(segment['x']), int(segment['y'])),
-                                 segment['radius'])
+                # Draw body segment with 3D spherical effect (darker golden yellow)
+                center_x = int(segment['x'])
+                center_y = int(segment['y'])
+                radius = segment['radius']
+
+                # Base color - darker golden yellow
+                base_color = (200, 180, 0)
+
+                # Draw multiple layers for spherical gradient effect
+                pygame.draw.circle(screen, (120, 100, 0), (center_x, center_y), radius)
+                pygame.draw.circle(screen, (160, 140, 0), (center_x, center_y), int(radius * 0.85))
+                pygame.draw.circle(screen, base_color, (center_x, center_y), int(radius * 0.7))
+                # Highlight
+                highlight_offset = radius // 4
+                pygame.draw.circle(screen, (240, 220, 50),
+                                 (center_x - highlight_offset, center_y - highlight_offset),
+                                 int(radius * 0.3))
+
+                # Add subtle scale pattern
+                scale_radius = radius // 10
+                angle_step = 60
+                for angle_deg in range(0, 360, angle_step):
+                    angle_rad = math.radians(angle_deg)
+                    scale_x = center_x + int(math.cos(angle_rad) * radius * 0.6)
+                    scale_y = center_y + int(math.sin(angle_rad) * radius * 0.6)
+                    pygame.draw.circle(screen, (180, 160, 0), (scale_x, scale_y), scale_radius)
 
         # Draw particles
         for particle in self.particles:
