@@ -5613,6 +5613,15 @@ class SnakeBoss:
 
     def draw(self, screen):
         """Draw the snake boss"""
+        # If boss is destroyed, only draw particles (no segments)
+        if self.destruction_complete:
+            # Draw particles from segment destruction
+            for particle in self.particles:
+                pygame.draw.circle(screen, particle['color'],
+                                 (int(particle['x']), int(particle['y'])),
+                                 3)
+            return  # Don't draw snake segments or health bar
+
         # Draw body segments (in reverse so head is on top)
         for i in range(len(self.segments) - 1, -1, -1):
             segment = self.segments[i]
