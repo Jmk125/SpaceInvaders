@@ -23,7 +23,7 @@ PURPLE = (128, 0, 128)
 ORANGE = (255, 165, 0)
 CYAN = (0, 255, 255)
 DARK_GREEN = (0, 128, 0)
-GRAY = (128, 128, 128)
+GRAY = (80, 80, 80)
 GOLD = (255, 215, 0)
 
 # Game settings
@@ -6376,7 +6376,7 @@ class TitleScreen:
         single_best = self.score_manager.get_best_score(False)
         coop_best = self.score_manager.get_best_score(True)
 
-        preview_y = 750
+        preview_y = 880
         if single_best:
             single_text = self.font_small.render(f"Best Single: {single_best['score']:,} - {single_best['name']}", True, CYAN)
             single_rect = single_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
