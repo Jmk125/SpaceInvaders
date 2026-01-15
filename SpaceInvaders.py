@@ -9241,11 +9241,11 @@ class Game:
         if self.is_boss_level:
             if self.current_boss and self.current_boss.is_destruction_complete():
                 # Boss destruction sequence finished
-                # Track boss defeat for achievements BEFORE clearing boss reference
-                boss_name = self.current_boss.__class__.__name__
-                self.achievement_manager.player_defeated_boss(boss_name)
                 self.current_boss = None
                 level_complete = True
+                # Reset asteroid boss tracking flag for next encounter
+                if hasattr(self, '_asteroid_boss_tracked'):
+                    delattr(self, '_asteroid_boss_tracked')
             elif not self.current_boss:  # Boss was destroyed instantly (shouldn't happen with new system)
                 level_complete = True
         else:
@@ -9480,6 +9480,15 @@ class Game:
             # Capture player explosion particles from boss update (e.g., AlienOverlordBoss hand attacks)
             if boss_explosion_particles:
                 self.player_explosion_particles.extend(boss_explosion_particles)
+
+            # Check if Asteroid Field Boss just completed (for immediate achievement tracking)
+            if isinstance(self.current_boss, AsteroidFieldBoss):
+                if self.current_boss.destruction_complete and not hasattr(self, '_asteroid_boss_tracked'):
+                    # Track boss defeat immediately when completion starts (not when it finishes)
+                    boss_name = self.current_boss.__class__.__name__
+                    self.achievement_manager.player_defeated_boss(boss_name)
+                    self._asteroid_boss_tracked = True  # Prevent duplicate tracking
+
             # Boss shooting
             boss_bullets = self.current_boss.shoot(self.players, self.sound_manager)
             self.enemy_bullets.extend(boss_bullets)
