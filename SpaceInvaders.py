@@ -707,6 +707,335 @@ class PlayerStats:
         return total_time / 1000.0
 
 
+# Achievement System
+
+# Achievement types
+ACHIEVEMENT_TYPE_CUMULATIVE = "cumulative"  # Tracks across all games (e.g., kill 10000 enemies)
+ACHIEVEMENT_TYPE_MILESTONE = "milestone"    # One-time unlock (e.g., reach level 100)
+ACHIEVEMENT_TYPE_SINGLE_RUN = "single_run"  # Must happen in one playthrough (e.g., defeat all bosses)
+ACHIEVEMENT_TYPE_CHALLENGE = "challenge"    # Special conditions (e.g., no death runs)
+
+# Configurable titles based on achievement completion percentage
+ACHIEVEMENT_TITLES = [
+    "Orbital Recruit",      # 0%
+    "Star Cadet",           # 10%
+    "Void Trooper",         # 20%
+    "Strike Sergeant",      # 30%
+    "Squadron Leader",      # 40%
+    "Flight Commander",     # 50%
+    "Battle Captain",       # 60%
+    "Sector Commander",     # 70%
+    "Fleet Marshal",        # 80%
+    "Supreme Admiral"       # 90-100%
+]
+
+class Achievement:
+    """Represents a single achievement"""
+    def __init__(self, id, name, description, achievement_type, target_value=1, track_key=None):
+        self.id = id
+        self.name = name
+        self.description = description
+        self.achievement_type = achievement_type
+        self.target_value = target_value
+        self.track_key = track_key  # Key used for tracking (e.g., "total_kills", "boss_count")
+        self.progress = 0
+        self.unlocked = False
+        self.unlocked_date = None
+
+    def check_unlock(self, progress_value):
+        """Check if achievement should be unlocked based on progress"""
+        if not self.unlocked and progress_value >= self.target_value:
+            self.unlocked = True
+            self.unlocked_date = time.strftime("%Y-%m-%d %H:%M:%S")
+            return True
+        return False
+
+    def update_progress(self, progress_value):
+        """Update achievement progress"""
+        if not self.unlocked:
+            self.progress = min(progress_value, self.target_value)
+            return self.check_unlock(progress_value)
+        return False
+
+    def get_progress_text(self):
+        """Get progress text for display"""
+        if self.unlocked:
+            return "UNLOCKED"
+        elif self.achievement_type in [ACHIEVEMENT_TYPE_CUMULATIVE]:
+            return f"{self.progress}/{self.target_value}"
+        elif self.achievement_type in [ACHIEVEMENT_TYPE_SINGLE_RUN, ACHIEVEMENT_TYPE_CHALLENGE]:
+            return f"{self.progress}/{self.target_value}"
+        else:
+            return "LOCKED"
+
+    def to_dict(self):
+        """Convert to dictionary for JSON storage"""
+        return {
+            "id": self.id,
+            "progress": self.progress,
+            "unlocked": self.unlocked,
+            "unlocked_date": self.unlocked_date
+        }
+
+    @staticmethod
+    def from_dict(data, achievement_def):
+        """Create Achievement from saved data"""
+        achievement = Achievement(
+            achievement_def["id"],
+            achievement_def["name"],
+            achievement_def["description"],
+            achievement_def["type"],
+            achievement_def["target"],
+            achievement_def.get("track_key")
+        )
+        achievement.progress = data.get("progress", 0)
+        achievement.unlocked = data.get("unlocked", False)
+        achievement.unlocked_date = data.get("unlocked_date", None)
+        return achievement
+
+
+class AchievementManager:
+    """Manages all achievements, tracking, and persistence"""
+    def __init__(self, filename="achievements.json"):
+        self.filename = filename
+        self.achievements = {}
+        self.run_stats = {}  # Stats for current run (reset each game)
+        self.global_stats = {}  # Global cumulative stats (persist forever)
+        self.newly_unlocked = []  # Track newly unlocked achievements this session
+
+        # Define all achievements
+        self.achievement_definitions = [
+            {"id": "first_boss", "name": "First Boss", "description": "Defeat a boss",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "boss_defeated"},
+
+            {"id": "partner_up", "name": "Partner Up", "description": "Start a co-op game",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "coop_started"},
+
+            {"id": "exterminator", "name": "Exterminator", "description": "Kill 1,000 aliens",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 1000, "track_key": "total_kills"},
+
+            {"id": "exterminator_supreme", "name": "Exterminator Supreme", "description": "Kill 10,000 aliens",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 10000, "track_key": "total_kills"},
+
+            {"id": "six_figures", "name": "Six Figures", "description": "Achieve a score of at least 100,000",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 100000, "track_key": "max_score"},
+
+            {"id": "head_hunter", "name": "Head Hunter", "description": "Kill 5 bosses in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 5, "track_key": "run_bosses"},
+
+            {"id": "master_head_hunter", "name": "Master Head Hunter", "description": "Kill 10 bosses in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 10, "track_key": "run_bosses"},
+
+            {"id": "no_stone_unturned", "name": "No Stone Unturned", "description": "Kill all existing bosses in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 5, "track_key": "run_unique_bosses"},  # 5 unique boss types
+
+            {"id": "flawless", "name": "Flawless", "description": "Get through 50 levels without dying",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 50, "track_key": "flawless_levels"},
+
+            {"id": "flawless_supreme", "name": "Flawless Supreme", "description": "Get through 100 levels without dying",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 100, "track_key": "flawless_levels"},
+
+            {"id": "i_have_your_number", "name": "I Have Your Number!", "description": "Kill every boss without dying",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 5, "track_key": "bosses_no_death"},  # All 5 unique boss types
+        ]
+
+        # Initialize achievements
+        self.init_achievements()
+        self.load()
+
+    def init_achievements(self):
+        """Initialize all achievements from definitions"""
+        for definition in self.achievement_definitions:
+            achievement = Achievement(
+                definition["id"],
+                definition["name"],
+                definition["description"],
+                definition["type"],
+                definition["target"],
+                definition.get("track_key")
+            )
+            self.achievements[achievement.id] = achievement
+
+        # Initialize global stats
+        self.global_stats = {
+            "total_kills": 0,
+            "max_score": 0,
+            "boss_defeated": 0,
+            "coop_started": 0,
+        }
+
+        # Initialize run stats (reset each game)
+        self.reset_run_stats()
+
+    def reset_run_stats(self):
+        """Reset stats that are tracked per-run"""
+        self.run_stats = {
+            "run_bosses": 0,
+            "run_unique_bosses": set(),
+            "flawless_levels": 0,
+            "bosses_no_death": set(),
+            "player_died": False,
+        }
+
+    def start_new_run(self, is_coop=False):
+        """Called when a new game starts"""
+        self.reset_run_stats()
+
+        # Track coop achievement
+        if is_coop:
+            self.track_milestone("coop_started", 1)
+
+    def track_cumulative(self, key, value):
+        """Track cumulative stats (persist across all games)"""
+        if key in self.global_stats:
+            self.global_stats[key] += value
+            # Check relevant achievements
+            for achievement in self.achievements.values():
+                if achievement.track_key == key and achievement.achievement_type == ACHIEVEMENT_TYPE_CUMULATIVE:
+                    if achievement.update_progress(self.global_stats[key]):
+                        self.newly_unlocked.append(achievement)
+
+    def track_milestone(self, key, value):
+        """Track milestone achievements (one-time unlocks)"""
+        if key in self.global_stats:
+            self.global_stats[key] = max(self.global_stats[key], value)
+        else:
+            self.global_stats[key] = value
+
+        # Check relevant achievements
+        for achievement in self.achievements.values():
+            if achievement.track_key == key and achievement.achievement_type == ACHIEVEMENT_TYPE_MILESTONE:
+                if achievement.update_progress(self.global_stats[key]):
+                    self.newly_unlocked.append(achievement)
+
+    def track_run_stat(self, key, value):
+        """Track stats for current run only"""
+        if key == "run_unique_bosses" or key == "bosses_no_death":
+            # These use sets for unique boss tracking
+            if isinstance(value, str):
+                self.run_stats[key].add(value)
+        else:
+            self.run_stats[key] = value
+
+        # Check relevant achievements
+        for achievement in self.achievements.values():
+            if achievement.track_key == key:
+                if achievement.achievement_type == ACHIEVEMENT_TYPE_SINGLE_RUN:
+                    if key in ["run_unique_bosses", "bosses_no_death"]:
+                        progress_value = len(self.run_stats[key])
+                    else:
+                        progress_value = self.run_stats[key]
+                    if achievement.update_progress(progress_value):
+                        self.newly_unlocked.append(achievement)
+                elif achievement.achievement_type == ACHIEVEMENT_TYPE_CHALLENGE:
+                    if key in ["run_unique_bosses", "bosses_no_death"]:
+                        progress_value = len(self.run_stats[key])
+                    else:
+                        progress_value = self.run_stats[key]
+                    if achievement.update_progress(progress_value):
+                        self.newly_unlocked.append(achievement)
+
+    def player_died(self):
+        """Called when player 1 dies - resets challenge achievements"""
+        self.run_stats["player_died"] = True
+        self.run_stats["flawless_levels"] = 0
+        self.run_stats["bosses_no_death"].clear()
+
+    def player_completed_level(self):
+        """Called when player 1 completes a level without dying"""
+        if not self.run_stats["player_died"]:
+            self.run_stats["flawless_levels"] += 1
+            self.track_run_stat("flawless_levels", self.run_stats["flawless_levels"])
+
+    def player_defeated_boss(self, boss_name):
+        """Called when player 1 defeats a boss"""
+        # Track for milestone
+        self.track_milestone("boss_defeated", 1)
+
+        # Track for single run
+        self.run_stats["run_bosses"] += 1
+        self.track_run_stat("run_bosses", self.run_stats["run_bosses"])
+
+        # Track unique bosses in this run
+        self.run_stats["run_unique_bosses"].add(boss_name)
+        self.track_run_stat("run_unique_bosses", boss_name)
+
+        # Track bosses killed without dying
+        if not self.run_stats["player_died"]:
+            self.run_stats["bosses_no_death"].add(boss_name)
+            self.track_run_stat("bosses_no_death", boss_name)
+
+    def get_newly_unlocked(self):
+        """Get and clear newly unlocked achievements"""
+        unlocked = self.newly_unlocked.copy()
+        self.newly_unlocked.clear()
+        return unlocked
+
+    def get_completion_percentage(self):
+        """Get percentage of achievements unlocked"""
+        total = len(self.achievements)
+        unlocked = sum(1 for a in self.achievements.values() if a.unlocked)
+        return (unlocked / total * 100) if total > 0 else 0
+
+    def get_current_title(self):
+        """Get current title based on achievement completion"""
+        percentage = self.get_completion_percentage()
+        # Each title represents a 10% bracket
+        index = min(int(percentage / 10), len(ACHIEVEMENT_TITLES) - 1)
+        return ACHIEVEMENT_TITLES[index]
+
+    def get_achievements_sorted(self):
+        """Get achievements sorted by unlock status and name"""
+        unlocked = [a for a in self.achievements.values() if a.unlocked]
+        locked = [a for a in self.achievements.values() if not a.unlocked]
+
+        # Sort unlocked by date (most recent first)
+        unlocked.sort(key=lambda a: a.unlocked_date if a.unlocked_date else "", reverse=True)
+        # Sort locked by name
+        locked.sort(key=lambda a: a.name)
+
+        return unlocked + locked
+
+    def save(self):
+        """Save achievements to JSON file"""
+        data = {
+            "achievements": {aid: a.to_dict() for aid, a in self.achievements.items()},
+            "global_stats": self.global_stats,
+            "total_unlocked": sum(1 for a in self.achievements.values() if a.unlocked),
+            "current_title": self.get_current_title(),
+            "completion_percentage": self.get_completion_percentage()
+        }
+        try:
+            with open(self.filename, 'w') as f:
+                json.dump(data, f, indent=4)
+        except Exception as e:
+            print(f"Error saving achievements: {e}")
+
+    def load(self):
+        """Load achievements from JSON file"""
+        if not os.path.exists(self.filename):
+            return
+
+        try:
+            with open(self.filename, 'r') as f:
+                data = json.load(f)
+
+            # Load global stats
+            if "global_stats" in data:
+                self.global_stats.update(data["global_stats"])
+
+            # Load achievement progress
+            saved_achievements = data.get("achievements", {})
+            for aid, achievement in self.achievements.items():
+                if aid in saved_achievements:
+                    saved_data = saved_achievements[aid]
+                    achievement.progress = saved_data.get("progress", 0)
+                    achievement.unlocked = saved_data.get("unlocked", False)
+                    achievement.unlocked_date = saved_data.get("unlocked_date", None)
+        except Exception as e:
+            print(f"Error loading achievements: {e}")
+
+
 class FloatingText:
     def __init__(self, x, y, text, color=YELLOW, duration=1000):
         self.x = x
@@ -732,7 +1061,77 @@ class FloatingText:
         text_surface = self.font.render(self.text, True, self.color)
         text_surface.set_alpha(alpha)
         screen.blit(text_surface, (self.x, self.y))
-        
+
+
+class AchievementNotification:
+    """Achievement unlock notification (RetroAchievements style)"""
+    def __init__(self, achievement, duration=3000):
+        self.achievement = achievement
+        self.duration = duration
+        self.start_time = pygame.time.get_ticks()
+        self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.font_text = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+
+        # Position at top-middle of screen
+        self.y = 50
+        self.target_y = 50
+        self.x = SCREEN_WIDTH // 2
+
+        # Animation
+        self.slide_in_duration = 300  # ms for slide in animation
+        self.slide_out_duration = 300  # ms for slide out animation
+
+    def update(self):
+        """Update notification and check if expired"""
+        current_time = pygame.time.get_ticks()
+        elapsed = current_time - self.start_time
+
+        # Slide in animation
+        if elapsed < self.slide_in_duration:
+            progress = elapsed / self.slide_in_duration
+            self.y = -100 + (self.target_y + 100) * progress
+        # Slide out animation
+        elif elapsed > self.duration - self.slide_out_duration:
+            progress = (elapsed - (self.duration - self.slide_out_duration)) / self.slide_out_duration
+            self.y = self.target_y - (self.target_y + 100) * progress
+        else:
+            self.y = self.target_y
+
+        return elapsed < self.duration
+
+    def draw(self, screen):
+        """Draw the achievement notification"""
+        # Background box
+        box_width = 600
+        box_height = 120
+        box_x = self.x - box_width // 2
+        box_y = int(self.y)
+
+        # Draw semi-transparent background
+        background = pygame.Surface((box_width, box_height))
+        background.set_alpha(220)
+        background.fill((20, 20, 40))
+        screen.blit(background, (box_x, box_y))
+
+        # Draw border
+        pygame.draw.rect(screen, GOLD, (box_x, box_y, box_width, box_height), 3)
+
+        # Draw "ACHIEVEMENT UNLOCKED" header
+        header_text = self.font_text.render("ACHIEVEMENT UNLOCKED", True, GOLD)
+        header_rect = header_text.get_rect(center=(self.x, box_y + 25))
+        screen.blit(header_text, header_rect)
+
+        # Draw achievement name
+        name_text = self.font_title.render(self.achievement.name, True, WHITE)
+        name_rect = name_text.get_rect(center=(self.x, box_y + 55))
+        screen.blit(name_text, name_rect)
+
+        # Draw achievement description
+        desc_text = self.font_text.render(self.achievement.description, True, GRAY)
+        desc_rect = desc_text.get_rect(center=(self.x, box_y + 85))
+        screen.blit(desc_text, desc_rect)
+
+
 class LevelUpScreen:
     def __init__(self, screen, players, is_coop=False, sound_manager=None, xp_level=1, game_level=1, score=0, key_bindings=None):
         self.screen = screen
@@ -3088,7 +3487,148 @@ class HighScoreScreen:
             no_scores_rect = no_scores.get_rect(centerx=x + 200)
             no_scores_rect.y = y
             self.screen.blit(no_scores, no_scores_rect)
-        
+
+
+class AchievementScreen:
+    """Display achievements and player title"""
+    def __init__(self, screen, achievement_manager, sound_manager, key_bindings=None):
+        self.screen = screen
+        self.achievement_manager = achievement_manager
+        self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
+        self.font_tiny = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)
+
+        # Scrolling support
+        self.scroll_offset = 0
+        self.max_scroll = 0
+        self.scroll_speed = 30
+
+        # Starfield background
+        self.starfield = StarField(direction='horizontal')
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE or event.key == pygame.K_RETURN:
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+                elif event.key in (pygame.K_UP, pygame.K_w):
+                    self.sound_manager.play_sound('menu_change')
+                    self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    self.sound_manager.play_sound('menu_change')
+                    self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
+            elif event.type == pygame.JOYBUTTONDOWN:
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 1:
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+            elif event.type == pygame.JOYHATMOTION:
+                if event.value[1] == 1:  # Up
+                    self.sound_manager.play_sound('menu_change')
+                    self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
+                elif event.value[1] == -1:  # Down
+                    self.sound_manager.play_sound('menu_change')
+                    self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
+            elif event.type == pygame.JOYAXISMOTION:
+                threshold = 0.5
+                if event.axis == 1:  # Y-axis
+                    if event.value < -threshold:  # Up
+                        self.sound_manager.play_sound('menu_change')
+                        self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
+                    elif event.value > threshold:  # Down
+                        self.sound_manager.play_sound('menu_change')
+                        self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        # Update and draw starfield background
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        # Title
+        title_text = self.font_large.render("ACHIEVEMENTS", True, GOLD)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 60))
+        self.screen.blit(title_text, title_rect)
+
+        # Current title and completion
+        current_title = self.achievement_manager.get_current_title()
+        completion_pct = self.achievement_manager.get_completion_percentage()
+        unlocked_count = sum(1 for a in self.achievement_manager.achievements.values() if a.unlocked)
+        total_count = len(self.achievement_manager.achievements)
+
+        title_line = self.font_medium.render(f"Title: {current_title}", True, CYAN)
+        title_line_rect = title_line.get_rect(center=(SCREEN_WIDTH // 2, 120))
+        self.screen.blit(title_line, title_line_rect)
+
+        completion_line = self.font_small.render(
+            f"Completed: {unlocked_count}/{total_count} ({completion_pct:.1f}%)",
+            True, WHITE
+        )
+        completion_rect = completion_line.get_rect(center=(SCREEN_WIDTH // 2, 155))
+        self.screen.blit(completion_line, completion_rect)
+
+        # Achievement list
+        y_start = 210
+        y = y_start - self.scroll_offset
+        x = 200
+        line_height = 85
+
+        achievements = self.achievement_manager.get_achievements_sorted()
+
+        for achievement in achievements:
+            # Only draw if visible on screen
+            if y + line_height > y_start and y < SCREEN_HEIGHT - 100:
+                # Color based on unlock status
+                name_color = GREEN if achievement.unlocked else GRAY
+                desc_color = WHITE if achievement.unlocked else DARK_GREEN
+
+                # Achievement name
+                name_text = self.font_medium.render(achievement.name, True, name_color)
+                self.screen.blit(name_text, (x, y))
+
+                # Achievement description
+                desc_text = self.font_small.render(achievement.description, True, desc_color)
+                self.screen.blit(desc_text, (x, y + 30))
+
+                # Progress or status
+                progress_text = achievement.get_progress_text()
+                if achievement.unlocked:
+                    progress_color = GOLD
+                    status_text = self.font_tiny.render(f"UNLOCKED - {achievement.unlocked_date}", True, progress_color)
+                else:
+                    progress_color = YELLOW
+                    status_text = self.font_small.render(progress_text, True, progress_color)
+
+                self.screen.blit(status_text, (x, y + 55))
+
+            y += line_height
+
+        # Update max scroll
+        total_height = len(achievements) * line_height
+        self.max_scroll = max(0, total_height - (SCREEN_HEIGHT - y_start - 100))
+
+        # Instructions
+        instructions = ["Press ENTER or ESC to return"]
+        if self.max_scroll > 0:
+            instructions.insert(0, "Use UP/DOWN to scroll")
+
+        inst_y = SCREEN_HEIGHT - 80
+        for i, inst in enumerate(instructions):
+            inst_text = self.font_tiny.render(inst, True, GRAY)
+            inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, inst_y + i * 25))
+            self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
+
 class Player:
     def __init__(self, x, y, player_id=1, controller=None, upgrades=None):
         self.x = x
@@ -6874,9 +7414,9 @@ class TitleScreen:
         # Check if save file exists and add Continue option if it does
         self.has_save_file = os.path.exists("savegame.json")
         if self.has_save_file:
-            self.options = ["Continue", "Single Player", "Co-op", "Settings", "High Scores", "Quit"]
+            self.options = ["Continue", "Single Player", "Co-op", "Settings", "High Scores", "Achievements", "Quit"]
         else:
-            self.options = ["Single Player", "Co-op", "Settings", "High Scores", "Quit"]
+            self.options = ["Single Player", "Co-op", "Settings", "High Scores", "Achievements", "Quit"]
 
         self.controllers = []
         self.scan_controllers()
@@ -6934,6 +7474,8 @@ class TitleScreen:
                         return "settings"
                     elif selected_text == "High Scores":
                         return "highscores"
+                    elif selected_text == "Achievements":
+                        return "achievements"
                     elif selected_text == "Quit":
                         return "quit"
                 elif event.key in (pygame.K_LEFT, pygame.K_a):
@@ -6958,6 +7500,8 @@ class TitleScreen:
                         return "settings"
                     elif selected_text == "High Scores":
                         return "highscores"
+                    elif selected_text == "Achievements":
+                        return "achievements"
                     elif selected_text == "Quit":
                         return "quit"
             elif event.type == pygame.JOYHATMOTION:
@@ -7362,7 +7906,7 @@ class UFOWarningScreen:
         pygame.display.flip()
 
 class Game:
-    def __init__(self, score_manager, sound_manager, key_bindings=None):
+    def __init__(self, score_manager, sound_manager, achievement_manager=None, key_bindings=None):
         try:
             self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
         except:
@@ -7382,6 +7926,7 @@ class Game:
         self.enemies_killed_this_level = 0
         self.score_manager = score_manager
         self.sound_manager = sound_manager
+        self.achievement_manager = achievement_manager if achievement_manager else AchievementManager()
 
         # Key bindings for player controls
         if key_bindings is None:
@@ -7426,6 +7971,7 @@ class Game:
 
         # Visual feedback
         self.floating_texts = []
+        self.achievement_notifications = []  # Achievement unlock notifications
         
         # Boss system
         self.current_boss = None
@@ -7480,6 +8026,9 @@ class Game:
         self.coop_mode = (mode == "coop")
         self.players = []
         self.player_stats = []  # Reset stats
+
+        # Start new achievement run
+        self.achievement_manager.start_new_run(is_coop=self.coop_mode)
 
         # Delete any existing save file when starting a new game
         if os.path.exists("savegame.json"):
@@ -8458,6 +9007,9 @@ class Game:
             self.level += 1
             print(f"Advanced to game level {self.level}")  # Debug
 
+            # Track level completion for achievements (player 1 flawless tracking)
+            self.achievement_manager.player_completed_level()
+
             # Reset powerup tracking for new level
             self.powerups_spawned_this_level = 0
             self.enemies_killed_this_level = 0
@@ -8489,6 +9041,12 @@ class Game:
         if game_over and not self.game_over:
             self.game_over = True
             self.game_over_time = pygame.time.get_ticks()  # ADDED: Record when game over occurred
+
+            # Track final score for achievements
+            self.achievement_manager.track_milestone("max_score", self.score)
+
+            # Save achievements
+            self.achievement_manager.save()
 
             # Delete save file on game over
             if os.path.exists("savegame.json"):
@@ -8552,6 +9110,17 @@ class Game:
 
         # Update floating texts
         self.floating_texts = [text for text in self.floating_texts if text.update()]
+
+        # Check for newly unlocked achievements and create notifications
+        newly_unlocked = self.achievement_manager.get_newly_unlocked()
+        for achievement in newly_unlocked:
+            notification = AchievementNotification(achievement)
+            self.achievement_notifications.append(notification)
+            self.sound_manager.play_sound('powerup')  # Play a sound for achievement unlock
+            self.achievement_manager.save()  # Save immediately when achievement unlocks
+
+        # Update achievement notifications
+        self.achievement_notifications = [notif for notif in self.achievement_notifications if notif.update()]
 
         # Update enemy explosions
         self.enemy_explosions = [explosion for explosion in self.enemy_explosions if explosion.update()]
@@ -8741,6 +9310,10 @@ class Game:
                                 head = self.current_boss.segments[0] if self.current_boss.segments else {'x': SCREEN_WIDTH // 2, 'y': 200}
                                 self.add_xp(200, int(head['x']), int(head['y']))
 
+                                # Track boss defeat achievement (player 1 only)
+                                boss_name = self.current_boss.__class__.__name__
+                                self.achievement_manager.player_defeated_boss(boss_name)
+
                                 # Clear all enemy bullets
                                 self.enemy_bullets.clear()
 
@@ -8829,6 +9402,10 @@ class Game:
                             self.score += 1000
                             self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
 
+                            # Track boss defeat achievement (player 1 only)
+                            boss_name = self.current_boss.__class__.__name__
+                            self.achievement_manager.player_defeated_boss(boss_name)
+
                             # Clear all enemy bullets immediately when boss is destroyed
                             self.enemy_bullets.clear()
 
@@ -8891,6 +9468,9 @@ class Game:
                         # Track enemy kill in player stats
                         if bullet.owner_id and bullet.owner_id <= len(self.player_stats):
                             self.player_stats[bullet.owner_id - 1].record_enemy_kill()
+                            # Track achievement for player 1 only
+                            if bullet.owner_id == 1:
+                                self.achievement_manager.track_cumulative("total_kills", 1)
                         if bullet.pierce_hits > 0:
                             bullet.pierce_hits -= 1
                         break
@@ -8940,6 +9520,10 @@ class Game:
                             self.score += 1000
                             self.add_xp(200, main_body_rect.centerx, main_body_rect.centery)
 
+                            # Track boss defeat achievement (player 1 only)
+                            boss_name = self.current_boss.__class__.__name__
+                            self.achievement_manager.player_defeated_boss(boss_name)
+
                             # Clear all enemy bullets immediately when boss is destroyed
                             self.enemy_bullets.clear()
 
@@ -8966,7 +9550,10 @@ class Game:
                             # Track enemy kill in player stats
                             if laser.owner_player_id and laser.owner_player_id <= len(self.player_stats):
                                 self.player_stats[laser.owner_player_id - 1].record_enemy_kill()
-                            
+                                # Track achievement for player 1 only
+                                if laser.owner_player_id == 1:
+                                    self.achievement_manager.track_cumulative("total_kills", 1)
+
         self.update_enemy_speed()
                         
         # Player bullets vs barriers
@@ -9009,6 +9596,9 @@ class Game:
                         # Track death if player died
                         if was_alive and player.lives <= 0 and i < len(self.player_stats):
                             self.player_stats[i].record_death()
+                            # Track player 1 death for achievements
+                            if player.player_id == 1:
+                                self.achievement_manager.player_died()
                         # Add explosion particles if player died
                         if explosion_particles:
                             self.player_explosion_particles.extend(explosion_particles)
@@ -9069,6 +9659,9 @@ class Game:
                         # Track death if player died
                         if was_alive and player.lives <= 0 and i < len(self.player_stats):
                             self.player_stats[i].record_death()
+                            # Track player 1 death for achievements
+                            if player.player_id == 1:
+                                self.achievement_manager.player_died()
                         # Add explosion particles if player died
                         if explosion_particles:
                             self.player_explosion_particles.extend(explosion_particles)
@@ -9244,6 +9837,10 @@ class Game:
             for text in self.floating_texts:
                 text.draw(self.screen)
 
+        # Draw achievement notifications (always visible, even during game over)
+        for notification in self.achievement_notifications:
+            notification.draw(self.screen)
+
         # Draw player explosion particles (outside game_over check so they're always visible)
         for particle in self.player_explosion_particles:
             if particle['life'] > 0:
@@ -9414,6 +10011,9 @@ def main():
     # Initialize sound manager
     sound_manager = SoundManager()
 
+    # Initialize achievement manager
+    achievement_manager = AchievementManager()
+
     # Initialize profile manager and load last profile (or defaults)
     profile_manager = ProfileManager()
     key_bindings = profile_manager.get_last_profile_bindings()
@@ -9443,6 +10043,18 @@ def main():
                         pygame.quit()
                         sys.exit()
                     high_score_screen.draw()
+                    clock.tick(60)
+                break
+            elif action == "achievements":
+                achievement_screen = AchievementScreen(screen, achievement_manager, sound_manager, key_bindings=key_bindings)
+                while True:
+                    ach_action = achievement_screen.handle_events()
+                    if ach_action == "back":
+                        break
+                    elif ach_action == "quit":
+                        pygame.quit()
+                        sys.exit()
+                    achievement_screen.draw()
                     clock.tick(60)
                 break
             elif action == "settings":
@@ -9504,7 +10116,7 @@ def main():
                     sys.exit()
                 elif debug_action == "start":
                     game_mode = debug_config.get('mode', 'single')
-                    game = Game(score_manager, sound_manager, key_bindings)
+                    game = Game(score_manager, sound_manager, achievement_manager, key_bindings)
                     game.setup_game(game_mode, debug_config)
                     result = game.run()
 
@@ -9517,7 +10129,7 @@ def main():
                     break
             elif action == "continue":
                 # Load saved game
-                game = Game(score_manager, sound_manager, key_bindings)
+                game = Game(score_manager, sound_manager, achievement_manager, key_bindings)
                 try:
                     game.load_game()
                     result = game.run()
@@ -9531,7 +10143,7 @@ def main():
                     print("Save file not found!")
                     break  # Go back to title screen
             elif action in ["single", "coop"]:
-                game = Game(score_manager, sound_manager, key_bindings)
+                game = Game(score_manager, sound_manager, achievement_manager, key_bindings)
                 game.setup_game(action)
                 result = game.run()
 
