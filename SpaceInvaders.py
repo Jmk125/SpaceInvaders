@@ -837,6 +837,36 @@ class AchievementManager:
 
             {"id": "i_have_your_number", "name": "I Have Your Number!", "description": "Kill every boss without dying",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 5, "track_key": "bosses_no_death"},  # All 5 unique boss types
+
+            # Upgrade achievements
+            {"id": "max_fire_rate", "name": "Max Fire Rate", "description": "Achieve maximum fire rate in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "max_fire_rate"},
+
+            {"id": "max_shot_speed", "name": "Max Shot Speed", "description": "Achieve maximum shot speed in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "max_shot_speed"},
+
+            {"id": "speedy_gonzales", "name": "Speedy Gonzales", "description": "Achieve maximum movement speed in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "max_movement_speed"},
+
+            {"id": "maximum_effort", "name": "Maximum Effort", "description": "Achieve maximum powerup duration in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "max_powerup_duration"},
+
+            {"id": "mad_max", "name": "Mad Max", "description": "Max all four main stats in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "all_stats_maxed"},
+
+            # XP Level achievements
+            {"id": "level_and_true", "name": "Level and True", "description": "Reach player level 10",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 10, "track_key": "max_xp_level"},
+
+            {"id": "plumb_level_true", "name": "Plumb, Level, and True", "description": "Reach player level 20 in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 20, "track_key": "run_max_xp_level"},
+
+            {"id": "lord_commander", "name": "Lord Commander", "description": "Reach player level 50 in one playthrough",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 50, "track_key": "run_max_xp_level"},
+
+            # Special challenge achievements
+            {"id": "mini_me_laser", "name": "Mini Me, Get The Laser!", "description": "Clear an entire level using only laser kills",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "laser_only_level"},
         ]
 
         # Initialize achievements
@@ -862,6 +892,7 @@ class AchievementManager:
             "max_score": 0,
             "boss_defeated": 0,
             "coop_started": 0,
+            "max_xp_level": 0,  # Milestone: highest XP level ever reached
         }
 
         # Initialize run stats (reset each game)
@@ -875,6 +906,18 @@ class AchievementManager:
             "flawless_levels": 0,
             "bosses_no_death": set(),
             "player_died": False,
+            # Upgrade tracking
+            "max_fire_rate": 0,
+            "max_shot_speed": 0,
+            "max_movement_speed": 0,
+            "max_powerup_duration": 0,
+            "all_stats_maxed": 0,
+            # XP level tracking
+            "run_max_xp_level": 0,
+            # Laser-only level tracking
+            "laser_only_level": 0,
+            "level_laser_kills": 0,
+            "level_non_laser_kills": 0,
         }
 
     def start_new_run(self, is_coop=False):
@@ -964,6 +1007,50 @@ class AchievementManager:
         if not self.run_stats["player_died"]:
             self.run_stats["bosses_no_death"].add(boss_name)
             self.track_run_stat("bosses_no_death", boss_name)
+
+    def track_upgrade_maxed(self, upgrade_name, player_upgrades):
+        """Called when checking if an upgrade has been maxed"""
+        # Check if this specific upgrade is maxed (level 10)
+        upgrade_level = getattr(player_upgrades, f"{upgrade_name}_level", 0)
+        if upgrade_level >= 10:
+            self.run_stats[f"max_{upgrade_name}"] = 1
+            self.track_run_stat(f"max_{upgrade_name}", 1)
+
+            # Check if all 4 main stats are maxed
+            if (self.run_stats["max_fire_rate"] == 1 and
+                self.run_stats["max_shot_speed"] == 1 and
+                self.run_stats["max_movement_speed"] == 1 and
+                self.run_stats["max_powerup_duration"] == 1):
+                self.run_stats["all_stats_maxed"] = 1
+                self.track_run_stat("all_stats_maxed", 1)
+
+    def track_xp_level(self, xp_level):
+        """Called when XP level changes"""
+        # Track milestone (highest ever)
+        self.track_milestone("max_xp_level", xp_level)
+
+        # Track for this run
+        if xp_level > self.run_stats["run_max_xp_level"]:
+            self.run_stats["run_max_xp_level"] = xp_level
+            self.track_run_stat("run_max_xp_level", xp_level)
+
+    def track_enemy_kill_by_weapon(self, is_laser):
+        """Track kills by weapon type for laser-only level achievement"""
+        if is_laser:
+            self.run_stats["level_laser_kills"] += 1
+        else:
+            self.run_stats["level_non_laser_kills"] += 1
+
+    def check_laser_only_level(self):
+        """Check if current level was completed with laser only"""
+        # If we had laser kills and NO non-laser kills, achievement unlocked
+        if self.run_stats["level_laser_kills"] > 0 and self.run_stats["level_non_laser_kills"] == 0:
+            self.run_stats["laser_only_level"] = 1
+            self.track_run_stat("laser_only_level", 1)
+
+        # Reset level tracking for next level
+        self.run_stats["level_laser_kills"] = 0
+        self.run_stats["level_non_laser_kills"] = 0
 
     def get_newly_unlocked(self):
         """Get and clear newly unlocked achievements"""
@@ -8528,6 +8615,9 @@ class Game:
             self.pending_level_up = True
             print(f"Player leveled up! XP Level: {self.xp_system.level}, Game Level: {self.level}")  # Debug
 
+            # Track XP level achievement
+            self.achievement_manager.track_xp_level(self.xp_system.level)
+
             # PLAY LEVEL UP SOUND
             if self.sound_manager:
                 self.sound_manager.play_sound('levelup')
@@ -8763,6 +8853,14 @@ class Game:
                 self.awaiting_level_up = False
                 self.pending_level_up = False  # Clear the flag
                 del self.level_up_screen
+
+                # Check if player 1 has maxed any upgrades (for achievements)
+                if self.players:
+                    player1_upgrades = self.players[0].upgrades
+                    self.achievement_manager.track_upgrade_maxed("fire_rate", player1_upgrades)
+                    self.achievement_manager.track_upgrade_maxed("shot_speed", player1_upgrades)
+                    self.achievement_manager.track_upgrade_maxed("movement_speed", player1_upgrades)
+                    self.achievement_manager.track_upgrade_maxed("powerup_duration", player1_upgrades)
 
                 # DEBUG: Log powerup stats before advancing to next level
                 if self.enemies_killed_this_level > 0:
@@ -9009,6 +9107,9 @@ class Game:
 
             # Track level completion for achievements (player 1 flawless tracking)
             self.achievement_manager.player_completed_level()
+
+            # Check laser-only level achievement
+            self.achievement_manager.check_laser_only_level()
 
             # Reset powerup tracking for new level
             self.powerups_spawned_this_level = 0
@@ -9471,6 +9572,8 @@ class Game:
                             # Track achievement for player 1 only
                             if bullet.owner_id == 1:
                                 self.achievement_manager.track_cumulative("total_kills", 1)
+                                # Track as non-laser kill for laser-only achievement
+                                self.achievement_manager.track_enemy_kill_by_weapon(is_laser=False)
                         if bullet.pierce_hits > 0:
                             bullet.pierce_hits -= 1
                         break
@@ -9553,6 +9656,8 @@ class Game:
                                 # Track achievement for player 1 only
                                 if laser.owner_player_id == 1:
                                     self.achievement_manager.track_cumulative("total_kills", 1)
+                                    # Track as laser kill for laser-only achievement
+                                    self.achievement_manager.track_enemy_kill_by_weapon(is_laser=True)
 
         self.update_enemy_speed()
                         
