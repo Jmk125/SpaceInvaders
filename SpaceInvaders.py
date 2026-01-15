@@ -1004,7 +1004,8 @@ class AchievementManager:
             # Check relevant achievements
             for achievement in self.achievements.values():
                 if achievement.track_key == key and achievement.achievement_type == ACHIEVEMENT_TYPE_CUMULATIVE:
-                    if achievement.update_progress(self.global_stats[key]):
+                    # Defensive check: only add if not already unlocked
+                    if not achievement.unlocked and achievement.update_progress(self.global_stats[key]):
                         self.newly_unlocked.append(achievement)
 
     def track_milestone(self, key, value):
@@ -1017,7 +1018,8 @@ class AchievementManager:
         # Check relevant achievements
         for achievement in self.achievements.values():
             if achievement.track_key == key and achievement.achievement_type == ACHIEVEMENT_TYPE_MILESTONE:
-                if achievement.update_progress(self.global_stats[key]):
+                # Defensive check: only add if not already unlocked
+                if not achievement.unlocked and achievement.update_progress(self.global_stats[key]):
                     self.newly_unlocked.append(achievement)
 
     def track_run_stat(self, key, value):
@@ -1037,14 +1039,16 @@ class AchievementManager:
                         progress_value = len(self.run_stats[key])
                     else:
                         progress_value = self.run_stats[key]
-                    if achievement.update_progress(progress_value):
+                    # Defensive check: only add if not already unlocked
+                    if not achievement.unlocked and achievement.update_progress(progress_value):
                         self.newly_unlocked.append(achievement)
                 elif achievement.achievement_type == ACHIEVEMENT_TYPE_CHALLENGE:
                     if key in ["run_unique_bosses", "bosses_no_death"]:
                         progress_value = len(self.run_stats[key])
                     else:
                         progress_value = self.run_stats[key]
-                    if achievement.update_progress(progress_value):
+                    # Defensive check: only add if not already unlocked
+                    if not achievement.unlocked and achievement.update_progress(progress_value):
                         self.newly_unlocked.append(achievement)
 
     def player_died(self):
@@ -9237,6 +9241,9 @@ class Game:
         if self.is_boss_level:
             if self.current_boss and self.current_boss.is_destruction_complete():
                 # Boss destruction sequence finished
+                # Track boss defeat for achievements BEFORE clearing boss reference
+                boss_name = self.current_boss.__class__.__name__
+                self.achievement_manager.player_defeated_boss(boss_name)
                 self.current_boss = None
                 level_complete = True
             elif not self.current_boss:  # Boss was destroyed instantly (shouldn't happen with new system)
