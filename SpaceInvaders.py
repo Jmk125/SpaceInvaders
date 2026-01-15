@@ -1291,16 +1291,19 @@ class FloatingText:
 
 class AchievementNotification:
     """Achievement unlock notification (RetroAchievements style)"""
-    def __init__(self, achievement, duration=3000):
+    def __init__(self, achievement, duration=3000, stack_index=0):
         self.achievement = achievement
         self.duration = duration
         self.start_time = pygame.time.get_ticks()
         self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.font_text = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
 
-        # Position at top-middle of screen
-        self.y = 50
-        self.target_y = 50
+        # Position at top-middle of screen, stacked vertically if multiple
+        # Box height is 120, stack with 10px gap between notifications
+        self.stack_spacing = 130
+        self.base_y = 50
+        self.y = self.base_y + (stack_index * self.stack_spacing)
+        self.target_y = self.base_y + (stack_index * self.stack_spacing)
         self.x = SCREEN_WIDTH // 2
 
         # Animation
@@ -9379,8 +9382,10 @@ class Game:
 
         # Check for newly unlocked achievements and create notifications
         newly_unlocked = self.achievement_manager.get_newly_unlocked()
-        for achievement in newly_unlocked:
-            notification = AchievementNotification(achievement)
+        for i, achievement in enumerate(newly_unlocked):
+            # Stack notifications vertically - use current number of active notifications as stack index
+            stack_index = len(self.achievement_notifications) + i
+            notification = AchievementNotification(achievement, stack_index=stack_index)
             self.achievement_notifications.append(notification)
             self.sound_manager.play_sound('powerup')  # Play a sound for achievement unlock
             self.achievement_manager.save()  # Save immediately when achievement unlocks
