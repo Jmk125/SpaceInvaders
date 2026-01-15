@@ -931,6 +931,21 @@ class AchievementManager:
 
             {"id": "spray_and_pray", "name": "Spray & Pray", "description": "Select the autofire powerup",
              "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "auto_fire_selected"},
+
+            {"id": "duel_wielding", "name": "Duel Wielding", "description": "Select the twin shots powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "extra_bullet_selected"},
+
+            {"id": "calling_in_reinforcements", "name": "Calling in Reinforcements",
+             "description": "Select the reinforced barriers powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "reinforced_barriers_selected"},
+
+            {"id": "get_this_man_a_shield", "name": "...And get this man a shield!",
+             "description": "Select the boss shield powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "boss_shield_selected"},
+
+            {"id": "we_got_ourselves_a_dog_fight", "name": "We've Got Ourselves A Dog Fight!",
+             "description": "Select the boss breaker powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "boss_damage_selected"},
         ]
 
         # Initialize achievements
@@ -972,6 +987,10 @@ class AchievementManager:
             "powerup_spawn_selected": 0,
             "ammo_capacity_selected": 0,
             "auto_fire_selected": 0,
+            "extra_bullet_selected": 0,
+            "reinforced_barriers_selected": 0,
+            "boss_shield_selected": 0,
+            "boss_damage_selected": 0,
             # Play time tracking (in seconds)
             "total_play_time": 0,
         }
@@ -1162,7 +1181,7 @@ class AchievementManager:
         if is_boss_level:
             return
         if (self.run_stats["pinpoint_shots"] >= 20 and
-                self.run_stats["pinpoint_shots"] == self.run_stats["pinpoint_kills"]):
+                self.run_stats["pinpoint_kills"] >= self.run_stats["pinpoint_shots"]):
             self.run_stats["pinpoint_accuracy"] = 1
             self.track_run_stat("pinpoint_accuracy", 1)
 
@@ -1172,6 +1191,10 @@ class AchievementManager:
             "powerup_spawn": "powerup_spawn_selected",
             "ammo_capacity": "ammo_capacity_selected",
             "auto_fire": "auto_fire_selected",
+            "extra_bullet": "extra_bullet_selected",
+            "reinforced_barriers": "reinforced_barriers_selected",
+            "boss_shield": "boss_shield_selected",
+            "boss_damage": "boss_damage_selected",
         }
         if powerup_name in powerup_map:
             achievement_key = powerup_map[powerup_name]
@@ -9109,6 +9132,14 @@ class Game:
                         self.achievement_manager.track_powerup_selection("ammo_capacity")
                     if player1_upgrades.auto_fire_level > 0:
                         self.achievement_manager.track_powerup_selection("auto_fire")
+                    if player1_upgrades.extra_bullet_level > 0:
+                        self.achievement_manager.track_powerup_selection("extra_bullet")
+                    if player1_upgrades.reinforced_barriers_level > 0:
+                        self.achievement_manager.track_powerup_selection("reinforced_barriers")
+                    if player1_upgrades.boss_damage_level > 0:
+                        self.achievement_manager.track_powerup_selection("boss_damage")
+                    if self.players[0].has_boss_shield_upgrade:
+                        self.achievement_manager.track_powerup_selection("boss_shield")
 
                 # DEBUG: Log powerup stats before advancing to next level
                 if self.enemies_killed_this_level > 0:
