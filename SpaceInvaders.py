@@ -8202,6 +8202,10 @@ class Game:
         # Player statistics tracking
         self.player_stats = []  # Will be populated when players are created
 
+        # Sharp Shooter achievement tracking
+        self.last_enemy_shots_fired = 0  # Track shots fired when only 1 enemy remains
+        self.tracking_last_enemy = False  # Flag to indicate we're tracking the last enemy
+
         # Visual feedback
         self.floating_texts = []
         self.achievement_notifications = []  # Achievement unlock notifications
@@ -8726,6 +8730,34 @@ class Game:
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
 
+    def track_shot_at_last_enemy(self):
+        """Track shots fired when only one enemy remains (for Sharp Shooter achievement)"""
+        # Only track in non-boss levels when exactly 1 enemy remains
+        if not self.is_boss_level and len(self.enemies) == 1:
+            if not self.tracking_last_enemy:
+                # First time we're down to one enemy - start tracking
+                self.tracking_last_enemy = True
+                self.last_enemy_shots_fired = 0
+            # Increment shot counter
+            self.last_enemy_shots_fired += 1
+
+    def check_sharp_shooter_achievement(self):
+        """Check if Sharp Shooter achievement was earned and display notification"""
+        if self.tracking_last_enemy and self.last_enemy_shots_fired == 1:
+            # Achievement earned! Display notification
+            self.floating_texts.append(
+                FloatingText(
+                    SCREEN_WIDTH // 2,
+                    SCREEN_HEIGHT // 2,
+                    "SHARP SHOOTER!",
+                    YELLOW,
+                    duration=3000
+                )
+            )
+        # Reset tracking for next level
+        self.tracking_last_enemy = False
+        self.last_enemy_shots_fired = 0
+
     def grant_post_boss_shield(self):
         """Give each player a one-hit shield after defeating a boss"""
         if self.boss_shield_granted:
@@ -8848,12 +8880,16 @@ class Game:
                                 # Track shot in stats
                                 if len(self.player_stats) > 0:
                                     self.player_stats[0].record_shot(shot_stat_type)
+                                # Track shot for Sharp Shooter achievement
+                                self.track_shot_at_last_enemy()
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
                                 # Track laser shot in stats
                                 if len(self.player_stats) > 0:
                                     self.player_stats[0].record_shot(shot_stat_type)
+                                # Track laser shot for Sharp Shooter achievement
+                                self.track_shot_at_last_enemy()
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
@@ -8881,12 +8917,16 @@ class Game:
                                 # Track shot in stats
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                                # Track shot for Sharp Shooter achievement
+                                self.track_shot_at_last_enemy()
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
                                 # Track laser shot in stats
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                                # Track laser shot for Sharp Shooter achievement
+                                self.track_shot_at_last_enemy()
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
@@ -8937,12 +8977,16 @@ class Game:
                                         # Track shot in stats
                                         if i < len(self.player_stats):
                                             self.player_stats[i].record_shot(shot_stat_type)
+                                        # Track shot for Sharp Shooter achievement
+                                        self.track_shot_at_last_enemy()
                                     elif shot_type == 'laser':
                                         self.sound_manager.play_sound('laser')
                                         self.laser_beams.append(shot)
                                         # Track laser shot in stats
                                         if i < len(self.player_stats):
                                             self.player_stats[i].record_shot(shot_stat_type)
+                                        # Track laser shot for Sharp Shooter achievement
+                                        self.track_shot_at_last_enemy()
                                     elif shot_type == 'muzzle_flash':
                                         # Add muzzle flash particles to the particle list
                                         self.muzzle_flash_particles.extend(shot)
@@ -9251,7 +9295,9 @@ class Game:
         else:
             if not self.enemies:  # All regular enemies defeated
                 level_complete = True
-        
+                # Check for Sharp Shooter achievement (non-boss levels only)
+                self.check_sharp_shooter_achievement()
+
         if level_complete:
             print(f"Level complete! pending_level_up: {self.pending_level_up}")  # Debug
             # Check if player leveled up during this level - show level up screen first
