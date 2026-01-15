@@ -817,6 +817,18 @@ class AchievementManager:
             {"id": "exterminator_supreme", "name": "Exterminator Supreme", "description": "Kill 10,000 aliens",
              "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 10000, "track_key": "total_kills"},
 
+            {"id": "guns_ablaze", "name": "Guns Ablaze", "description": "Fire 10,000 shots with the Rapid Fire powerup",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 10000, "track_key": "rapid_fire_shots"},
+
+            {"id": "tripple_threat", "name": "Tripple Threat", "description": "Fire 10,000 shots with the Multi powerup",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 10000, "track_key": "multi_shot_shots"},
+
+            {"id": "laser_quest", "name": "Laser Quest", "description": "Shoot 1,000 laser powerups",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 1000, "track_key": "laser_powerup_shots"},
+
+            {"id": "super_trooper", "name": "Super Trooper", "description": "Spend 1 hour invincible",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 3600, "track_key": "total_invincibility_time"},
+
             {"id": "six_figures", "name": "Six Figures", "description": "Achieve a score of at least 100,000",
              "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 100000, "track_key": "max_score"},
 
@@ -883,6 +895,10 @@ class AchievementManager:
             {"id": "assassin", "name": "Assassin", "description": "Kill any boss in less than 10 seconds",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "fast_boss_kill"},
 
+            {"id": "pinpoint_accuracy", "name": "Pinpoint Accuracy",
+             "description": "Fire 20 shots in a non-boss level without missing an enemy",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "pinpoint_accuracy"},
+
             # Boss-specific achievements
             {"id": "thlithery_thnake", "name": "Thlithery Thnake!", "description": "Kill the Snake Boss",
              "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "snake_boss_defeated"},
@@ -915,6 +931,21 @@ class AchievementManager:
 
             {"id": "spray_and_pray", "name": "Spray & Pray", "description": "Select the autofire powerup",
              "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "auto_fire_selected"},
+
+            {"id": "duel_wielding", "name": "Duel Wielding", "description": "Select the twin shots powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "extra_bullet_selected"},
+
+            {"id": "calling_in_reinforcements", "name": "Calling in Reinforcements",
+             "description": "Select the reinforced barriers powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "reinforced_barriers_selected"},
+
+            {"id": "get_this_man_a_shield", "name": "...And get this man a shield!",
+             "description": "Select the boss shield powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "boss_shield_selected"},
+
+            {"id": "we_got_ourselves_a_dog_fight", "name": "We've Got Ourselves A Dog Fight!",
+             "description": "Select the boss breaker powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "boss_damage_selected"},
         ]
 
         # Initialize achievements
@@ -941,6 +972,10 @@ class AchievementManager:
             "boss_defeated": 0,
             "coop_started": 0,
             "max_xp_level": 0,  # Milestone: highest XP level ever reached
+            "rapid_fire_shots": 0,
+            "multi_shot_shots": 0,
+            "laser_powerup_shots": 0,
+            "total_invincibility_time": 0,
             # Boss-specific defeats
             "snake_boss_defeated": 0,
             "rubiks_boss_defeated": 0,
@@ -952,6 +987,10 @@ class AchievementManager:
             "powerup_spawn_selected": 0,
             "ammo_capacity_selected": 0,
             "auto_fire_selected": 0,
+            "extra_bullet_selected": 0,
+            "reinforced_barriers_selected": 0,
+            "boss_shield_selected": 0,
+            "boss_damage_selected": 0,
             # Play time tracking (in seconds)
             "total_play_time": 0,
         }
@@ -988,6 +1027,11 @@ class AchievementManager:
             # Fast boss kill tracking
             "fast_boss_kill": 0,
             "current_boss_start_time": None,
+            # Pinpoint accuracy tracking (per level)
+            "pinpoint_accuracy": 0,
+            "pinpoint_shots": 0,
+            "pinpoint_kills": 0,
+            "pinpoint_tracking": False,
         }
 
     def start_new_run(self, is_coop=False):
@@ -997,6 +1041,12 @@ class AchievementManager:
         # Track coop achievement
         if is_coop:
             self.track_milestone("coop_started", 1)
+
+    def start_level(self, is_boss_level):
+        """Called when a new level starts"""
+        self.run_stats["pinpoint_shots"] = 0
+        self.run_stats["pinpoint_kills"] = 0
+        self.run_stats["pinpoint_tracking"] = not is_boss_level
 
     def track_cumulative(self, key, value):
         """Track cumulative stats (persist across all games)"""
@@ -1116,12 +1166,35 @@ class AchievementManager:
         self.run_stats["asteroid_near_misses"] += 1
         self.track_run_stat("asteroid_near_misses", self.run_stats["asteroid_near_misses"])
 
+    def track_pinpoint_shot(self):
+        """Track shots fired for pinpoint accuracy challenge"""
+        if self.run_stats["pinpoint_tracking"]:
+            self.run_stats["pinpoint_shots"] += 1
+
+    def track_pinpoint_kill(self):
+        """Track kills for pinpoint accuracy challenge"""
+        if self.run_stats["pinpoint_tracking"]:
+            self.run_stats["pinpoint_kills"] += 1
+
+    def check_pinpoint_accuracy(self, is_boss_level):
+        """Check pinpoint accuracy challenge completion for a level"""
+        if is_boss_level:
+            return
+        if (self.run_stats["pinpoint_shots"] >= 20 and
+                self.run_stats["pinpoint_kills"] >= self.run_stats["pinpoint_shots"]):
+            self.run_stats["pinpoint_accuracy"] = 1
+            self.track_run_stat("pinpoint_accuracy", 1)
+
     def track_powerup_selection(self, powerup_name):
         """Called when a powerup is selected"""
         powerup_map = {
             "powerup_spawn": "powerup_spawn_selected",
             "ammo_capacity": "ammo_capacity_selected",
             "auto_fire": "auto_fire_selected",
+            "extra_bullet": "extra_bullet_selected",
+            "reinforced_barriers": "reinforced_barriers_selected",
+            "boss_shield": "boss_shield_selected",
+            "boss_damage": "boss_damage_selected",
         }
         if powerup_name in powerup_map:
             achievement_key = powerup_map[powerup_name]
@@ -1151,6 +1224,10 @@ class AchievementManager:
     def track_play_time(self, delta_seconds):
         """Track total play time"""
         self.track_cumulative("total_play_time", delta_seconds)
+
+    def track_invincibility_time(self, delta_seconds):
+        """Track total invincibility time"""
+        self.track_cumulative("total_invincibility_time", delta_seconds)
 
     def track_upgrade_maxed(self, upgrade_name, player_upgrades):
         """Called when checking if an upgrade has been maxed"""
@@ -8617,6 +8694,7 @@ class Game:
         else:
             self.is_boss_level = self.is_level_a_boss_level(self.level)
         self.boss_shield_granted = False
+        self.achievement_manager.start_level(self.is_boss_level)
 
         if self.is_boss_level:
             # ADDED: Show UFO warning before boss level
@@ -8734,6 +8812,18 @@ class Game:
             return
         if not self.is_boss_level and len(self.enemies) == 1:
             self.achievement_manager.track_shot_at_last_enemy()
+
+    def track_shot_for_achievements(self, player_id, shot_stat_type):
+        """Track shots for achievements (player 1 only)."""
+        if player_id != 1:
+            return
+        self.achievement_manager.track_pinpoint_shot()
+        if shot_stat_type == 'rapid':
+            self.achievement_manager.track_cumulative("rapid_fire_shots", 1)
+        elif shot_stat_type == 'multi':
+            self.achievement_manager.track_cumulative("multi_shot_shots", 1)
+        elif shot_stat_type == 'laser':
+            self.achievement_manager.track_cumulative("laser_powerup_shots", 1)
 
     def grant_post_boss_shield(self):
         """Give each player a one-hit shield after defeating a boss"""
@@ -8859,6 +8949,7 @@ class Game:
                                     self.player_stats[0].record_shot(shot_stat_type)
                                 # Track shot for Sharp Shooter achievement
                                 self.track_shot_at_last_enemy(player.player_id)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
@@ -8867,6 +8958,7 @@ class Game:
                                     self.player_stats[0].record_shot(shot_stat_type)
                                 # Track laser shot for Sharp Shooter achievement
                                 self.track_shot_at_last_enemy(player.player_id)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
@@ -8896,6 +8988,7 @@ class Game:
                                     self.player_stats[1].record_shot(shot_stat_type)
                                 # Track shot for Sharp Shooter achievement
                                 self.track_shot_at_last_enemy(player.player_id)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
@@ -8904,6 +8997,7 @@ class Game:
                                     self.player_stats[1].record_shot(shot_stat_type)
                                 # Track laser shot for Sharp Shooter achievement
                                 self.track_shot_at_last_enemy(player.player_id)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
@@ -8956,6 +9050,7 @@ class Game:
                                             self.player_stats[i].record_shot(shot_stat_type)
                                         # Track shot for Sharp Shooter achievement
                                         self.track_shot_at_last_enemy(player.player_id)
+                                        self.track_shot_for_achievements(player.player_id, shot_stat_type)
                                     elif shot_type == 'laser':
                                         self.sound_manager.play_sound('laser')
                                         self.laser_beams.append(shot)
@@ -8964,6 +9059,7 @@ class Game:
                                             self.player_stats[i].record_shot(shot_stat_type)
                                         # Track laser shot for Sharp Shooter achievement
                                         self.track_shot_at_last_enemy(player.player_id)
+                                        self.track_shot_for_achievements(player.player_id, shot_stat_type)
                                     elif shot_type == 'muzzle_flash':
                                         # Add muzzle flash particles to the particle list
                                         self.muzzle_flash_particles.extend(shot)
@@ -9036,6 +9132,14 @@ class Game:
                         self.achievement_manager.track_powerup_selection("ammo_capacity")
                     if player1_upgrades.auto_fire_level > 0:
                         self.achievement_manager.track_powerup_selection("auto_fire")
+                    if player1_upgrades.extra_bullet_level > 0:
+                        self.achievement_manager.track_powerup_selection("extra_bullet")
+                    if player1_upgrades.reinforced_barriers_level > 0:
+                        self.achievement_manager.track_powerup_selection("reinforced_barriers")
+                    if player1_upgrades.boss_damage_level > 0:
+                        self.achievement_manager.track_powerup_selection("boss_damage")
+                    if self.players[0].has_boss_shield_upgrade:
+                        self.achievement_manager.track_powerup_selection("boss_shield")
 
                 # DEBUG: Log powerup stats before advancing to next level
                 if self.enemies_killed_this_level > 0:
@@ -9113,6 +9217,7 @@ class Game:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
                             self.track_shot_at_last_enemy(player.player_id)
+                            self.track_shot_for_achievements(player.player_id, shot_stat_type)
                         elif shot_type == 'laser':
                             self.sound_manager.play_sound('laser')
                             self.laser_beams.append(shot)
@@ -9120,6 +9225,7 @@ class Game:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
                             self.track_shot_at_last_enemy(player.player_id)
+                            self.track_shot_for_achievements(player.player_id, shot_stat_type)
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
                         elif shot_type == 'muzzle_flash_flashes':
@@ -9146,6 +9252,7 @@ class Game:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
                             self.track_shot_at_last_enemy(player.player_id)
+                            self.track_shot_for_achievements(player.player_id, shot_stat_type)
                         elif shot_type == 'laser':
                             self.sound_manager.play_sound('laser')
                             self.laser_beams.append(shot)
@@ -9153,6 +9260,7 @@ class Game:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
                             self.track_shot_at_last_enemy(player.player_id)
+                            self.track_shot_for_achievements(player.player_id, shot_stat_type)
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
                         elif shot_type == 'muzzle_flash_flashes':
@@ -9191,11 +9299,13 @@ class Game:
                                 self.player_bullets.append(shot)
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'muzzle_flash':
                                 self.muzzle_flash_particles.extend(shot)
                             elif shot_type == 'muzzle_flash_flashes':
@@ -9220,11 +9330,13 @@ class Game:
                                 self.player_bullets.append(shot)
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
+                                self.track_shot_for_achievements(player.player_id, shot_stat_type)
                             elif shot_type == 'muzzle_flash':
                                 self.muzzle_flash_particles.extend(shot)
                             elif shot_type == 'muzzle_flash_flashes':
@@ -9299,6 +9411,9 @@ class Game:
 
             # Check sharp shooter achievement (killed last enemy with one shot)
             self.achievement_manager.check_sharp_shooter(0)  # 0 enemies remaining
+
+            # Check pinpoint accuracy achievement
+            self.achievement_manager.check_pinpoint_accuracy(self.is_boss_level)
 
             # Reset powerup tracking for new level
             self.powerups_spawned_this_level = 0
@@ -9779,6 +9894,7 @@ class Game:
                                 self.achievement_manager.track_cumulative("total_kills", 1)
                                 # Track as non-laser kill for laser-only achievement
                                 self.achievement_manager.track_enemy_kill_by_weapon(is_laser=False)
+                                self.achievement_manager.track_pinpoint_kill()
                         if bullet.pierce_hits > 0:
                             bullet.pierce_hits -= 1
                         break
@@ -9865,6 +9981,7 @@ class Game:
                                     self.achievement_manager.track_cumulative("total_kills", 1)
                                     # Track as laser kill for laser-only achievement
                                     self.achievement_manager.track_enemy_kill_by_weapon(is_laser=True)
+                                    self.achievement_manager.track_pinpoint_kill()
 
         self.update_enemy_speed()
                         
@@ -10319,6 +10436,8 @@ class Game:
                 delta_time = self.clock.tick(60) / 1000.0  # Convert to seconds
                 # Track play time for achievement
                 self.achievement_manager.track_play_time(delta_time)
+                if self.players and self.players[0].invincible:
+                    self.achievement_manager.track_invincibility_time(delta_time)
 
         return result
 
