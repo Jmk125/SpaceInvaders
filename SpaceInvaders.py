@@ -982,6 +982,7 @@ class AchievementManager:
             # Sharp shooter tracking
             "sharp_shooter": 0,
             "last_enemy_shots_fired": 0,
+            "tracking_last_enemy": False,
             # Near miss tracking (asteroid boss)
             "asteroid_near_misses": 0,
             # Fast boss kill tracking
@@ -1131,17 +1132,17 @@ class AchievementManager:
         # Only check when there's exactly 1 enemy left
         if remaining_enemies == 1:
             # Start tracking shots when only 1 enemy remains
-            if self.run_stats["last_enemy_shots_fired"] == 0:
-                # This is the first time we're down to 1 enemy this level
-                # The counter will increment when player shoots
-                pass
+            if not self.run_stats["tracking_last_enemy"]:
+                self.run_stats["tracking_last_enemy"] = True
+                self.run_stats["last_enemy_shots_fired"] = 0
         elif remaining_enemies == 0:
             # Level complete - check if we killed last enemy with 1 shot
-            if self.run_stats["last_enemy_shots_fired"] == 1:
+            if self.run_stats["tracking_last_enemy"] and self.run_stats["last_enemy_shots_fired"] == 1:
                 self.run_stats["sharp_shooter"] = 1
                 self.track_run_stat("sharp_shooter", 1)
             # Reset for next level
             self.run_stats["last_enemy_shots_fired"] = 0
+            self.run_stats["tracking_last_enemy"] = False
 
     def track_shot_at_last_enemy(self):
         """Called when player shoots while only 1 enemy remains"""
@@ -8203,9 +8204,6 @@ class Game:
         self.player_stats = []  # Will be populated when players are created
 
         # Sharp Shooter achievement tracking
-        self.last_enemy_shots_fired = 0  # Track shots fired when only 1 enemy remains
-        self.tracking_last_enemy = False  # Flag to indicate we're tracking the last enemy
-
         # Visual feedback
         self.floating_texts = []
         self.achievement_notifications = []  # Achievement unlock notifications
@@ -8730,33 +8728,12 @@ class Game:
             for enemy in self.enemies:
                 enemy.speed = enemy.base_speed * speed_multiplier
 
-    def track_shot_at_last_enemy(self):
-        """Track shots fired when only one enemy remains (for Sharp Shooter achievement)"""
-        # Only track in non-boss levels when exactly 1 enemy remains
+    def track_shot_at_last_enemy(self, player_id=None):
+        """Track shots fired when only one enemy remains (for Sharp Shooter achievement)."""
+        if player_id != 1:
+            return
         if not self.is_boss_level and len(self.enemies) == 1:
-            if not self.tracking_last_enemy:
-                # First time we're down to one enemy - start tracking
-                self.tracking_last_enemy = True
-                self.last_enemy_shots_fired = 0
-            # Increment shot counter
-            self.last_enemy_shots_fired += 1
-
-    def check_sharp_shooter_achievement(self):
-        """Check if Sharp Shooter achievement was earned and display notification"""
-        if self.tracking_last_enemy and self.last_enemy_shots_fired == 1:
-            # Achievement earned! Display notification
-            self.floating_texts.append(
-                FloatingText(
-                    SCREEN_WIDTH // 2,
-                    SCREEN_HEIGHT // 2,
-                    "SHARP SHOOTER!",
-                    YELLOW,
-                    duration=3000
-                )
-            )
-        # Reset tracking for next level
-        self.tracking_last_enemy = False
-        self.last_enemy_shots_fired = 0
+            self.achievement_manager.track_shot_at_last_enemy()
 
     def grant_post_boss_shield(self):
         """Give each player a one-hit shield after defeating a boss"""
@@ -8881,7 +8858,7 @@ class Game:
                                 if len(self.player_stats) > 0:
                                     self.player_stats[0].record_shot(shot_stat_type)
                                 # Track shot for Sharp Shooter achievement
-                                self.track_shot_at_last_enemy()
+                                self.track_shot_at_last_enemy(player.player_id)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
@@ -8889,7 +8866,7 @@ class Game:
                                 if len(self.player_stats) > 0:
                                     self.player_stats[0].record_shot(shot_stat_type)
                                 # Track laser shot for Sharp Shooter achievement
-                                self.track_shot_at_last_enemy()
+                                self.track_shot_at_last_enemy(player.player_id)
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
@@ -8918,7 +8895,7 @@ class Game:
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
                                 # Track shot for Sharp Shooter achievement
-                                self.track_shot_at_last_enemy()
+                                self.track_shot_at_last_enemy(player.player_id)
                             elif shot_type == 'laser':
                                 self.sound_manager.play_sound('laser')
                                 self.laser_beams.append(shot)
@@ -8926,7 +8903,7 @@ class Game:
                                 if len(self.player_stats) > 1:
                                     self.player_stats[1].record_shot(shot_stat_type)
                                 # Track laser shot for Sharp Shooter achievement
-                                self.track_shot_at_last_enemy()
+                                self.track_shot_at_last_enemy(player.player_id)
                             elif shot_type == 'muzzle_flash':
                                 # Add muzzle flash particles to the particle list
                                 self.muzzle_flash_particles.extend(shot)
@@ -8978,7 +8955,7 @@ class Game:
                                         if i < len(self.player_stats):
                                             self.player_stats[i].record_shot(shot_stat_type)
                                         # Track shot for Sharp Shooter achievement
-                                        self.track_shot_at_last_enemy()
+                                        self.track_shot_at_last_enemy(player.player_id)
                                     elif shot_type == 'laser':
                                         self.sound_manager.play_sound('laser')
                                         self.laser_beams.append(shot)
@@ -8986,7 +8963,7 @@ class Game:
                                         if i < len(self.player_stats):
                                             self.player_stats[i].record_shot(shot_stat_type)
                                         # Track laser shot for Sharp Shooter achievement
-                                        self.track_shot_at_last_enemy()
+                                        self.track_shot_at_last_enemy(player.player_id)
                                     elif shot_type == 'muzzle_flash':
                                         # Add muzzle flash particles to the particle list
                                         self.muzzle_flash_particles.extend(shot)
@@ -9135,16 +9112,14 @@ class Game:
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
-                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
-                                self.achievement_manager.track_shot_at_last_enemy()
+                            self.track_shot_at_last_enemy(player.player_id)
                         elif shot_type == 'laser':
                             self.sound_manager.play_sound('laser')
                             self.laser_beams.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
-                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
-                                self.achievement_manager.track_shot_at_last_enemy()
+                            self.track_shot_at_last_enemy(player.player_id)
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
                         elif shot_type == 'muzzle_flash_flashes':
@@ -9170,16 +9145,14 @@ class Game:
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
-                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
-                                self.achievement_manager.track_shot_at_last_enemy()
+                            self.track_shot_at_last_enemy(player.player_id)
                         elif shot_type == 'laser':
                             self.sound_manager.play_sound('laser')
                             self.laser_beams.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
                             # Track shot at last enemy for sharp shooter achievement (player 1 only)
-                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
-                                self.achievement_manager.track_shot_at_last_enemy()
+                            self.track_shot_at_last_enemy(player.player_id)
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
                         elif shot_type == 'muzzle_flash_flashes':
@@ -9295,8 +9268,6 @@ class Game:
         else:
             if not self.enemies:  # All regular enemies defeated
                 level_complete = True
-                # Check for Sharp Shooter achievement (non-boss levels only)
-                self.check_sharp_shooter_achievement()
 
         if level_complete:
             print(f"Level complete! pending_level_up: {self.pending_level_up}")  # Debug
@@ -9791,6 +9762,8 @@ class Game:
                         self.enemy_explosions.append(explosion)
 
                         self.enemies.remove(enemy)
+                        if len(self.enemies) == 1:
+                            self.achievement_manager.check_sharp_shooter(1)
                         self.score += 10
                         self.total_enemies_killed += 1
                         self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
@@ -9876,6 +9849,8 @@ class Game:
                             self.enemy_explosions.append(explosion)
 
                             self.enemies.remove(enemy)
+                            if len(self.enemies) == 1:
+                                self.achievement_manager.check_sharp_shooter(1)
                             self.score += 10
                             self.total_enemies_killed += 1
                             self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
