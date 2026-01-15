@@ -867,6 +867,54 @@ class AchievementManager:
             # Special challenge achievements
             {"id": "mini_me_laser", "name": "Mini Me, Get The Laser!", "description": "Clear an entire level using only laser kills",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "laser_only_level"},
+
+            {"id": "sharp_shooter", "name": "Sharp Shooter", "description": "Kill the final enemy in one shot",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "sharp_shooter"},
+
+            {"id": "pretty_smooth_flyin", "name": "Pretty Smooth Flyin'", "description": "10 near misses in the asteroid field",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 10, "track_key": "asteroid_near_misses"},
+
+            {"id": "iceman", "name": "Iceman", "description": "20 near misses in the asteroid field",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 20, "track_key": "asteroid_near_misses"},
+
+            {"id": "inconceivable", "name": "Inconceivable!!", "description": "Score 200,000 points",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 200000, "track_key": "max_score"},
+
+            {"id": "assassin", "name": "Assassin", "description": "Kill any boss in less than 10 seconds",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "fast_boss_kill"},
+
+            # Boss-specific achievements
+            {"id": "thlithery_thnake", "name": "Thlithery Thnake!", "description": "Kill the Snake Boss",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "snake_boss_defeated"},
+
+            {"id": "solve_puzzle", "name": "Solve the Puzzle", "description": "Kill the Rubik's Cube boss",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "rubiks_boss_defeated"},
+
+            {"id": "dodged_bullet", "name": "Dodged A Bullet!", "description": "Kill the Bullet Hell boss",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "bullet_hell_boss_defeated"},
+
+            {"id": "object_identified", "name": "Object Identified", "description": "Kill the UFO boss",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "ufo_boss_defeated"},
+
+            {"id": "look_ma_no_hands", "name": "Look Ma! No Hands!", "description": "Kill the Alien Overlord boss",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "overlord_boss_defeated"},
+
+            {"id": "never_tell_odds", "name": "Never Tell Me The Odds!", "description": "Get through the asteroid field",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "asteroid_boss_defeated"},
+
+            # Time-based achievement
+            {"id": "hero_of_time", "name": "Hero of Time", "description": "Log 10 hours of play",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 36000, "track_key": "total_play_time"},  # 10 hours in seconds
+
+            # Powerup selection achievements
+            {"id": "drops_of_jupiter", "name": "Drops of Jupiter", "description": "Select the lucky drops powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "powerup_spawn_selected"},
+
+            {"id": "gunslinger", "name": "Gunslinger", "description": "Select the ammo belt powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "ammo_capacity_selected"},
+
+            {"id": "spray_and_pray", "name": "Spray & Pray", "description": "Select the autofire powerup",
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "auto_fire_selected"},
         ]
 
         # Initialize achievements
@@ -893,6 +941,19 @@ class AchievementManager:
             "boss_defeated": 0,
             "coop_started": 0,
             "max_xp_level": 0,  # Milestone: highest XP level ever reached
+            # Boss-specific defeats
+            "snake_boss_defeated": 0,
+            "rubiks_boss_defeated": 0,
+            "bullet_hell_boss_defeated": 0,
+            "ufo_boss_defeated": 0,
+            "overlord_boss_defeated": 0,
+            "asteroid_boss_defeated": 0,
+            # Powerup selections
+            "powerup_spawn_selected": 0,
+            "ammo_capacity_selected": 0,
+            "auto_fire_selected": 0,
+            # Play time tracking (in seconds)
+            "total_play_time": 0,
         }
 
         # Initialize run stats (reset each game)
@@ -918,6 +979,14 @@ class AchievementManager:
             "laser_only_level": 0,
             "level_laser_kills": 0,
             "level_non_laser_kills": 0,
+            # Sharp shooter tracking
+            "sharp_shooter": 0,
+            "last_enemy_shots_fired": 0,
+            # Near miss tracking (asteroid boss)
+            "asteroid_near_misses": 0,
+            # Fast boss kill tracking
+            "fast_boss_kill": 0,
+            "current_boss_start_time": None,
         }
 
     def start_new_run(self, is_coop=False):
@@ -1007,6 +1076,76 @@ class AchievementManager:
         if not self.run_stats["player_died"]:
             self.run_stats["bosses_no_death"].add(boss_name)
             self.track_run_stat("bosses_no_death", boss_name)
+
+        # Track boss-specific achievements
+        boss_achievement_map = {
+            "SnakeBoss": "snake_boss_defeated",
+            "RubiksCubeBoss": "rubiks_boss_defeated",
+            "BulletHellBoss": "bullet_hell_boss_defeated",
+            "Boss": "ufo_boss_defeated",  # Original UFO boss
+            "AlienOverlordBoss": "overlord_boss_defeated",
+            "AsteroidFieldBoss": "asteroid_boss_defeated",
+        }
+        if boss_name in boss_achievement_map:
+            achievement_key = boss_achievement_map[boss_name]
+            self.track_milestone(achievement_key, 1)
+
+        # Track fast boss kill (less than 10 seconds)
+        if self.run_stats["current_boss_start_time"] is not None:
+            import time
+            boss_kill_time = time.time() - self.run_stats["current_boss_start_time"]
+            if boss_kill_time < 10:
+                self.run_stats["fast_boss_kill"] = 1
+                self.track_run_stat("fast_boss_kill", 1)
+            self.run_stats["current_boss_start_time"] = None
+
+    def start_boss_encounter(self):
+        """Called when a boss encounter starts"""
+        import time
+        self.run_stats["current_boss_start_time"] = time.time()
+        # Reset near miss counter for this boss
+        self.run_stats["asteroid_near_misses"] = 0
+
+    def track_near_miss(self):
+        """Called when player has a near miss with asteroid"""
+        self.run_stats["asteroid_near_misses"] += 1
+        self.track_run_stat("asteroid_near_misses", self.run_stats["asteroid_near_misses"])
+
+    def track_powerup_selection(self, powerup_name):
+        """Called when a powerup is selected"""
+        powerup_map = {
+            "powerup_spawn": "powerup_spawn_selected",
+            "ammo_capacity": "ammo_capacity_selected",
+            "auto_fire": "auto_fire_selected",
+        }
+        if powerup_name in powerup_map:
+            achievement_key = powerup_map[powerup_name]
+            self.track_milestone(achievement_key, 1)
+
+    def check_sharp_shooter(self, remaining_enemies):
+        """Check if player killed last enemy with one shot"""
+        # Only check when there's exactly 1 enemy left
+        if remaining_enemies == 1:
+            # Start tracking shots when only 1 enemy remains
+            if self.run_stats["last_enemy_shots_fired"] == 0:
+                # This is the first time we're down to 1 enemy this level
+                # The counter will increment when player shoots
+                pass
+        elif remaining_enemies == 0:
+            # Level complete - check if we killed last enemy with 1 shot
+            if self.run_stats["last_enemy_shots_fired"] == 1:
+                self.run_stats["sharp_shooter"] = 1
+                self.track_run_stat("sharp_shooter", 1)
+            # Reset for next level
+            self.run_stats["last_enemy_shots_fired"] = 0
+
+    def track_shot_at_last_enemy(self):
+        """Called when player shoots while only 1 enemy remains"""
+        self.run_stats["last_enemy_shots_fired"] += 1
+
+    def track_play_time(self, delta_seconds):
+        """Track total play time"""
+        self.track_cumulative("total_play_time", delta_seconds)
 
     def track_upgrade_maxed(self, upgrade_name, player_upgrades):
         """Called when checking if an upgrade has been maxed"""
@@ -8862,6 +9001,14 @@ class Game:
                     self.achievement_manager.track_upgrade_maxed("movement_speed", player1_upgrades)
                     self.achievement_manager.track_upgrade_maxed("powerup_duration", player1_upgrades)
 
+                    # Track specific powerup selections
+                    if player1_upgrades.powerup_spawn_level > 0:
+                        self.achievement_manager.track_powerup_selection("powerup_spawn")
+                    if player1_upgrades.ammo_capacity_level > 0:
+                        self.achievement_manager.track_powerup_selection("ammo_capacity")
+                    if player1_upgrades.auto_fire_level > 0:
+                        self.achievement_manager.track_powerup_selection("auto_fire")
+
                 # DEBUG: Log powerup stats before advancing to next level
                 if self.enemies_killed_this_level > 0:
                     drop_rate = (self.powerups_spawned_this_level / self.enemies_killed_this_level) * 100
@@ -8936,11 +9083,17 @@ class Game:
                             self.player_bullets.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
+                            # Track shot at last enemy for sharp shooter achievement (player 1 only)
+                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
+                                self.achievement_manager.track_shot_at_last_enemy()
                         elif shot_type == 'laser':
                             self.sound_manager.play_sound('laser')
                             self.laser_beams.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
+                            # Track shot at last enemy for sharp shooter achievement (player 1 only)
+                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
+                                self.achievement_manager.track_shot_at_last_enemy()
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
                         elif shot_type == 'muzzle_flash_flashes':
@@ -8965,11 +9118,17 @@ class Game:
                             self.player_bullets.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
+                            # Track shot at last enemy for sharp shooter achievement (player 1 only)
+                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
+                                self.achievement_manager.track_shot_at_last_enemy()
                         elif shot_type == 'laser':
                             self.sound_manager.play_sound('laser')
                             self.laser_beams.append(shot)
                             if len(self.player_stats) > 0:
                                 self.player_stats[0].record_shot(shot_stat_type)
+                            # Track shot at last enemy for sharp shooter achievement (player 1 only)
+                            if not self.is_boss_level and len(self.enemies) == 1 and player.player_id == 1:
+                                self.achievement_manager.track_shot_at_last_enemy()
                         elif shot_type == 'muzzle_flash':
                             self.muzzle_flash_particles.extend(shot)
                         elif shot_type == 'muzzle_flash_flashes':
@@ -9111,6 +9270,9 @@ class Game:
             # Check laser-only level achievement
             self.achievement_manager.check_laser_only_level()
 
+            # Check sharp shooter achievement (killed last enemy with one shot)
+            self.achievement_manager.check_sharp_shooter(0)  # 0 enemies remaining
+
             # Reset powerup tracking for new level
             self.powerups_spawned_this_level = 0
             self.enemies_killed_this_level = 0
@@ -9179,6 +9341,9 @@ class Game:
                 boss_name = self.current_boss.__class__.__name__
                 for stat in self.player_stats:
                     stat.record_boss_encounter(boss_name)
+
+                # Track boss encounter start for achievement timing
+                self.achievement_manager.start_boss_encounter()
 
                 # Clear barriers for Asteroid Field Boss
                 if isinstance(self.current_boss, AsteroidFieldBoss):
@@ -9738,6 +9903,9 @@ class Game:
                             asteroid.near_miss_triggered = True
                             self.add_xp(10, player_center_x, player_center_y)
                             self.sound_manager.play_sound('levelup')
+                            # Track near miss for player 1 only
+                            if player.player_id == 1:
+                                self.achievement_manager.track_near_miss()
 
                         if asteroid.collides_with_circle(player_center_x, player_center_y, player_radius):
                             was_alive = player.lives > 0
@@ -10106,8 +10274,10 @@ class Game:
                     self.handle_input()
                     self.update()
                 self.draw()
-                self.clock.tick(60)
-                
+                delta_time = self.clock.tick(60) / 1000.0  # Convert to seconds
+                # Track play time for achievement
+                self.achievement_manager.track_play_time(delta_time)
+
         return result
 
 def main():
