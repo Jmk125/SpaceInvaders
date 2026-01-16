@@ -1175,15 +1175,17 @@ class AchievementManager:
         """Track kills for pinpoint accuracy challenge"""
         if self.run_stats["pinpoint_tracking"]:
             self.run_stats["pinpoint_kills"] += 1
+            # Check if player has reached exactly 20 kills with perfect accuracy
+            if (self.run_stats["pinpoint_kills"] == 20 and
+                    self.run_stats["pinpoint_shots"] == 20):
+                self.run_stats["pinpoint_accuracy"] = 1
+                self.track_run_stat("pinpoint_accuracy", 1)
 
     def check_pinpoint_accuracy(self, is_boss_level):
         """Check pinpoint accuracy challenge completion for a level"""
-        if is_boss_level:
-            return
-        if (self.run_stats["pinpoint_shots"] >= 20 and
-                self.run_stats["pinpoint_kills"] >= self.run_stats["pinpoint_shots"]):
-            self.run_stats["pinpoint_accuracy"] = 1
-            self.track_run_stat("pinpoint_accuracy", 1)
+        # This method is now deprecated as the check happens in track_pinpoint_kill
+        # Keeping it for backwards compatibility but it does nothing
+        pass
 
     def track_powerup_selection(self, powerup_name):
         """Called when a powerup is selected"""
@@ -1262,12 +1264,14 @@ class AchievementManager:
         else:
             self.run_stats["level_non_laser_kills"] += 1
 
-    def check_laser_only_level(self):
+    def check_laser_only_level(self, is_boss_level):
         """Check if current level was completed with laser only"""
-        # If we had laser kills and NO non-laser kills, achievement unlocked
-        if self.run_stats["level_laser_kills"] > 0 and self.run_stats["level_non_laser_kills"] == 0:
-            self.run_stats["laser_only_level"] = 1
-            self.track_run_stat("laser_only_level", 1)
+        # Only award achievement on non-boss levels
+        if not is_boss_level:
+            # If we had laser kills and NO non-laser kills, achievement unlocked
+            if self.run_stats["level_laser_kills"] > 0 and self.run_stats["level_non_laser_kills"] == 0:
+                self.run_stats["laser_only_level"] = 1
+                self.track_run_stat("laser_only_level", 1)
 
         # Reset level tracking for next level
         self.run_stats["level_laser_kills"] = 0
@@ -9407,7 +9411,7 @@ class Game:
             self.achievement_manager.player_completed_level()
 
             # Check laser-only level achievement
-            self.achievement_manager.check_laser_only_level()
+            self.achievement_manager.check_laser_only_level(self.is_boss_level)
 
             # Check sharp shooter achievement (killed last enemy with one shot)
             self.achievement_manager.check_sharp_shooter(0)  # 0 enemies remaining
@@ -9518,6 +9522,9 @@ class Game:
 
         # Update floating texts
         self.floating_texts = [text for text in self.floating_texts if text.update()]
+
+        # Track current score for achievements (so notifications appear during gameplay)
+        self.achievement_manager.track_milestone("max_score", self.score)
 
         # Check for newly unlocked achievements and create notifications
         newly_unlocked = self.achievement_manager.get_newly_unlocked()
