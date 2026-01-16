@@ -852,16 +852,16 @@ class AchievementManager:
 
             # Level clearing achievements
             {"id": "five_o", "name": "Five O", "description": "Clear 50 Levels",
-             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 50, "track_key": "levels_cleared"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 50, "track_key": "levels_cleared"},
 
             {"id": "centurion", "name": "Centurion", "description": "Clear 100 Levels",
-             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 100, "track_key": "levels_cleared"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 100, "track_key": "levels_cleared"},
 
             {"id": "buck_fifty", "name": "Buck Fifty", "description": "Clear 150 Levels",
-             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 150, "track_key": "levels_cleared"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 150, "track_key": "levels_cleared"},
 
             {"id": "boldly_go", "name": "2 Boldly Go Where No Man Has Gone Before", "description": "Clear 200 Levels",
-             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 200, "track_key": "levels_cleared"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 200, "track_key": "levels_cleared"},
 
             # Upgrade achievements
             {"id": "max_fire_rate", "name": "Max Fire Rate", "description": "Achieve maximum fire rate in one playthrough",
@@ -1027,6 +1027,7 @@ class AchievementManager:
             "run_bosses": 0,
             "run_unique_bosses": set(),
             "flawless_levels": 0,
+            "levels_cleared": 0,
             "bosses_no_death": set(),
             "player_died": False,
             # Upgrade tracking
@@ -1139,6 +1140,9 @@ class AchievementManager:
         """Called when player 1 completes a level"""
         # Track total levels cleared
         self.track_cumulative("levels_cleared", 1)
+
+        self.run_stats["levels_cleared"] += 1
+        self.track_run_stat("levels_cleared", self.run_stats["levels_cleared"])
 
         # Track flawless levels (without dying)
         if not self.run_stats["player_died"]:
@@ -8437,6 +8441,8 @@ class Game:
                 self.achievement_manager.global_stats.get('levels_cleared', 0),
                 self.level - 1
             )
+            self.achievement_manager.run_stats["levels_cleared"] = self.level - 1
+            self.achievement_manager.track_run_stat("levels_cleared", self.level - 1)
 
         xp_level = max(1, debug_config.get('xp_level', self.xp_system.level))
         self.xp_system.level = xp_level
