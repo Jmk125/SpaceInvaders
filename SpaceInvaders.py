@@ -8821,7 +8821,8 @@ class Game:
         """Track shots for achievements (player 1 only)."""
         if player_id != 1:
             return
-        self.achievement_manager.track_pinpoint_shot()
+        if shot_stat_type != 'laser':
+            self.achievement_manager.track_pinpoint_shot()
         if shot_stat_type == 'rapid':
             self.achievement_manager.track_cumulative("rapid_fire_shots", 1)
         elif shot_stat_type == 'multi':
@@ -9988,7 +9989,6 @@ class Game:
                                     self.achievement_manager.track_cumulative("total_kills", 1)
                                     # Track as laser kill for laser-only achievement
                                     self.achievement_manager.track_enemy_kill_by_weapon(is_laser=True)
-                                    self.achievement_manager.track_pinpoint_kill()
 
         self.update_enemy_speed()
                         
