@@ -876,7 +876,7 @@ class AchievementManager:
             {"id": "maximum_effort", "name": "Maximum Effort", "description": "Achieve maximum powerup duration in one playthrough",
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "max_powerup_duration"},
 
-            {"id": "mad_max", "name": "Mad Max", "description": "Max all four main stats in one playthrough",
+            {"id": "mad_max", "name": "Jack of All Trades", "description": "Max all four main stats in one playthrough",
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "all_stats_maxed"},
 
             # XP Level achievements
