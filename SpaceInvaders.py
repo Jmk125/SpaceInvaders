@@ -839,7 +839,7 @@ class AchievementManager:
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 10, "track_key": "run_bosses"},
 
             {"id": "no_stone_unturned", "name": "No Stone Unturned", "description": "Kill all existing bosses in one playthrough",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 5, "track_key": "run_unique_bosses"},  # 5 unique boss types
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 6, "track_key": "run_unique_bosses"},  # 6 unique boss types
 
             {"id": "flawless", "name": "Flawless", "description": "Get through 50 levels without dying",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 50, "track_key": "flawless_levels"},
@@ -848,7 +848,7 @@ class AchievementManager:
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 100, "track_key": "flawless_levels"},
 
             {"id": "i_have_your_number", "name": "I Have Your Number!", "description": "Kill every boss without dying",
-             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 5, "track_key": "bosses_no_death"},  # All 5 unique boss types
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 6, "track_key": "bosses_no_death"},  # All 6 unique boss types
 
             # Upgrade achievements
             {"id": "max_fire_rate", "name": "Max Fire Rate", "description": "Achieve maximum fire rate in one playthrough",
