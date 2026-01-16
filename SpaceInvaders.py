@@ -1459,8 +1459,19 @@ class AchievementNotification:
 
     def draw(self, screen):
         """Draw the achievement notification"""
-        # Background box
-        box_width = 600
+        # Draw "ACHIEVEMENT UNLOCKED" header
+        header_text = self.font_text.render("ACHIEVEMENT UNLOCKED", True, GOLD)
+        name_text = self.font_title.render(self.achievement.name, True, WHITE)
+        desc_text = self.font_text.render(self.achievement.description, True, GRAY)
+        max_text_width = max(
+            header_text.get_width(),
+            name_text.get_width(),
+            desc_text.get_width()
+        )
+
+        # Background box (expand width if needed for long text)
+        box_padding_x = 30
+        box_width = max(600, max_text_width + (box_padding_x * 2))
         box_height = 120
         box_x = self.x - box_width // 2
         box_y = int(self.y)
@@ -1474,18 +1485,14 @@ class AchievementNotification:
         # Draw border
         pygame.draw.rect(screen, GOLD, (box_x, box_y, box_width, box_height), 3)
 
-        # Draw "ACHIEVEMENT UNLOCKED" header
-        header_text = self.font_text.render("ACHIEVEMENT UNLOCKED", True, GOLD)
         header_rect = header_text.get_rect(center=(self.x, box_y + 25))
         screen.blit(header_text, header_rect)
 
         # Draw achievement name
-        name_text = self.font_title.render(self.achievement.name, True, WHITE)
         name_rect = name_text.get_rect(center=(self.x, box_y + 55))
         screen.blit(name_text, name_rect)
 
         # Draw achievement description
-        desc_text = self.font_text.render(self.achievement.description, True, GRAY)
         desc_rect = desc_text.get_rect(center=(self.x, box_y + 85))
         screen.blit(desc_text, desc_rect)
 
