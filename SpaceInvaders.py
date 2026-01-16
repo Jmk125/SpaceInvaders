@@ -896,7 +896,7 @@ class AchievementManager:
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "fast_boss_kill"},
 
             {"id": "pinpoint_accuracy", "name": "Pinpoint Accuracy",
-             "description": "Fire 20 shots in a non-boss level without missing an enemy",
+             "description": "Kill 20 Aliens without missing",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "pinpoint_accuracy"},
 
             # Boss-specific achievements
