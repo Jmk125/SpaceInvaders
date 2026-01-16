@@ -850,6 +850,19 @@ class AchievementManager:
             {"id": "i_have_your_number", "name": "I Have Your Number!", "description": "Kill every boss without dying",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 6, "track_key": "bosses_no_death"},  # All 6 unique boss types
 
+            # Level clearing achievements
+            {"id": "five_o", "name": "Five O", "description": "Clear 50 Levels",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 50, "track_key": "levels_cleared"},
+
+            {"id": "centurion", "name": "Centurion", "description": "Clear 100 Levels",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 100, "track_key": "levels_cleared"},
+
+            {"id": "buck_fifty", "name": "Buck Fifty", "description": "Clear 150 Levels",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 150, "track_key": "levels_cleared"},
+
+            {"id": "boldly_go", "name": "2 Boldly Go Where No Man Has Gone Before", "description": "Clear 200 Levels",
+             "type": ACHIEVEMENT_TYPE_CUMULATIVE, "target": 200, "track_key": "levels_cleared"},
+
             # Upgrade achievements
             {"id": "max_fire_rate", "name": "Max Fire Rate", "description": "Achieve maximum fire rate in one playthrough",
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "max_fire_rate"},
@@ -976,6 +989,8 @@ class AchievementManager:
             "multi_shot_shots": 0,
             "laser_powerup_shots": 0,
             "total_invincibility_time": 0,
+            # Level tracking
+            "levels_cleared": 0,
             # Boss-specific defeats
             "snake_boss_defeated": 0,
             "rubiks_boss_defeated": 0,
@@ -1109,7 +1124,11 @@ class AchievementManager:
         self.run_stats["bosses_no_death"].clear()
 
     def player_completed_level(self):
-        """Called when player 1 completes a level without dying"""
+        """Called when player 1 completes a level"""
+        # Track total levels cleared
+        self.track_cumulative("levels_cleared", 1)
+
+        # Track flawless levels (without dying)
         if not self.run_stats["player_died"]:
             self.run_stats["flawless_levels"] += 1
             self.track_run_stat("flawless_levels", self.run_stats["flawless_levels"])
