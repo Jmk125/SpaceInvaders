@@ -41,8 +41,8 @@ BASE_LUCKY_DROP_CHANCE = 5  # Base percentage chance for powerup drops (affected
 
 # XP and Leveling System Configuration
 XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
-XP_INCREASE_RATE = 0.10  # 10% increase per level (configurable)
-UPGRADE_PERCENTAGE = 0.1  # 5% increase per upgrade (configurable)
+XP_INCREASE_RATE = 0.075  # 10% increase per level (configurable)
+UPGRADE_PERCENTAGE = 0.1  # 10% increase per upgrade (configurable)
 MAX_UPGRADE_MULTIPLIER = 2.0  # 100% increase maximum (configurable)
 BASE_POWERUP_DURATION = 10000  # Base power-up duration in milliseconds
 
@@ -102,8 +102,8 @@ ALIEN_BOSS_FIREBALL_COOLDOWN_BASE = 3100  # ms between fireballs
 ALIEN_BOSS_FIREBALL_COOLDOWN_SCALE = 0.88
 
 # Bullet Hell Boss Configuration
-BULLET_HELL_BOSS_HEALTH_BASE = 70  # Base health
-BULLET_HELL_BOSS_HEALTH_PER_LEVEL = 12  # Health increase per encounter
+BULLET_HELL_BOSS_HEALTH_BASE = 50  # Base health
+BULLET_HELL_BOSS_HEALTH_PER_LEVEL = 10  # Health increase per encounter
 BULLET_HELL_BOSS_SPEED_BASE = 6  # Base movement speed (fast!)
 BULLET_HELL_BOSS_SPEED_GROWTH = 0.4  # Speed increase per encounter
 BULLET_HELL_BOSS_SHOT_COOLDOWN_BASE = 350  # ms between shots (very rapid!)
