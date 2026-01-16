@@ -912,6 +912,14 @@ class AchievementManager:
              "description": "Kill 20 Aliens without missing",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "pinpoint_accuracy"},
 
+            {"id": "dead_eye", "name": "Dead Eye",
+             "description": "Kill 50 Aliens without missing",
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 1, "track_key": "dead_eye"},
+
+            {"id": "five_for_fighting", "name": "Five for Fighting",
+             "description": "Defeat a level 5 boss",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "five_for_fighting"},
+
             # Boss-specific achievements
             {"id": "thlithery_thnake", "name": "Thlithery Thnake!", "description": "Kill the Snake Boss",
              "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "snake_boss_defeated"},
@@ -1044,9 +1052,13 @@ class AchievementManager:
             "current_boss_start_time": None,
             # Pinpoint accuracy tracking (per level)
             "pinpoint_accuracy": 0,
+            "dead_eye": 0,
             "pinpoint_shots": 0,
             "pinpoint_kills": 0,
             "pinpoint_tracking": False,
+            # Boss encounter tracking (per boss type)
+            "boss_defeats_by_type": {},
+            "five_for_fighting": 0,
         }
 
     def start_new_run(self, is_coop=False):
@@ -1151,6 +1163,14 @@ class AchievementManager:
             self.run_stats["bosses_no_death"].add(boss_name)
             self.track_run_stat("bosses_no_death", boss_name)
 
+        # Track repeat boss defeats in a single run (level 5 boss achievement)
+        boss_defeats = self.run_stats.get("boss_defeats_by_type", {})
+        boss_defeats[boss_name] = boss_defeats.get(boss_name, 0) + 1
+        self.run_stats["boss_defeats_by_type"] = boss_defeats
+        if boss_defeats[boss_name] >= 5 and not self.run_stats.get("five_for_fighting", 0):
+            self.run_stats["five_for_fighting"] = 1
+            self.track_run_stat("five_for_fighting", 1)
+
         # Track boss-specific achievements
         boss_achievement_map = {
             "SnakeBoss": "snake_boss_defeated",
@@ -1199,6 +1219,10 @@ class AchievementManager:
                     self.run_stats["pinpoint_shots"] == 20):
                 self.run_stats["pinpoint_accuracy"] = 1
                 self.track_run_stat("pinpoint_accuracy", 1)
+            if (self.run_stats["pinpoint_kills"] == 50 and
+                    self.run_stats["pinpoint_shots"] == 50):
+                self.run_stats["dead_eye"] = 1
+                self.track_run_stat("dead_eye", 1)
 
     def check_pinpoint_accuracy(self, is_boss_level):
         """Check pinpoint accuracy challenge completion for a level"""
@@ -9406,6 +9430,8 @@ class Game:
                 # Reset asteroid boss tracking flag for next encounter
                 if hasattr(self, '_asteroid_boss_tracked'):
                     delattr(self, '_asteroid_boss_tracked')
+                if hasattr(self, '_rubiks_boss_tracked'):
+                    delattr(self, '_rubiks_boss_tracked')
             elif not self.current_boss:  # Boss was destroyed instantly (shouldn't happen with new system)
                 level_complete = True
         else:
@@ -9654,6 +9680,11 @@ class Game:
                     boss_name = self.current_boss.__class__.__name__
                     self.achievement_manager.player_defeated_boss(boss_name)
                     self._asteroid_boss_tracked = True  # Prevent duplicate tracking
+            elif isinstance(self.current_boss, RubiksCubeBoss):
+                if self.current_boss.destruction_complete and not hasattr(self, '_rubiks_boss_tracked'):
+                    boss_name = self.current_boss.__class__.__name__
+                    self.achievement_manager.player_defeated_boss(boss_name)
+                    self._rubiks_boss_tracked = True
 
             # Boss shooting
             boss_bullets = self.current_boss.shoot(self.players, self.sound_manager)
