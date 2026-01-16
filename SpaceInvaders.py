@@ -8400,6 +8400,13 @@ class Game:
         self.level = max(1, debug_config.get('start_level', self.level))
         self.score = max(0, debug_config.get('start_score', self.score))
 
+        # Set levels_cleared to match the starting level (levels before current level)
+        if 'start_level' in debug_config and debug_config['start_level'] > 1:
+            self.achievement_manager.global_stats['levels_cleared'] = max(
+                self.achievement_manager.global_stats.get('levels_cleared', 0),
+                self.level - 1
+            )
+
         xp_level = max(1, debug_config.get('xp_level', self.xp_system.level))
         self.xp_system.level = xp_level
         self.xp_system.current_xp = max(0, debug_config.get('xp_current', 0))
