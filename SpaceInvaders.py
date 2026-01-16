@@ -7977,7 +7977,7 @@ class DebugMenu:
         self.menu_items = [
             {'type': 'label', 'label': 'Debug Mode'},
             {'type': 'choice', 'label': 'Mode', 'choices': ['single', 'coop'], 'path': ('mode',)},
-            {'type': 'int', 'label': 'Start Level', 'path': ('start_level',), 'min': 1, 'max': 99, 'step': 1},
+            {'type': 'int', 'label': 'Start Level', 'path': ('start_level',), 'min': 1, 'max': 9999, 'step': 1},
             {'type': 'int', 'label': 'Start Score', 'path': ('start_score',), 'min': 0, 'max': 9999999, 'step': 250},
             {'type': 'int', 'label': 'XP Level', 'path': ('xp_level',), 'min': 1, 'max': 99, 'step': 1},
             {'type': 'int', 'label': 'XP Current', 'path': ('xp_current',), 'min': 0, 'max': 50000, 'step': 250},
