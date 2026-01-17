@@ -1526,10 +1526,10 @@ class PauseMenu:
         self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.font_item = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
-        self.menu_items = ["Resume", "Achievements", "Settings", "Quit"]
+        self.menu_items = ["Resume (hold)", "Achievements", "Settings", "Quit"]
         self.selected_index = 0
         self.hold_start_time = None
-        self.hold_duration = 3000
+        self.hold_duration = 2000
         self.hold_progress = 0.0
 
     def reset_hold(self):
@@ -1537,7 +1537,7 @@ class PauseMenu:
         self.hold_progress = 0.0
 
     def _handle_resume_hold(self):
-        if self.menu_items[self.selected_index] != "Resume":
+        if self.menu_items[self.selected_index] != "Resume (hold)":
             self.reset_hold()
             return None
 
@@ -1585,15 +1585,20 @@ class PauseMenu:
                         self.sound_manager.play_sound('menu_change')
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                     selected = self.menu_items[self.selected_index]
-                    if selected != "Resume":
+                    if selected != "Resume (hold)":
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_select')
                         return selected.lower()
             elif event.type == pygame.JOYBUTTONDOWN:
+                pause_button = self.key_bindings.get('pause_button', 7)
+                if isinstance(pause_button, int) and event.button == pause_button:
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_select')
+                    return "resume"
                 fire_button = self.key_bindings.get('player1_fire_button', 0)
                 if event.button == 0 or (isinstance(fire_button, int) and event.button == fire_button):
                     selected = self.menu_items[self.selected_index]
-                    if selected != "Resume":
+                    if selected != "Resume (hold)":
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_select')
                         return selected.lower()
@@ -1656,18 +1661,14 @@ class PauseMenu:
             item_rect = item_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
             self.screen.blit(item_text, item_rect)
 
-            if item == "Resume":
-                bar_width = 160
+            if item == "Resume (hold)":
+                bar_width = 220
                 bar_height = 10
-                bar_x = item_rect.right + 20
-                bar_y = item_rect.centery - bar_height // 2
+                bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+                bar_y = item_rect.bottom + 8
                 pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
                 pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, int(bar_width * self.hold_progress), bar_height))
                 pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
-
-        hint_text = self.font_small.render("Hold FIRE to Resume", True, GRAY)
-        hint_rect = hint_text.get_rect(center=(SCREEN_WIDTH // 2, box_y + box_height - 40))
-        self.screen.blit(hint_text, hint_rect)
 
 
 class LevelUpScreen:
@@ -10957,7 +10958,9 @@ class Game:
         while self.running and not result:
             if self.paused and self.pause_menu:
                 pause_action = self.pause_menu.handle_events()
-                if pause_action == "quit":
+                if pause_action == "resume":
+                    self.paused = False
+                elif pause_action == "quit":
                     result = "title"
                 elif pause_action == "achievements":
                     achievement_screen = AchievementScreen(
