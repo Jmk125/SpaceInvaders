@@ -8062,6 +8062,8 @@ class TitleScreen:
             self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers)
         self.pause_menu.selected_index = 0
         self.pause_menu.reset_hold()
+        if self.sound_manager:
+            self.sound_manager.play_sound('menu_select')
         self.paused = True
 
     def _register_debug_input(self, direction):
