@@ -39,7 +39,7 @@ AFTERIMAGE_INTERVAL = 80
 RESPAWN_IMMUNITY_DURATION = 3000
 SHIELD_BREAK_IMMUNITY_DURATION = 1500  # Invincibility frames after boss shield breaks to prevent instant death
 BASE_LUCKY_DROP_CHANCE = 5  # Base percentage chance for powerup drops (affected by upgrades and co-op mode)
-ALIEN_SHIMMER_INTENSITY = 0.30  # Shimmer brightness increase for aliens (0.0 to 1.0, where 0.30 = 30% brighter at peak)
+ALIEN_SHIMMER_INTENSITY = 0.5  # Shimmer brightness increase for aliens (0.0 to 1.0, where 0.30 = 30% brighter at peak)
 
 # XP and Leveling System Configuration
 XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
