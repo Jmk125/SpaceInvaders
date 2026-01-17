@@ -213,6 +213,7 @@ class ProfileManager:
             'player2_fire_key': pygame.K_RCTRL,
             'player2_left_key': pygame.K_a,
             'player2_right_key': pygame.K_d,
+            'pause_key': pygame.K_ESCAPE,
             'player1_left_button': HAT_LEFT,
             'player1_right_button': HAT_RIGHT,
             'player1_up_button': HAT_UP,
@@ -222,7 +223,8 @@ class ProfileManager:
             'player2_right_button': HAT_RIGHT,
             'player2_up_button': HAT_UP,
             'player2_down_button': HAT_DOWN,
-            'player2_fire_button': 0  # A button
+            'player2_fire_button': 0,  # A button
+            'pause_button': 7  # Start button
         }
 
     def load_profiles(self):
@@ -1512,6 +1514,161 @@ class AchievementNotification:
         # Draw achievement description
         desc_rect = desc_text.get_rect(center=(self.x, box_y + 85))
         screen.blit(desc_text, desc_rect)
+
+
+class PauseMenu:
+    """Pause menu overlay with hold-to-resume"""
+    def __init__(self, screen, sound_manager, key_bindings=None, controllers=None):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
+        self.controllers = controllers if controllers else []
+        self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
+        self.font_item = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+        self.menu_items = ["Resume (hold)", "Achievements", "Settings", "Quit"]
+        self.selected_index = 0
+        self.hold_start_time = None
+        self.hold_duration = 2000
+        self.hold_progress = 0.0
+
+    def reset_hold(self):
+        self.hold_start_time = None
+        self.hold_progress = 0.0
+
+    def _handle_resume_hold(self):
+        if self.menu_items[self.selected_index] != "Resume (hold)":
+            self.reset_hold()
+            return None
+
+        fire_key = self.key_bindings.get('player1_fire_key', pygame.K_SPACE)
+        fire_button = self.key_bindings.get('player1_fire_button', 0)
+
+        keys = pygame.key.get_pressed()
+        holding = keys[fire_key]
+
+        if not holding and self.controllers:
+            controller = self.controllers[0]
+            if controller and isinstance(fire_button, int):
+                if controller.get_numbuttons() > fire_button:
+                    holding = controller.get_button(fire_button)
+
+        if holding:
+            if self.hold_start_time is None:
+                self.hold_start_time = pygame.time.get_ticks()
+            elapsed = pygame.time.get_ticks() - self.hold_start_time
+            self.hold_progress = min(1.0, elapsed / self.hold_duration)
+            if elapsed >= self.hold_duration:
+                self.reset_hold()
+                if self.sound_manager:
+                    self.sound_manager.play_sound('menu_select')
+                return "resume"
+        else:
+            self.reset_hold()
+
+        return None
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                    self.reset_hold()
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                    self.reset_hold()
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                    selected = self.menu_items[self.selected_index]
+                    if selected != "Resume (hold)":
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_select')
+                        return selected.lower()
+            elif event.type == pygame.JOYBUTTONDOWN:
+                pause_button = self.key_bindings.get('pause_button', 7)
+                if isinstance(pause_button, int) and event.button == pause_button:
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_select')
+                    return "resume"
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if event.button == 0 or (isinstance(fire_button, int) and event.button == fire_button):
+                    selected = self.menu_items[self.selected_index]
+                    if selected != "Resume (hold)":
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_select')
+                        return selected.lower()
+                elif event.button == 1:
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_select')
+                    return "quit"
+            elif event.type == pygame.JOYHATMOTION:
+                if event.value[1] == 1:
+                    self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                    self.reset_hold()
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                elif event.value[1] == -1:
+                    self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                    self.reset_hold()
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+            elif event.type == pygame.JOYAXISMOTION:
+                threshold = 0.5
+                if event.axis == 1:
+                    if event.value < -threshold:
+                        self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                        self.reset_hold()
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                    elif event.value > threshold:
+                        self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                        self.reset_hold()
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+
+        return None
+
+    def update(self):
+        return self._handle_resume_hold()
+
+    def draw(self):
+        box_width = 700
+        box_height = 360
+        box_x = SCREEN_WIDTH // 2 - box_width // 2
+        box_y = SCREEN_HEIGHT // 2 - box_height // 2
+
+        background = pygame.Surface((box_width, box_height))
+        background.set_alpha(220)
+        background.fill((20, 20, 40))
+        self.screen.blit(background, (box_x, box_y))
+        pygame.draw.rect(self.screen, GOLD, (box_x, box_y, box_width, box_height), 3)
+
+        title_text = self.font_title.render("PAUSED", True, GOLD)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, box_y + 50))
+        self.screen.blit(title_text, title_rect)
+
+        start_y = box_y + 120
+        spacing = 50
+
+        for i, item in enumerate(self.menu_items):
+            color = YELLOW if i == self.selected_index else WHITE
+            item_text = self.font_item.render(item, True, color)
+            item_rect = item_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
+            self.screen.blit(item_text, item_rect)
+
+            if item == "Resume (hold)":
+                bar_width = 220
+                bar_height = 10
+                bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+                bar_y = item_rect.bottom + 8
+                pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
+                pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, int(bar_width * self.hold_progress), bar_height))
+                pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
 
 
 class LevelUpScreen:
@@ -7568,6 +7725,7 @@ class SettingsScreen:
             ("Keyboard - P2 Left", "player2_left_key", "keyboard"),
             ("Keyboard - P2 Right", "player2_right_key", "keyboard"),
             ("Keyboard - P2 Fire", "player2_fire_key", "keyboard"),
+            ("Keyboard - Pause", "pause_key", "keyboard"),
             ("Controller - P1 Left", "player1_left_button", "controller"),
             ("Controller - P1 Right", "player1_right_button", "controller"),
             ("Controller - P1 Up", "player1_up_button", "controller"),
@@ -7578,6 +7736,7 @@ class SettingsScreen:
             ("Controller - P2 Up", "player2_up_button", "controller"),
             ("Controller - P2 Down", "player2_down_button", "controller"),
             ("Controller - P2 Fire", "player2_fire_button", "controller"),
+            ("Controller - Pause", "pause_button", "controller"),
             ("Save Profile", None, "save"),
             ("Load Profile", None, "load"),
             ("Back", None, None)
@@ -7897,6 +8056,15 @@ class TitleScreen:
             controller = pygame.joystick.Joystick(i)
             controller.init()
             self.controllers.append(controller)
+
+    def open_pause_menu(self):
+        if not self.pause_menu:
+            self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers)
+        self.pause_menu.selected_index = 0
+        self.pause_menu.reset_hold()
+        if self.sound_manager:
+            self.sound_manager.play_sound('menu_select')
+        self.paused = True
 
     def _register_debug_input(self, direction):
         expected = self.debug_sequence[self.debug_index]
@@ -8382,6 +8550,8 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
         self.game_over = False
+        self.paused = False
+        self.pause_menu = None
         self.score = 0
         self.level = 1
         self.total_enemies_killed = 0
@@ -8403,6 +8573,7 @@ class Game:
                 'player2_fire_key': pygame.K_RCTRL,
                 'player2_left_key': pygame.K_a,
                 'player2_right_key': pygame.K_d,
+                'pause_key': pygame.K_ESCAPE,
                 'player1_left_button': 13,  # D-pad left
                 'player1_right_button': 14,  # D-pad right
                 'player1_up_button': 11,  # D-pad up
@@ -8412,7 +8583,8 @@ class Game:
                 'player2_right_button': 14,  # D-pad right
                 'player2_up_button': 11,  # D-pad up
                 'player2_down_button': 12,  # D-pad down
-                'player2_fire_button': 0  # A button
+                'player2_fire_button': 0,  # A button
+                'pause_button': 7  # Start button
             }
         self.key_bindings = key_bindings
         self.awaiting_name_input = False
@@ -8491,6 +8663,13 @@ class Game:
             controller = pygame.joystick.Joystick(i)
             controller.init()
             self.controllers.append(controller)
+
+    def open_pause_menu(self):
+        if not self.pause_menu:
+            self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers)
+        self.pause_menu.selected_index = 0
+        self.pause_menu.reset_hold()
+        self.paused = True
             
     def setup_game(self, mode, debug_config=None):
         self.coop_mode = (mode == "coop")
@@ -9161,6 +9340,10 @@ class Game:
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.KEYDOWN:
+                pause_key = self.key_bindings.get('pause_key', pygame.K_ESCAPE)
+                if event.key == pause_key and not self.game_over:
+                    self.open_pause_menu()
+                    return None
                 if event.key == self.key_bindings['player1_fire_key'] and not self.game_over:
                     if len(self.players) > 0 and self.players[0].is_alive:
                         player = self.players[0]
@@ -9248,9 +9431,11 @@ class Game:
                         # FIXED: Check input delay before allowing title screen
                         if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
                             return "title"
-                    elif not self.game_over:
-                        return "title"
             elif event.type == pygame.JOYBUTTONDOWN:
+                pause_button = self.key_bindings.get('pause_button', 7)
+                if not self.game_over and isinstance(pause_button, int) and event.button == pause_button:
+                    self.open_pause_menu()
+                    return None
                 # FIXED: Add controller support for game over screen
                 if self.game_over and not self.awaiting_name_input:
                     if pygame.time.get_ticks() - self.game_over_time >= self.input_delay_duration:
@@ -9301,6 +9486,37 @@ class Game:
                                     elif shot_type == 'muzzle_flash_flashes':
                                         # Add muzzle flash circles to the flash list
                                         self.muzzle_flash_flashes.extend(shot)
+            elif event.type == pygame.JOYHATMOTION:
+                pause_button = self.key_bindings.get('pause_button')
+                if not self.game_over and pause_button in (HAT_LEFT, HAT_RIGHT, HAT_UP, HAT_DOWN):
+                    if pause_button == HAT_LEFT and event.value[0] == -1:
+                        self.open_pause_menu()
+                        return None
+                    if pause_button == HAT_RIGHT and event.value[0] == 1:
+                        self.open_pause_menu()
+                        return None
+                    if pause_button == HAT_UP and event.value[1] == 1:
+                        self.open_pause_menu()
+                        return None
+                    if pause_button == HAT_DOWN and event.value[1] == -1:
+                        self.open_pause_menu()
+                        return None
+            elif event.type == pygame.JOYAXISMOTION:
+                pause_button = self.key_bindings.get('pause_button')
+                threshold = 0.5
+                if not self.game_over and pause_button in (AXIS_LEFT, AXIS_RIGHT, AXIS_UP, AXIS_DOWN):
+                    if pause_button == AXIS_LEFT and event.axis == 0 and event.value < -threshold:
+                        self.open_pause_menu()
+                        return None
+                    if pause_button == AXIS_RIGHT and event.axis == 0 and event.value > threshold:
+                        self.open_pause_menu()
+                        return None
+                    if pause_button == AXIS_UP and event.axis == 1 and event.value < -threshold:
+                        self.open_pause_menu()
+                        return None
+                    if pause_button == AXIS_DOWN and event.axis == 1 and event.value > threshold:
+                        self.open_pause_menu()
+                        return None
 
         return None
     
@@ -10680,6 +10896,9 @@ class Game:
             controls_rect = controls_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 40))
             self.screen.blit(controls_text, controls_rect)
 
+        if self.paused and self.pause_menu and not self.game_over:
+            self.pause_menu.draw()
+
         # Draw instructions and screen flash, then update display
         self.update_display()
 
@@ -10739,12 +10958,92 @@ class Game:
     def run(self):
         result = None
         while self.running and not result:
+            if self.paused and self.pause_menu:
+                pause_action = self.pause_menu.handle_events()
+                if pause_action == "resume":
+                    self.paused = False
+                elif pause_action == "quit":
+                    result = "title"
+                elif pause_action == "achievements":
+                    achievement_screen = AchievementScreen(
+                        self.screen,
+                        self.achievement_manager,
+                        self.sound_manager,
+                        key_bindings=self.key_bindings
+                    )
+                    while True:
+                        ach_action = achievement_screen.handle_events()
+                        if ach_action == "back":
+                            break
+                        elif ach_action == "quit":
+                            self.running = False
+                            return None
+                        achievement_screen.draw()
+                        self.clock.tick(60)
+                elif pause_action == "settings":
+                    profile_manager = ProfileManager()
+                    settings_screen = SettingsScreen(self.screen, self.sound_manager, self.key_bindings, profile_manager)
+                    while True:
+                        settings_action = settings_screen.handle_events()
+                        if settings_action == "back":
+                            break
+                        elif settings_action == "quit":
+                            self.running = False
+                            return None
+                        elif settings_action == "save":
+                            profile_name_screen = ProfileNameInputScreen(self.screen, self.sound_manager, self.key_bindings)
+                            while True:
+                                name_result = profile_name_screen.handle_events()
+                                if name_result == "quit":
+                                    self.running = False
+                                    return None
+                                elif name_result == "cancel":
+                                    break
+                                elif name_result:
+                                    profile_manager.save_profile(name_result, self.key_bindings)
+                                    settings_screen.show_message(f"Profile '{name_result}' saved!")
+                                    break
+                                profile_name_screen.draw()
+                                self.clock.tick(60)
+                        elif settings_action == "load":
+                            profile_selection_screen = ProfileSelectionScreen(self.screen, self.sound_manager, profile_manager, self.key_bindings)
+                            while True:
+                                load_result = profile_selection_screen.handle_events()
+                                if load_result == "quit":
+                                    self.running = False
+                                    return None
+                                elif load_result == "cancel":
+                                    break
+                                elif load_result:
+                                    loaded_bindings = profile_manager.get_profile(load_result)
+                                    if loaded_bindings:
+                                        self.key_bindings.update(loaded_bindings)
+                                        profile_manager.last_profile = load_result
+                                        profile_manager.save_profiles()
+                                        settings_screen.show_message(f"Profile '{load_result}' loaded!")
+                                    break
+                                profile_selection_screen.draw()
+                                self.clock.tick(60)
+                        settings_screen.draw()
+                        self.clock.tick(60)
+
+                resume_action = self.pause_menu.update()
+                if resume_action == "resume":
+                    self.paused = False
+                self.draw()
+                self.clock.tick(60)
+                continue
+
             action = self.handle_events()
             if action == "restart":
                 self.restart_game()
             elif action == "title":
                 result = "title"
             else:
+                if self.paused:
+                    self.draw()
+                    self.clock.tick(60)
+                    continue
                 if not self.awaiting_name_input and not self.awaiting_level_up:
                     self.handle_input()
                     self.update()
