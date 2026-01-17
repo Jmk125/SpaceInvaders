@@ -854,17 +854,17 @@ class AchievementManager:
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 6, "track_key": "bosses_no_death"},  # All 6 unique boss types
 
             # Level clearing achievements
-            {"id": "five_o", "name": "Five O", "description": "Clear 50 Levels",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 50, "track_key": "levels_cleared"},
+            {"id": "five_o", "name": "Five O", "description": "Beat Level 50",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 50, "track_key": "max_level_reached"},
 
-            {"id": "centurion", "name": "Centurion", "description": "Clear 100 Levels",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 100, "track_key": "levels_cleared"},
+            {"id": "centurion", "name": "Centurion", "description": "Beat Level 100",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 100, "track_key": "max_level_reached"},
 
-            {"id": "buck_fifty", "name": "Buck Fifty", "description": "Clear 150 Levels",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 150, "track_key": "levels_cleared"},
+            {"id": "buck_fifty", "name": "Buck Fifty", "description": "Beat Level 150",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 150, "track_key": "max_level_reached"},
 
-            {"id": "boldly_go", "name": "2 Boldly Go Where No Man Has Gone Before", "description": "Clear 200 Levels",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 200, "track_key": "levels_cleared"},
+            {"id": "boldly_go", "name": "2 Boldly Go Where No Man Has Gone Before", "description": "Beat Level 200",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 200, "track_key": "max_level_reached"},
 
             # Upgrade achievements
             {"id": "max_fire_rate", "name": "Max Fire Rate", "description": "Achieve maximum fire rate in one playthrough",
@@ -1002,6 +1002,7 @@ class AchievementManager:
             "total_invincibility_time": 0,
             # Level tracking
             "levels_cleared": 0,
+            "max_level_reached": 0,
             # Boss-specific defeats
             "snake_boss_defeated": 0,
             "rubiks_boss_defeated": 0,
@@ -1031,6 +1032,7 @@ class AchievementManager:
             "run_unique_bosses": set(),
             "flawless_levels": 0,
             "levels_cleared": 0,
+            "max_level_reached": 0,
             "bosses_no_death": set(),
             "player_died": False,
             # Upgrade tracking
@@ -1139,13 +1141,19 @@ class AchievementManager:
         self.run_stats["flawless_levels"] = 0
         self.run_stats["bosses_no_death"].clear()
 
-    def player_completed_level(self):
+    def player_completed_level(self, game_level=None):
         """Called when player 1 completes a level"""
         # Track total levels cleared
         self.track_cumulative("levels_cleared", 1)
 
         self.run_stats["levels_cleared"] += 1
         self.track_run_stat("levels_cleared", self.run_stats["levels_cleared"])
+
+        # Track maximum level reached (for level-based achievements)
+        if game_level is not None:
+            self.global_stats["max_level_reached"] = max(self.global_stats["max_level_reached"], game_level)
+            self.run_stats["max_level_reached"] = max(self.run_stats["max_level_reached"], game_level)
+            self.track_run_stat("max_level_reached", self.run_stats["max_level_reached"])
 
         # Track flawless levels (without dying)
         if not self.run_stats["player_died"]:
@@ -9627,11 +9635,12 @@ class Game:
                 print(f"{'='*70}\n")
 
             # No level up pending, advance to next level
+            completed_level = self.level  # Save the level that was just completed
             self.level += 1
             print(f"Advanced to game level {self.level}")  # Debug
 
             # Track level completion for achievements (player 1 flawless tracking)
-            self.achievement_manager.player_completed_level()
+            self.achievement_manager.player_completed_level(completed_level)
 
             # Check laser-only level achievement
             self.achievement_manager.check_laser_only_level(self.is_boss_level)
