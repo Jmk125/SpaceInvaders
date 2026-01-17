@@ -9184,6 +9184,9 @@ class Game:
                 self.special_enemy_spawned_this_level = True
                 return
 
+            # Mark as checked so we only roll once per level
+            self.special_enemy_spawned_this_level = True
+
     def update_enemy_speed(self):
         # More aggressive speed increase as enemies are eliminated
         total_enemies = ENEMY_GRID_TOTAL
