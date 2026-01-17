@@ -39,6 +39,7 @@ AFTERIMAGE_INTERVAL = 80
 RESPAWN_IMMUNITY_DURATION = 3000
 SHIELD_BREAK_IMMUNITY_DURATION = 1500  # Invincibility frames after boss shield breaks to prevent instant death
 BASE_LUCKY_DROP_CHANCE = 5  # Base percentage chance for powerup drops (affected by upgrades and co-op mode)
+ALIEN_SHIMMER_INTENSITY = 0.30  # Shimmer brightness increase for aliens (0.0 to 1.0, where 0.30 = 30% brighter at peak)
 
 # XP and Leveling System Configuration
 XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
@@ -6821,8 +6822,8 @@ class Enemy:
         # Slow sine wave (0.002 is much slower than boss shield's 0.006)
         # Adding shimmer_offset makes each alien shimmer at different times
         time_factor = pygame.time.get_ticks() * 0.002 + self.shimmer_offset
-        # Returns value between 1.0 and 1.15 (subtle 15% brightness increase at peak)
-        shimmer = 1.0 + (abs(math.sin(time_factor)) * 0.15)
+        # Returns value between 1.0 and 1.0+ALIEN_SHIMMER_INTENSITY
+        shimmer = 1.0 + (abs(math.sin(time_factor)) * ALIEN_SHIMMER_INTENSITY)
         return shimmer
 
     def apply_shimmer_to_color(self, color):
