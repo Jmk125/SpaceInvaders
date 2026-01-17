@@ -10,7 +10,7 @@ import os
 pygame.init()
 pygame.joystick.init()
 
-# Constants - 16:9 Fullscreen
+# Constants - 16:9 base resolution (logical rendering size)
 SCREEN_WIDTH = 1920
 SCREEN_HEIGHT = 1080
 BLACK = (0, 0, 0)
@@ -26,6 +26,22 @@ DARK_GREEN = (0, 128, 0)
 GRAY = (80, 80, 80)
 GOLD = (255, 215, 0)
 SILVER = (192, 192, 192)
+
+
+def create_display(fullscreen=True):
+    flags = pygame.SCALED
+    if fullscreen:
+        flags |= pygame.FULLSCREEN
+    try:
+        return pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), flags)
+    except pygame.error:
+        try:
+            return pygame.display.set_mode(
+                (SCREEN_WIDTH, SCREEN_HEIGHT),
+                pygame.FULLSCREEN if fullscreen else 0
+            )
+        except pygame.error:
+            return pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 
 # Game settings
 BASE_PLAYER_SPEED = 8
@@ -8541,10 +8557,7 @@ class UFOWarningScreen:
 
 class Game:
     def __init__(self, score_manager, sound_manager, achievement_manager=None, key_bindings=None):
-        try:
-            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
-        except:
-            self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen = create_display(fullscreen=True)
 
         pygame.display.set_caption("Place Invaders")
         self.clock = pygame.time.Clock()
@@ -11074,10 +11087,7 @@ def main():
     profile_manager = ProfileManager()
     key_bindings = profile_manager.get_last_profile_bindings()
 
-    try:
-        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.FULLSCREEN)
-    except:
-        screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    screen = create_display(fullscreen=True)
 
     clock = pygame.time.Clock()
 
