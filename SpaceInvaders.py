@@ -8942,8 +8942,8 @@ class Game:
                 self.special_enemy_spawned_this_level = True
                 return
 
-            # Roll for silver enemy (1/25 chance)
-            if random.randint(1, 25) == 1:
+            # Roll for silver enemy (1/40 chance)
+            if random.randint(1, 40) == 1:
                 enemy.make_special('silver')
                 self.special_enemy_spawned_this_level = True
                 return
@@ -10082,6 +10082,9 @@ class Game:
 
                         # Grant special enemy rewards
                         if is_special_enemy:
+                            # Play powerup collection sound for special enemies
+                            self.sound_manager.play_sound('powerup', volume_override=0.7)
+
                             if special_type == 'gold':
                                 # Gold enemy: grant +1 life to the player who killed it
                                 if bullet.owner_id and bullet.owner_id <= len(self.players):
@@ -10193,6 +10196,9 @@ class Game:
 
                             # Grant special enemy rewards
                             if is_special_enemy:
+                                # Play powerup collection sound for special enemies
+                                self.sound_manager.play_sound('powerup', volume_override=0.7)
+
                                 if special_type == 'gold':
                                     # Gold enemy: grant +1 life to the player who killed it
                                     if laser.owner_player_id and laser.owner_player_id <= len(self.players):
