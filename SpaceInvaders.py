@@ -25,6 +25,7 @@ CYAN = (0, 255, 255)
 DARK_GREEN = (0, 128, 0)
 GRAY = (80, 80, 80)
 GOLD = (255, 215, 0)
+SILVER = (192, 192, 192)
 
 # Game settings
 BASE_PLAYER_SPEED = 8
@@ -6778,8 +6779,22 @@ class Enemy:
         self.rect = pygame.Rect(x, y, self.width, self.height)
         self.direction = 1
         self.enemy_type = enemy_type  # 0-4 for different rows
+        self.is_special = False
+        self.special_type = None  # 'gold' or 'silver'
+        self.afterimage_positions = []  # Track positions for afterimage effect
+        self.last_afterimage_time = 0
         
     def move(self):
+        # Track position for afterimage if this is a special enemy
+        if self.is_special:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.last_afterimage_time > 50:  # Add afterimage every 50ms
+                self.afterimage_positions.append((self.x, self.y))
+                self.last_afterimage_time = current_time
+                # Keep only last 5 positions
+                if len(self.afterimage_positions) > 5:
+                    self.afterimage_positions.pop(0)
+
         self.x += self.speed * self.direction
         self.rect.x = self.x
         
@@ -6915,8 +6930,39 @@ class Enemy:
         pygame.draw.rect(screen, accent_color, (self.x + 35, self.y + 26, 5, 6))
         pygame.draw.rect(screen, accent_color, (self.x + 41, self.y + 26, 5, 6))
         
+    def make_special(self, special_type):
+        """Convert this enemy to a special gold or silver enemy"""
+        self.is_special = True
+        self.special_type = special_type
+        # Double the speed for special enemies
+        self.speed = self.speed * 2
+        self.base_speed = self.base_speed * 2
+
+    def draw_afterimages(self, screen):
+        """Draw afterimages for special enemies"""
+        if not self.is_special or not self.afterimage_positions:
+            return
+
+        color = GOLD if self.special_type == 'gold' else SILVER
+
+        # Draw afterimages with fading alpha
+        for i, (old_x, old_y) in enumerate(self.afterimage_positions):
+            alpha = int(50 + (i / len(self.afterimage_positions)) * 100)  # 50-150 alpha
+            afterimage_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+
+            # Draw a simple colored rectangle for afterimage
+            afterimage_rect = pygame.Rect(0, 0, self.width, self.height)
+            pygame.draw.rect(afterimage_surface, (*color, alpha), afterimage_rect)
+
+            screen.blit(afterimage_surface, (old_x, old_y))
+
     def draw(self, screen):
         """Draw the enemy based on its type"""
+        # Draw afterimages first (behind the enemy)
+        if self.is_special:
+            self.draw_afterimages(screen)
+
+        # Draw the normal enemy
         if self.enemy_type == 0:  # Top row
             self.draw_squid_enemy(screen)
         elif self.enemy_type == 1:  # Second row
@@ -6925,6 +6971,15 @@ class Enemy:
             self.draw_octopus_enemy(screen)
         else:  # Bottom rows (3 and 4)
             self.draw_basic_enemy(screen)
+
+        # Apply special color overlay for gold/silver enemies
+        if self.is_special:
+            overlay_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            overlay_color = GOLD if self.special_type == 'gold' else SILVER
+            # Add a semi-transparent overlay and glowing border
+            pygame.draw.rect(overlay_surface, (*overlay_color, 100), (0, 0, self.width, self.height))
+            pygame.draw.rect(overlay_surface, overlay_color, (0, 0, self.width, self.height), 2)  # Border
+            screen.blit(overlay_surface, (self.x, self.y))
 
 class EnemyExplosion:
     """Simple explosion effect when enemy is destroyed"""
@@ -8350,6 +8405,9 @@ class Game:
         self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0}
         self.last_boss_type = None  # Track last boss to prevent consecutive repeats
 
+        # Special enemy system (gold/silver last enemy)
+        self.special_enemy_spawned_this_level = False
+
         # Debug overrides for boss testing
         self.debug_force_boss_level = False
         self.debug_force_boss_type = None
@@ -8841,6 +8899,32 @@ class Game:
                 
         self.update_enemy_speed()
         
+    def check_special_enemy_spawn(self):
+        """Check if we should spawn a special gold or silver enemy when only 1 enemy remains"""
+        # Only spawn in non-boss levels
+        if self.is_boss_level:
+            return
+
+        # Only check when exactly 1 enemy remains and we haven't spawned a special enemy yet
+        if len(self.enemies) == 1 and not self.special_enemy_spawned_this_level:
+            enemy = self.enemies[0]
+
+            # Don't convert if already special
+            if enemy.is_special:
+                return
+
+            # Roll for gold enemy (1/50 chance)
+            if random.randint(1, 50) == 1:
+                enemy.make_special('gold')
+                self.special_enemy_spawned_this_level = True
+                return
+
+            # Roll for silver enemy (1/25 chance)
+            if random.randint(1, 25) == 1:
+                enemy.make_special('silver')
+                self.special_enemy_spawned_this_level = True
+                return
+
     def update_enemy_speed(self):
         # More aggressive speed increase as enemies are eliminated
         total_enemies = ENEMY_GRID_TOTAL
@@ -8871,7 +8955,12 @@ class Game:
                     speed_multiplier += extra_multiplier
 
             for enemy in self.enemies:
-                enemy.speed = enemy.base_speed * speed_multiplier
+                # Don't override speed for special enemies (they have their own speed boost)
+                if not enemy.is_special:
+                    enemy.speed = enemy.base_speed * speed_multiplier
+
+        # Check if we should spawn a special enemy
+        self.check_special_enemy_spawn()
 
     def track_shot_at_last_enemy(self, player_id=None):
         """Track shots fired when only one enemy remains (for Sharp Shooter achievement)."""
@@ -9489,6 +9578,9 @@ class Game:
             self.powerups_spawned_this_level = 0
             self.enemies_killed_this_level = 0
 
+            # Reset special enemy tracking for new level
+            self.special_enemy_spawned_this_level = False
+
             # Clear all enemy bullets to prevent them from carrying over to the next level
             self.enemy_bullets.clear()
 
@@ -9954,13 +10046,36 @@ class Game:
                         explosion = EnemyExplosion(enemy.x + enemy.width // 2, enemy.y + enemy.height // 2, enemy.enemy_type)
                         self.enemy_explosions.append(explosion)
 
+                        # Check if this is a special enemy and grant appropriate reward
+                        is_special_enemy = enemy.is_special
+                        special_type = enemy.special_type
+
                         self.enemies.remove(enemy)
                         if len(self.enemies) == 1:
                             self.achievement_manager.check_sharp_shooter(1)
                         self.score += 10
                         self.total_enemies_killed += 1
                         self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
-                        self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
+
+                        # Grant special enemy rewards
+                        if is_special_enemy:
+                            if special_type == 'gold':
+                                # Gold enemy: grant +1 life to the player who killed it
+                                if bullet.owner_id and bullet.owner_id <= len(self.players):
+                                    self.players[bullet.owner_id - 1].lives += 1
+                                    self.floating_texts.append(FloatingText(
+                                        enemy.x + enemy.width // 2,
+                                        enemy.y,
+                                        "+1 Life",
+                                        GOLD
+                                    ))
+                            elif special_type == 'silver':
+                                # Silver enemy: grant +1000 XP
+                                self.add_xp(1000, enemy.x + enemy.width // 2, enemy.y)
+                        else:
+                            # Normal enemy: grant +5 XP
+                            self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
+
                         self.update_enemy_speed()
                         self.spawn_power_up(owner)
 
@@ -10042,13 +10157,36 @@ class Game:
                             explosion = EnemyExplosion(enemy.x + enemy.width // 2, enemy.y + enemy.height // 2, enemy.enemy_type)
                             self.enemy_explosions.append(explosion)
 
+                            # Check if this is a special enemy and grant appropriate reward
+                            is_special_enemy = enemy.is_special
+                            special_type = enemy.special_type
+
                             self.enemies.remove(enemy)
                             if len(self.enemies) == 1:
                                 self.achievement_manager.check_sharp_shooter(1)
                             self.score += 10
                             self.total_enemies_killed += 1
                             self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
-                            self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
+
+                            # Grant special enemy rewards
+                            if is_special_enemy:
+                                if special_type == 'gold':
+                                    # Gold enemy: grant +1 life to the player who killed it
+                                    if laser.owner_player_id and laser.owner_player_id <= len(self.players):
+                                        self.players[laser.owner_player_id - 1].lives += 1
+                                        self.floating_texts.append(FloatingText(
+                                            enemy.x + enemy.width // 2,
+                                            enemy.y,
+                                            "+1 Life",
+                                            GOLD
+                                        ))
+                                elif special_type == 'silver':
+                                    # Silver enemy: grant +1000 XP
+                                    self.add_xp(1000, enemy.x + enemy.width // 2, enemy.y)
+                            else:
+                                # Normal enemy: grant +5 XP
+                                self.add_xp(5, enemy.x + enemy.width // 2, enemy.y)
+
                             self.spawn_power_up(owner)
 
                             # Track enemy kill in player stats
