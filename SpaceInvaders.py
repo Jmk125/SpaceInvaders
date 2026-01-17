@@ -40,6 +40,7 @@ RESPAWN_IMMUNITY_DURATION = 3000
 SHIELD_BREAK_IMMUNITY_DURATION = 1500  # Invincibility frames after boss shield breaks to prevent instant death
 BASE_LUCKY_DROP_CHANCE = 5  # Base percentage chance for powerup drops (affected by upgrades and co-op mode)
 ALIEN_SHIMMER_INTENSITY = 0.30  # Shimmer brightness increase for aliens (0.0 to 1.0, where 0.30 = 30% brighter at peak)
+ALIEN_SHIMMER_BRIGHTEN = True  # If True, aliens brighten; if False, aliens dim (original color is brightest)
 
 # XP and Leveling System Configuration
 XP_BASE_REQUIREMENT = 500  # Starting XP needed for level 2
@@ -6814,7 +6815,7 @@ class Enemy:
         return None
 
     def get_shimmer_factor(self):
-        """Calculate shimmer brightness factor (1.0 = normal, >1.0 = brighter)"""
+        """Calculate shimmer brightness factor (1.0 = normal, >1.0 = brighter, <1.0 = dimmer)"""
         # Skip shimmer for special enemies (they already have special effects)
         if self.is_special:
             return 1.0
@@ -6822,8 +6823,15 @@ class Enemy:
         # Slow sine wave (0.002 is much slower than boss shield's 0.006)
         # Adding shimmer_offset makes each alien shimmer at different times
         time_factor = pygame.time.get_ticks() * 0.002 + self.shimmer_offset
-        # Returns value between 1.0 and 1.0+ALIEN_SHIMMER_INTENSITY
-        shimmer = 1.0 + (abs(math.sin(time_factor)) * ALIEN_SHIMMER_INTENSITY)
+        sine_wave = abs(math.sin(time_factor))
+
+        if ALIEN_SHIMMER_BRIGHTEN:
+            # Brighten mode: shimmer ranges from 1.0 to 1.0+INTENSITY (e.g., 1.0 to 1.3)
+            shimmer = 1.0 + (sine_wave * ALIEN_SHIMMER_INTENSITY)
+        else:
+            # Dim mode: shimmer ranges from 1.0-INTENSITY to 1.0 (e.g., 0.7 to 1.0)
+            shimmer = 1.0 - (sine_wave * ALIEN_SHIMMER_INTENSITY)
+
         return shimmer
 
     def apply_shimmer_to_color(self, color):
