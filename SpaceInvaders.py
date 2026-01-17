@@ -768,6 +768,10 @@ class Achievement:
             return f"{self.progress}/{self.target_value}"
         elif self.achievement_type in [ACHIEVEMENT_TYPE_SINGLE_RUN, ACHIEVEMENT_TYPE_CHALLENGE]:
             return f"{self.progress}/{self.target_value}"
+        elif self.achievement_type == ACHIEVEMENT_TYPE_MILESTONE:
+            # Show binary progress (0/1 or 1/1) for milestone achievements
+            progress = 1 if self.unlocked else 0
+            return f"{progress}/1"
         else:
             return "LOCKED"
 
@@ -855,16 +859,16 @@ class AchievementManager:
 
             # Level clearing achievements
             {"id": "five_o", "name": "Five O", "description": "Beat Level 50",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 50, "track_key": "max_level_reached"},
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 50, "track_key": "max_level_reached"},
 
             {"id": "centurion", "name": "Centurion", "description": "Beat Level 100",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 100, "track_key": "max_level_reached"},
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 100, "track_key": "max_level_reached"},
 
             {"id": "buck_fifty", "name": "Buck Fifty", "description": "Beat Level 150",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 150, "track_key": "max_level_reached"},
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 150, "track_key": "max_level_reached"},
 
             {"id": "boldly_go", "name": "2 Boldly Go Where No Man Has Gone Before", "description": "Beat Level 200",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 200, "track_key": "max_level_reached"},
+             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 200, "track_key": "max_level_reached"},
 
             # Upgrade achievements
             {"id": "max_fire_rate", "name": "Max Fire Rate", "description": "Achieve maximum fire rate in one playthrough",
@@ -1151,9 +1155,7 @@ class AchievementManager:
 
         # Track maximum level reached (for level-based achievements)
         if game_level is not None:
-            self.global_stats["max_level_reached"] = max(self.global_stats["max_level_reached"], game_level)
-            self.run_stats["max_level_reached"] = max(self.run_stats["max_level_reached"], game_level)
-            self.track_run_stat("max_level_reached", self.run_stats["max_level_reached"])
+            self.track_milestone("max_level_reached", game_level)
 
         # Track flawless levels (without dying)
         if not self.run_stats["player_died"]:
