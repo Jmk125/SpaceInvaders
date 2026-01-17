@@ -8846,6 +8846,22 @@ class Game:
 
         return False
 
+    def levels_until_next_boss(self, current_level):
+        """Calculate how many levels until the next boss level.
+        Returns 0 if current level is a boss level.
+        """
+        if self.is_level_a_boss_level(current_level):
+            return 0
+
+        boss_level = BOSS_FIRST_LEVEL
+        gap = BOSS_INITIAL_GAP
+
+        while boss_level <= current_level:
+            gap += BOSS_GAP_INCREMENT
+            boss_level += gap
+
+        return boss_level - current_level
+
     def setup_level(self):
         """Setup current level - either boss or regular enemies"""
         # Check for debug override first
@@ -10564,10 +10580,26 @@ class Game:
             lives_text2 = self.small_font.render(f"P2 {self.players[1].lives} {'X' if not self.players[1].is_alive else ''}", True, BLUE if self.players[1].is_alive else RED)
             self.screen.blit(lives_text1, (20, 80))
             self.screen.blit(lives_text2, (20, 110))
+
+            # Boss counter for co-op mode
+            levels_to_boss = self.levels_until_next_boss(self.level)
+            if levels_to_boss == 0:
+                boss_text = self.small_font.render(f"BOSS LEVEL!", True, RED)
+            else:
+                boss_text = self.small_font.render(f"{levels_to_boss} To Next Boss", True, YELLOW)
+            self.screen.blit(boss_text, (20, 140))
         else:
             if self.players:
                 lives_text = self.small_font.render(f"LIVES {self.players[0].lives}", True, WHITE)
                 self.screen.blit(lives_text, (20, 80))
+
+                # Boss counter for single player mode
+                levels_to_boss = self.levels_until_next_boss(self.level)
+                if levels_to_boss == 0:
+                    boss_text = self.small_font.render(f"BOSS LEVEL!", True, RED)
+                else:
+                    boss_text = self.small_font.render(f"{levels_to_boss} To Next Boss", True, YELLOW)
+                self.screen.blit(boss_text, (20, 110))
 
         # XP Bar - Clean retro style
         bar_width = 250
