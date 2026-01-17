@@ -6783,6 +6783,8 @@ class Enemy:
         self.special_type = None  # 'gold' or 'silver'
         self.afterimage_positions = []  # Track positions for afterimage effect
         self.last_afterimage_time = 0
+        # Random offset for shimmer effect so each alien shimmers at different times
+        self.shimmer_offset = random.uniform(0, math.pi * 2)
         
     def move(self):
         # Track position for afterimage if this is a special enemy
@@ -6809,12 +6811,30 @@ class Enemy:
                 sound_manager.play_sound('enemy_shoot', volume_override=0.3)  # Quieter than player
             return Bullet(self.x + self.width // 2, self.y + self.height, BASE_BULLET_SPEED)
         return None
+
+    def get_shimmer_factor(self):
+        """Calculate shimmer brightness factor (1.0 = normal, >1.0 = brighter)"""
+        # Skip shimmer for special enemies (they already have special effects)
+        if self.is_special:
+            return 1.0
+
+        # Slow sine wave (0.002 is much slower than boss shield's 0.006)
+        # Adding shimmer_offset makes each alien shimmer at different times
+        time_factor = pygame.time.get_ticks() * 0.002 + self.shimmer_offset
+        # Returns value between 1.0 and 1.15 (subtle 15% brightness increase at peak)
+        shimmer = 1.0 + (abs(math.sin(time_factor)) * 0.15)
+        return shimmer
+
+    def apply_shimmer_to_color(self, color):
+        """Apply shimmer brightness to a color tuple"""
+        shimmer = self.get_shimmer_factor()
+        return tuple(min(255, int(c * shimmer)) for c in color)
     
     def draw_squid_enemy(self, screen):
         """Top row - Green squid-like alien (most points) - EVEN BIGGER VERSION"""
         # Main body (green) - expanded further
-        body_color = (0, 200, 0)
-        dark_green = (0, 150, 0)
+        body_color = self.apply_shimmer_to_color((0, 200, 0))
+        dark_green = self.apply_shimmer_to_color((0, 150, 0))
         
         # Body outline - made bigger
         pygame.draw.rect(screen, body_color, (self.x + 3, self.y + 2, 39, 26))
@@ -6840,8 +6860,8 @@ class Enemy:
     def draw_crab_enemy(self, screen):
         """Second row - Red crab-like alien - EVEN BIGGER VERSION"""
         # Main body (red) - expanded further
-        body_color = (220, 20, 20)
-        dark_red = (180, 0, 0)
+        body_color = self.apply_shimmer_to_color((220, 20, 20))
+        dark_red = self.apply_shimmer_to_color((180, 0, 0))
         
         # Main body - bigger
         pygame.draw.rect(screen, body_color, (self.x + 2, self.y + 6, 41, 18))
@@ -6871,8 +6891,8 @@ class Enemy:
     def draw_octopus_enemy(self, screen):
         """Middle rows - Blue octopus-like alien - EVEN BIGGER VERSION"""
         # Main body (blue) - expanded further
-        body_color = (20, 100, 220)
-        dark_blue = (0, 60, 180)
+        body_color = self.apply_shimmer_to_color((20, 100, 220))
+        dark_blue = self.apply_shimmer_to_color((0, 60, 180))
         
         # Round head - bigger
         pygame.draw.rect(screen, body_color, (self.x + 5, self.y, 35, 24))
@@ -6902,11 +6922,11 @@ class Enemy:
         """Bottom rows - Simple geometric alien - EVEN BIGGER VERSION"""
         # Main body (mixed colors) - expanded further
         if self.enemy_type == 3:
-            body_color = (200, 100, 0)  # Orange
-            accent_color = (255, 150, 0)
+            body_color = self.apply_shimmer_to_color((200, 100, 0))  # Orange
+            accent_color = self.apply_shimmer_to_color((255, 150, 0))
         else:
-            body_color = (150, 0, 150)  # Purple
-            accent_color = (200, 0, 200)
+            body_color = self.apply_shimmer_to_color((150, 0, 150))  # Purple
+            accent_color = self.apply_shimmer_to_color((200, 0, 200))
         
         # Simple rectangular body - bigger
         pygame.draw.rect(screen, body_color, (self.x + 2, self.y + 4, 41, 22))
