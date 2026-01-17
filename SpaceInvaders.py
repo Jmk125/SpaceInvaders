@@ -8043,6 +8043,7 @@ class DebugMenu:
             'force_boss_type': 'Random',
             'boss_encounter_level': 1,
             'force_rubiks_attack_color': 'Random',
+            'force_special_enemy': 'Random',
             'players': [self._default_player_config(), self._default_player_config(player_id=2)],
         }
 
@@ -8075,6 +8076,8 @@ class DebugMenu:
             {'type': 'bool', 'label': 'Force Boss Level', 'path': ('force_boss_level',)},
             {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss', 'SnakeBoss'], 'path': ('force_boss_type',)},
             {'type': 'int', 'label': 'Boss Encounter Level', 'path': ('boss_encounter_level',), 'min': 1, 'max': 50, 'step': 1},
+            {'type': 'label', 'label': 'Special Enemy Testing'},
+            {'type': 'choice', 'label': 'Force Last Enemy Type', 'choices': ['Random', 'None', 'Gold', 'Silver'], 'path': ('force_special_enemy',)},
         ]
 
         # Conditionally add Rubik's Cube attack color selector if RubiksCubeBoss is selected
@@ -8532,6 +8535,9 @@ class Game:
         # Set Rubik's Cube attack color override
         self.debug_force_rubiks_attack_color = debug_config.get('force_rubiks_attack_color', 'Random')
 
+        # Set special enemy override
+        self.debug_force_special_enemy = debug_config.get('force_special_enemy', 'Random')
+
         player_configs = debug_config.get('players', [])
         for idx, player in enumerate(self.players):
             if idx >= len(player_configs):
@@ -8912,6 +8918,23 @@ class Game:
             # Don't convert if already special
             if enemy.is_special:
                 return
+
+            # Check for debug override
+            if hasattr(self, 'debug_force_special_enemy'):
+                forced_type = self.debug_force_special_enemy
+                if forced_type == 'Gold':
+                    enemy.make_special('gold')
+                    self.special_enemy_spawned_this_level = True
+                    return
+                elif forced_type == 'Silver':
+                    enemy.make_special('silver')
+                    self.special_enemy_spawned_this_level = True
+                    return
+                elif forced_type == 'None':
+                    # Explicitly no special enemy
+                    self.special_enemy_spawned_this_level = True
+                    return
+                # If 'Random', continue with normal random logic below
 
             # Roll for gold enemy (1/50 chance)
             if random.randint(1, 50) == 1:
