@@ -392,6 +392,12 @@ class UserManager:
 
     def delete_user(self, user_id):
         self.users = [user for user in self.users if user["id"] != user_id]
+        achievement_file = self.get_achievement_filename(user_id)
+        if os.path.exists(achievement_file):
+            try:
+                os.remove(achievement_file)
+            except Exception as e:
+                print(f"Error deleting achievements for user {user_id}: {e}")
         if self.last_user_id == user_id:
             self.last_user_id = self.users[0]["id"] if self.users else None
         self._ensure_default_user()
