@@ -390,6 +390,13 @@ class UserManager:
                 return True
         return False
 
+    def delete_user(self, user_id):
+        self.users = [user for user in self.users if user["id"] != user_id]
+        if self.last_user_id == user_id:
+            self.last_user_id = self.users[0]["id"] if self.users else None
+        self._ensure_default_user()
+        self.save_users()
+
     def get_achievement_filename(self, user_id=None):
         target_id = user_id if user_id is not None else (self.get_active_user() or {}).get("id")
         if target_id is None:
@@ -3907,6 +3914,11 @@ class UserNameInputScreen:
         name = "".join(self.name).rstrip()
         return name if name else "PLAYER"
 
+    def _clear_trailing_letters(self, start_index):
+        for idx in range(start_index, self.max_name_length):
+            self.name[idx] = " "
+            self.current_letter_index[idx] = self.alphabet.index(" ")
+
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -3951,6 +3963,7 @@ class UserNameInputScreen:
             elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                 self.input_mode = "controller"
                 if not self.ok_selected:
+                    self._clear_trailing_letters(self.current_position + 1)
                     self.current_letter_index[self.current_position] = (
                         self.current_letter_index[self.current_position] - 1
                     ) % len(self.alphabet)
@@ -3958,6 +3971,7 @@ class UserNameInputScreen:
             elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                 self.input_mode = "controller"
                 if not self.ok_selected:
+                    self._clear_trailing_letters(self.current_position + 1)
                     self.current_letter_index[self.current_position] = (
                         self.current_letter_index[self.current_position] + 1
                     ) % len(self.alphabet)
@@ -8062,6 +8076,7 @@ class UserMenuScreen:
         self.menu_items.extend([
             {"type": "action", "action": "add", "label": "Add User"},
             {"type": "action", "action": "rename", "label": "Rename User"},
+            {"type": "action", "action": "delete", "label": "Delete User"},
             {"type": "action", "action": "back", "label": "Back"}
         ])
 
@@ -11640,6 +11655,12 @@ def main():
                                     break
                                 name_screen.draw()
                                 clock.tick(60)
+                        user_screen._refresh_menu()
+                    elif user_action == "delete":
+                        selected_user = user_screen.get_selected_user()
+                        if selected_user:
+                            user_manager.delete_user(selected_user["id"])
+                            achievement_manager = AchievementManager(user_manager.get_achievement_filename())
                         user_screen._refresh_menu()
                     elif user_action == "selected":
                         achievement_manager = AchievementManager(user_manager.get_achievement_filename())
