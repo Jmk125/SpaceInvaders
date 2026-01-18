@@ -11057,9 +11057,9 @@ class Game:
                             self.score += 1000
                             self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
 
-                            # Track boss defeat achievement (player 1 only)
+                            # Track boss defeat achievement (all players)
                             boss_name = self.current_boss.__class__.__name__
-                            self.achievement_manager.player_defeated_boss(boss_name)
+                            self.track_for_all_players("player_defeated_boss", boss_name)
 
                             # Clear all enemy bullets immediately when boss is destroyed
                             self.enemy_bullets.clear()
@@ -11205,9 +11205,9 @@ class Game:
                             self.score += 1000
                             self.add_xp(200, main_body_rect.centerx, main_body_rect.centery)
 
-                            # Track boss defeat achievement (player 1 only)
+                            # Track boss defeat achievement (all players)
                             boss_name = self.current_boss.__class__.__name__
-                            self.achievement_manager.player_defeated_boss(boss_name)
+                            self.track_for_all_players("player_defeated_boss", boss_name)
 
                             # Clear all enemy bullets immediately when boss is destroyed
                             self.enemy_bullets.clear()
@@ -11231,7 +11231,7 @@ class Game:
 
                             self.enemies.remove(enemy)
                             if len(self.enemies) == 1:
-                                self.achievement_manager.check_sharp_shooter(1)
+                                self.track_for_all_players("check_sharp_shooter", 1)
                             self.score += 10
                             self.total_enemies_killed += 1
                             self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
@@ -11310,9 +11310,8 @@ class Game:
                         # Track death if player died
                         if was_alive and player.lives <= 0 and i < len(self.player_stats):
                             self.player_stats[i].record_death()
-                            # Track player 1 death for achievements
-                            if player.player_id == 1:
-                                self.achievement_manager.player_died()
+                            # Track player death for achievements
+                            self.track_achievement(player.player_id, "player_died")
                         # Add explosion particles if player died
                         if explosion_particles:
                             self.player_explosion_particles.extend(explosion_particles)
@@ -11347,9 +11346,8 @@ class Game:
                             asteroid.near_miss_triggered = True
                             self.add_xp(10, player_center_x, player_center_y)
                             self.sound_manager.play_sound('levelup')
-                            # Track near miss for player 1 only
-                            if player.player_id == 1:
-                                self.achievement_manager.track_near_miss()
+                            # Track near miss for the player
+                            self.track_achievement(player.player_id, "track_near_miss")
 
                         if asteroid.collides_with_circle(player_center_x, player_center_y, player_radius):
                             was_alive = player.lives > 0
@@ -11376,9 +11374,8 @@ class Game:
                         # Track death if player died
                         if was_alive and player.lives <= 0 and i < len(self.player_stats):
                             self.player_stats[i].record_death()
-                            # Track player 1 death for achievements
-                            if player.player_id == 1:
-                                self.achievement_manager.player_died()
+                            # Track player death for achievements
+                            self.track_achievement(player.player_id, "player_died")
                         # Add explosion particles if player died
                         if explosion_particles:
                             self.player_explosion_particles.extend(explosion_particles)
