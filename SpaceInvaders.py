@@ -317,6 +317,8 @@ class UserManager:
         self.filename = filename
         self.users = []
         self.last_user_id = None
+        self.player1_user_id = None  # User assigned to Player 1 slot (for coop)
+        self.player2_user_id = None  # User assigned to Player 2 slot (for coop)
         self.load_users()
 
     def _generate_next_id(self):
@@ -332,18 +334,29 @@ class UserManager:
                     data = json.load(f)
                     self.users = data.get("users", [])
                     self.last_user_id = data.get("last_user_id")
+                    self.player1_user_id = data.get("player1_user_id")
+                    self.player2_user_id = data.get("player2_user_id")
             except Exception as e:
                 print(f"Error loading users: {e}")
                 self.users = []
                 self.last_user_id = None
+                self.player1_user_id = None
+                self.player2_user_id = None
         if self.last_user_id is not None and not any(user["id"] == self.last_user_id for user in self.users):
             self.last_user_id = None
+        # Validate player slot assignments
+        if self.player1_user_id is not None and not any(user["id"] == self.player1_user_id for user in self.users):
+            self.player1_user_id = None
+        if self.player2_user_id is not None and not any(user["id"] == self.player2_user_id for user in self.users):
+            self.player2_user_id = None
 
     def save_users(self):
         """Save users to file"""
         data = {
             "users": self.users,
-            "last_user_id": self.last_user_id
+            "last_user_id": self.last_user_id,
+            "player1_user_id": self.player1_user_id,
+            "player2_user_id": self.player2_user_id
         }
         try:
             with open(self.filename, 'w') as f:
@@ -395,6 +408,11 @@ class UserManager:
                 print(f"Error deleting achievements for user {user_id}: {e}")
         if self.last_user_id == user_id:
             self.last_user_id = self.users[0]["id"] if self.users else None
+        # Clear player slot assignments if this user was assigned
+        if self.player1_user_id == user_id:
+            self.player1_user_id = None
+        if self.player2_user_id == user_id:
+            self.player2_user_id = None
         self.save_users()
 
     def get_achievement_filename(self, user_id=None):
@@ -402,6 +420,35 @@ class UserManager:
         if target_id is None:
             return None
         return f"achievements_{target_id}.json"
+
+    def set_player_slot(self, player_num, user_id):
+        """Assign a user to a player slot (1 or 2)"""
+        if user_id is not None and not any(user["id"] == user_id for user in self.users):
+            return False
+
+        if player_num == 1:
+            self.player1_user_id = user_id
+        elif player_num == 2:
+            self.player2_user_id = user_id
+        else:
+            return False
+
+        self.save_users()
+        return True
+
+    def get_player_slot_user(self, player_num):
+        """Get the user assigned to a player slot (1 or 2)"""
+        user_id = self.player1_user_id if player_num == 1 else self.player2_user_id
+        if user_id is None:
+            return None
+        for user in self.users:
+            if user["id"] == user_id:
+                return user
+        return None
+
+    def clear_player_slot(self, player_num):
+        """Clear a player slot assignment"""
+        return self.set_player_slot(player_num, None)
 
 
 class StarField:
@@ -1557,16 +1604,18 @@ class FloatingText:
 
 class AchievementNotification:
     """Achievement unlock notification (RetroAchievements style)"""
-    def __init__(self, achievement, duration=3000, stack_index=0):
+    def __init__(self, achievement, duration=3000, stack_index=0, player_id=None):
         self.achievement = achievement
         self.duration = duration
         self.start_time = pygame.time.get_ticks()
+        self.player_id = player_id
         self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.font_text = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)
 
         # Position at top-middle of screen, stacked vertically if multiple
-        # Box height is 120, stack with 10px gap between notifications
-        self.stack_spacing = 130
+        # Box height is 140 (with player label), stack with 10px gap between notifications
+        self.stack_spacing = 150
         self.base_y = 50
         self.y = self.base_y + (stack_index * self.stack_spacing)
         self.target_y = self.base_y + (stack_index * self.stack_spacing)
@@ -1596,20 +1645,33 @@ class AchievementNotification:
 
     def draw(self, screen):
         """Draw the achievement notification"""
-        # Draw "ACHIEVEMENT UNLOCKED" header
+        # Determine player color and label
+        if self.player_id == 1:
+            player_color = GREEN
+            player_label = "PLAYER 1"
+        elif self.player_id == 2:
+            player_color = (100, 150, 255)  # Blue color for Player 2
+            player_label = "PLAYER 2"
+        else:
+            player_color = GOLD
+            player_label = None
+
+        # Create text surfaces
+        player_text = self.font_small.render(player_label, True, player_color) if player_label else None
         header_text = self.font_text.render("ACHIEVEMENT UNLOCKED", True, GOLD)
         name_text = self.font_title.render(self.achievement.name, True, WHITE)
         desc_text = self.font_text.render(self.achievement.description, True, GRAY)
-        max_text_width = max(
-            header_text.get_width(),
-            name_text.get_width(),
-            desc_text.get_width()
-        )
 
-        # Background box (expand width if needed for long text)
+        # Calculate max width including player label if present
+        text_widths = [header_text.get_width(), name_text.get_width(), desc_text.get_width()]
+        if player_text:
+            text_widths.append(player_text.get_width())
+        max_text_width = max(text_widths)
+
+        # Background box (expand width and height if needed for player label)
         box_padding_x = 30
         box_width = max(600, max_text_width + (box_padding_x * 2))
-        box_height = 120
+        box_height = 140 if player_label else 120
         box_x = self.x - box_width // 2
         box_y = int(self.y)
 
@@ -1619,32 +1681,45 @@ class AchievementNotification:
         background.fill((20, 20, 40))
         screen.blit(background, (box_x, box_y))
 
-        # Draw border
-        pygame.draw.rect(screen, GOLD, (box_x, box_y, box_width, box_height), 3)
+        # Draw border with player color
+        border_color = player_color if player_label else GOLD
+        pygame.draw.rect(screen, border_color, (box_x, box_y, box_width, box_height), 3)
 
-        header_rect = header_text.get_rect(center=(self.x, box_y + 25))
+        # Draw player label if present
+        y_offset = 15 if player_label else 0
+        if player_text:
+            player_rect = player_text.get_rect(center=(self.x, box_y + 15))
+            screen.blit(player_text, player_rect)
+
+        # Draw header
+        header_rect = header_text.get_rect(center=(self.x, box_y + 25 + y_offset))
         screen.blit(header_text, header_rect)
 
         # Draw achievement name
-        name_rect = name_text.get_rect(center=(self.x, box_y + 55))
+        name_rect = name_text.get_rect(center=(self.x, box_y + 55 + y_offset))
         screen.blit(name_text, name_rect)
 
         # Draw achievement description
-        desc_rect = desc_text.get_rect(center=(self.x, box_y + 85))
+        desc_rect = desc_text.get_rect(center=(self.x, box_y + 85 + y_offset))
         screen.blit(desc_text, desc_rect)
 
 
 class PauseMenu:
     """Pause menu overlay with hold-to-resume"""
-    def __init__(self, screen, sound_manager, key_bindings=None, controllers=None):
+    def __init__(self, screen, sound_manager, key_bindings=None, controllers=None, coop_mode=False):
         self.screen = screen
         self.sound_manager = sound_manager
         self.key_bindings = key_bindings if key_bindings else {}
         self.controllers = controllers if controllers else []
+        self.coop_mode = coop_mode
         self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.font_item = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
-        self.menu_items = ["Resume (hold)", "Achievements", "Settings", "Quit"]
+        # Adjust menu items based on coop mode
+        if coop_mode:
+            self.menu_items = ["Resume (hold)", "P1 Achievements", "P2 Achievements", "Settings", "Quit"]
+        else:
+            self.menu_items = ["Resume (hold)", "Achievements", "Settings", "Quit"]
         self.confirm_items = ["Save & Quit", "Quit Without Saving", "Cancel"]
         self.menu_state = "main"
         self.selected_index = 0
@@ -8137,6 +8212,8 @@ class UserMenuScreen:
             {"type": "action", "action": "add", "label": "Add User"},
             {"type": "action", "action": "rename", "label": "Rename User"},
             {"type": "action", "action": "delete", "label": "Delete User"},
+            {"type": "action", "action": "assign_p1", "label": "Assign to Player 1"},
+            {"type": "action", "action": "assign_p2", "label": "Assign to Player 2"},
             {"type": "action", "action": "back", "label": "Back"}
         ])
 
@@ -8211,12 +8288,25 @@ class UserMenuScreen:
         spacing = 55
 
         active_user = self.user_manager.get_active_user()
+        p1_user = self.user_manager.get_player_slot_user(1)
+        p2_user = self.user_manager.get_player_slot_user(2)
 
         for i, item in enumerate(self.menu_items):
             color = YELLOW if i == self.selected_index else WHITE
             label = item["label"] if item["type"] == "action" else item["user"]["name"]
-            if item["type"] == "user" and active_user and item["user"]["id"] == active_user["id"]:
-                label = f"{label} (Active)"
+
+            # Add player slot indicators and active status for users
+            if item["type"] == "user":
+                tags = []
+                if active_user and item["user"]["id"] == active_user["id"]:
+                    tags.append("Active")
+                if p1_user and item["user"]["id"] == p1_user["id"]:
+                    tags.append("P1")
+                if p2_user and item["user"]["id"] == p2_user["id"]:
+                    tags.append("P2")
+                if tags:
+                    label = f"{label} ({', '.join(tags)})"
+
             option_text = self.font_medium.render(label, True, color)
             option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
             self.screen.blit(option_text, option_rect)
@@ -9090,7 +9180,7 @@ def is_button_pressed(event, key_bindings, button_binding_key, threshold=0.5):
     return False
 
 class Game:
-    def __init__(self, score_manager, sound_manager, achievement_manager=None, key_bindings=None):
+    def __init__(self, score_manager, sound_manager, achievement_manager=None, achievement_managers=None, key_bindings=None):
         self.screen = create_display(fullscreen=True)
 
         pygame.display.set_caption("Place Invaders")
@@ -9109,7 +9199,13 @@ class Game:
         self.enemies_killed_this_level = 0
         self.score_manager = score_manager
         self.sound_manager = sound_manager
-        self.achievement_manager = achievement_manager if achievement_manager else AchievementManager()
+        # Support both single and multi-player achievement tracking
+        if achievement_managers:
+            self.achievement_managers = achievement_managers
+        elif achievement_manager:
+            self.achievement_managers = {1: achievement_manager}
+        else:
+            self.achievement_managers = {1: AchievementManager()}
 
         # Key bindings for player controls
         if key_bindings is None:
@@ -9204,6 +9300,25 @@ class Game:
         # Starfield background
         self.starfield = StarField()
 
+    def get_achievement_manager(self, player_id):
+        """Get achievement manager for a specific player"""
+        return self.achievement_managers.get(player_id)
+
+    def track_achievement(self, player_id, method_name, *args, **kwargs):
+        """Helper to track achievements for a specific player"""
+        manager = self.get_achievement_manager(player_id)
+        if manager:
+            method = getattr(manager, method_name, None)
+            if method:
+                method(*args, **kwargs)
+
+    def track_for_all_players(self, method_name, *args, **kwargs):
+        """Helper to track achievements for all active players"""
+        for player_id, manager in self.achievement_managers.items():
+            method = getattr(manager, method_name, None)
+            if method:
+                method(*args, **kwargs)
+
     def scan_controllers(self):
         self.controllers = []
         for i in range(pygame.joystick.get_count()):
@@ -9213,7 +9328,7 @@ class Game:
 
     def open_pause_menu(self):
         if not self.pause_menu:
-            self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers)
+            self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers, coop_mode=self.coop_mode)
         self.pause_menu.close_confirm_quit()
         self.pause_menu.selected_index = 0
         self.pause_menu.reset_hold()
@@ -9226,8 +9341,9 @@ class Game:
         self.players = []
         self.player_stats = []  # Reset stats
 
-        # Start new achievement run
-        self.achievement_manager.start_new_run(is_coop=self.coop_mode)
+        # Start new achievement run for all active managers
+        for player_id, manager in self.achievement_managers.items():
+            manager.start_new_run(is_coop=self.coop_mode)
 
         # Delete any existing save file when starting a new game
         if os.path.exists("savegame.json"):
@@ -9266,12 +9382,13 @@ class Game:
 
         # Set levels_cleared to match the starting level (levels before current level)
         if 'start_level' in debug_config and debug_config['start_level'] > 1:
-            self.achievement_manager.global_stats['levels_cleared'] = max(
-                self.achievement_manager.global_stats.get('levels_cleared', 0),
-                self.level - 1
-            )
-            self.achievement_manager.run_stats["levels_cleared"] = self.level - 1
-            self.achievement_manager.track_run_stat("levels_cleared", self.level - 1)
+            for manager in self.achievement_managers.values():
+                manager.global_stats['levels_cleared'] = max(
+                    manager.global_stats.get('levels_cleared', 0),
+                    self.level - 1
+                )
+                manager.run_stats["levels_cleared"] = self.level - 1
+                manager.track_run_stat("levels_cleared", self.level - 1)
 
         xp_level = max(1, debug_config.get('xp_level', self.xp_system.level))
         self.xp_system.level = xp_level
@@ -9616,7 +9733,7 @@ class Game:
         else:
             self.is_boss_level = self.is_level_a_boss_level(self.level)
         self.boss_shield_granted = False
-        self.achievement_manager.start_level(self.is_boss_level)
+        self.track_for_all_players("start_level", self.is_boss_level)
 
         if self.is_boss_level:
             # ADDED: Show UFO warning before boss level
@@ -9781,23 +9898,23 @@ class Game:
 
     def track_shot_at_last_enemy(self, player_id=None):
         """Track shots fired when only one enemy remains (for Sharp Shooter achievement)."""
-        if player_id != 1:
+        if player_id is None:
             return
         if not self.is_boss_level and len(self.enemies) == 1:
-            self.achievement_manager.track_shot_at_last_enemy()
+            self.track_achievement(player_id, "track_shot_at_last_enemy")
 
     def track_shot_for_achievements(self, player_id, shot_stat_type):
-        """Track shots for achievements (player 1 only)."""
-        if player_id != 1:
+        """Track shots for achievements for the specific player."""
+        if player_id is None:
             return
         if shot_stat_type != 'laser':
-            self.achievement_manager.track_pinpoint_shot()
+            self.track_achievement(player_id, "track_pinpoint_shot")
         if shot_stat_type == 'rapid':
-            self.achievement_manager.track_cumulative("rapid_fire_shots", 1)
+            self.track_achievement(player_id, "track_cumulative", "rapid_fire_shots", 1)
         elif shot_stat_type == 'multi':
-            self.achievement_manager.track_cumulative("multi_shot_shots", 1)
+            self.track_achievement(player_id, "track_cumulative", "multi_shot_shots", 1)
         elif shot_stat_type == 'laser':
-            self.achievement_manager.track_cumulative("laser_powerup_shots", 1)
+            self.track_achievement(player_id, "track_cumulative", "laser_powerup_shots", 1)
 
     def grant_post_boss_shield(self):
         """Give each player a one-hit shield after defeating a boss"""
@@ -9834,8 +9951,8 @@ class Game:
             self.pending_level_up = True
             print(f"Player leveled up! XP Level: {self.xp_system.level}, Game Level: {self.level}")  # Debug
 
-            # Track XP level achievement
-            self.achievement_manager.track_xp_level(self.xp_system.level)
+            # Track XP level achievement for all players
+            self.track_for_all_players("track_xp_level", self.xp_system.level)
 
             # PLAY LEVEL UP SOUND
             if self.sound_manager:
@@ -10128,29 +10245,29 @@ class Game:
                 self.pending_level_up = False  # Clear the flag
                 del self.level_up_screen
 
-                # Check if player 1 has maxed any upgrades (for achievements)
-                if self.players:
-                    player1_upgrades = self.players[0].upgrades
-                    self.achievement_manager.track_upgrade_maxed("fire_rate", player1_upgrades)
-                    self.achievement_manager.track_upgrade_maxed("shot_speed", player1_upgrades)
-                    self.achievement_manager.track_upgrade_maxed("movement_speed", player1_upgrades)
-                    self.achievement_manager.track_upgrade_maxed("powerup_duration", player1_upgrades)
+                # Check if players have maxed any upgrades (for achievements)
+                for player in self.players:
+                    player_upgrades = player.upgrades
+                    self.track_achievement(player.player_id, "track_upgrade_maxed", "fire_rate", player_upgrades)
+                    self.track_achievement(player.player_id, "track_upgrade_maxed", "shot_speed", player_upgrades)
+                    self.track_achievement(player.player_id, "track_upgrade_maxed", "movement_speed", player_upgrades)
+                    self.track_achievement(player.player_id, "track_upgrade_maxed", "powerup_duration", player_upgrades)
 
                     # Track specific powerup selections
-                    if player1_upgrades.powerup_spawn_level > 0:
-                        self.achievement_manager.track_powerup_selection("powerup_spawn")
-                    if player1_upgrades.ammo_capacity_level > 0:
-                        self.achievement_manager.track_powerup_selection("ammo_capacity")
-                    if player1_upgrades.auto_fire_level > 0:
-                        self.achievement_manager.track_powerup_selection("auto_fire")
-                    if player1_upgrades.extra_bullet_level > 0:
-                        self.achievement_manager.track_powerup_selection("extra_bullet")
-                    if player1_upgrades.reinforced_barriers_level > 0:
-                        self.achievement_manager.track_powerup_selection("reinforced_barriers")
-                    if player1_upgrades.boss_damage_level > 0:
-                        self.achievement_manager.track_powerup_selection("boss_damage")
-                    if self.players[0].has_boss_shield_upgrade:
-                        self.achievement_manager.track_powerup_selection("boss_shield")
+                    if player_upgrades.powerup_spawn_level > 0:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "powerup_spawn")
+                    if player_upgrades.ammo_capacity_level > 0:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "ammo_capacity")
+                    if player_upgrades.auto_fire_level > 0:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "auto_fire")
+                    if player_upgrades.extra_bullet_level > 0:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "extra_bullet")
+                    if player_upgrades.reinforced_barriers_level > 0:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "reinforced_barriers")
+                    if player_upgrades.boss_damage_level > 0:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "boss_damage")
+                    if player.has_boss_shield_upgrade:
+                        self.track_achievement(player.player_id, "track_powerup_selection", "boss_shield")
 
                 # DEBUG: Log powerup stats before advancing to next level
                 if self.enemies_killed_this_level > 0:
@@ -10417,17 +10534,17 @@ class Game:
             self.level += 1
             print(f"Advanced to game level {self.level}")  # Debug
 
-            # Track level completion for achievements (player 1 flawless tracking)
-            self.achievement_manager.player_completed_level(completed_level)
+            # Track level completion for achievements (all players)
+            self.track_for_all_players("player_completed_level", completed_level)
 
             # Check laser-only level achievement
-            self.achievement_manager.check_laser_only_level(self.is_boss_level)
+            self.track_for_all_players("check_laser_only_level", self.is_boss_level)
 
             # Check sharp shooter achievement (killed last enemy with one shot)
-            self.achievement_manager.check_sharp_shooter(0)  # 0 enemies remaining
+            self.track_for_all_players("check_sharp_shooter", 0)  # 0 enemies remaining
 
             # Check pinpoint accuracy achievement
-            self.achievement_manager.check_pinpoint_accuracy(self.is_boss_level)
+            self.track_for_all_players("check_pinpoint_accuracy", self.is_boss_level)
 
             # Reset powerup tracking for new level
             self.powerups_spawned_this_level = 0
@@ -10465,10 +10582,11 @@ class Game:
             self.game_over_time = pygame.time.get_ticks()  # ADDED: Record when game over occurred
 
             # Track final score for achievements
-            self.achievement_manager.track_milestone("max_score", self.score)
+            self.track_for_all_players("track_milestone", "max_score", self.score)
 
             # Save achievements
-            self.achievement_manager.save()
+            for manager in self.achievement_managers.values():
+                manager.save()
 
             # Delete save file on game over
             if os.path.exists("savegame.json"):
@@ -10537,17 +10655,18 @@ class Game:
         self.floating_texts = [text for text in self.floating_texts if text.update()]
 
         # Track current score for achievements (so notifications appear during gameplay)
-        self.achievement_manager.track_milestone("max_score", self.score)
+        self.track_for_all_players("track_milestone", "max_score", self.score)
 
         # Check for newly unlocked achievements and create notifications
-        newly_unlocked = self.achievement_manager.get_newly_unlocked()
-        for i, achievement in enumerate(newly_unlocked):
-            # Stack notifications vertically - use current number of active notifications as stack index
-            stack_index = len(self.achievement_notifications) + i
-            notification = AchievementNotification(achievement, stack_index=stack_index)
-            self.achievement_notifications.append(notification)
-            self.sound_manager.play_sound('powerup')  # Play a sound for achievement unlock
-            self.achievement_manager.save()  # Save immediately when achievement unlocks
+        for player_id, manager in self.achievement_managers.items():
+            newly_unlocked = manager.get_newly_unlocked()
+            for achievement in newly_unlocked:
+                # Stack notifications vertically - use current number of active notifications as stack index
+                stack_index = len(self.achievement_notifications)
+                notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id)
+                self.achievement_notifications.append(notification)
+                self.sound_manager.play_sound('powerup')  # Play a sound for achievement unlock
+                manager.save()  # Save immediately when achievement unlocks
 
         # Update achievement notifications
         self.achievement_notifications = [notif for notif in self.achievement_notifications if notif.update()]
@@ -10638,12 +10757,12 @@ class Game:
                 if self.current_boss.destruction_complete and not hasattr(self, '_asteroid_boss_tracked'):
                     # Track boss defeat immediately when completion starts (not when it finishes)
                     boss_name = self.current_boss.__class__.__name__
-                    self.achievement_manager.player_defeated_boss(boss_name)
+                    self.track_for_all_players("player_defeated_boss", boss_name)
                     self._asteroid_boss_tracked = True  # Prevent duplicate tracking
             elif isinstance(self.current_boss, RubiksCubeBoss):
                 if self.current_boss.destruction_complete and not hasattr(self, '_rubiks_boss_tracked'):
                     boss_name = self.current_boss.__class__.__name__
-                    self.achievement_manager.player_defeated_boss(boss_name)
+                    self.track_for_all_players("player_defeated_boss", boss_name)
                     self._rubiks_boss_tracked = True
 
             # Boss shooting
@@ -10754,9 +10873,9 @@ class Game:
                                 head = self.current_boss.segments[0] if self.current_boss.segments else {'x': SCREEN_WIDTH // 2, 'y': 200}
                                 self.add_xp(200, int(head['x']), int(head['y']))
 
-                                # Track boss defeat achievement (player 1 only)
+                                # Track boss defeat achievement (all players)
                                 boss_name = self.current_boss.__class__.__name__
-                                self.achievement_manager.player_defeated_boss(boss_name)
+                                self.track_for_all_players("player_defeated_boss", boss_name)
 
                                 # Clear all enemy bullets
                                 self.enemy_bullets.clear()
@@ -10907,7 +11026,7 @@ class Game:
 
                         self.enemies.remove(enemy)
                         if len(self.enemies) == 1:
-                            self.achievement_manager.check_sharp_shooter(1)
+                            self.track_for_all_players("check_sharp_shooter", 1)
                         self.score += 10
                         self.total_enemies_killed += 1
                         self.enemies_killed_this_level += 1  # DEBUG: Track kills per level
@@ -10940,12 +11059,11 @@ class Game:
                         # Track enemy kill in player stats
                         if bullet.owner_id and bullet.owner_id <= len(self.player_stats):
                             self.player_stats[bullet.owner_id - 1].record_enemy_kill()
-                            # Track achievement for player 1 only
-                            if bullet.owner_id == 1:
-                                self.achievement_manager.track_cumulative("total_kills", 1)
-                                # Track as non-laser kill for laser-only achievement
-                                self.achievement_manager.track_enemy_kill_by_weapon(is_laser=False)
-                                self.achievement_manager.track_pinpoint_kill()
+                            # Track achievement for the player who made the kill
+                            self.track_achievement(bullet.owner_id, "track_cumulative", "total_kills", 1)
+                            # Track as non-laser kill for laser-only achievement
+                            self.track_achievement(bullet.owner_id, "track_enemy_kill_by_weapon", is_laser=False)
+                            self.track_achievement(bullet.owner_id, "track_pinpoint_kill")
                         if bullet.pierce_hits > 0:
                             bullet.pierce_hits -= 1
                         break
@@ -11053,11 +11171,10 @@ class Game:
                             # Track enemy kill in player stats
                             if laser.owner_player_id and laser.owner_player_id <= len(self.player_stats):
                                 self.player_stats[laser.owner_player_id - 1].record_enemy_kill()
-                                # Track achievement for player 1 only
-                                if laser.owner_player_id == 1:
-                                    self.achievement_manager.track_cumulative("total_kills", 1)
-                                    # Track as laser kill for laser-only achievement
-                                    self.achievement_manager.track_enemy_kill_by_weapon(is_laser=True)
+                                # Track achievement for the player who made the kill
+                                self.track_achievement(laser.owner_player_id, "track_cumulative", "total_kills", 1)
+                                # Track as laser kill for laser-only achievement
+                                self.track_achievement(laser.owner_player_id, "track_enemy_kill_by_weapon", is_laser=True)
 
         self.update_enemy_speed()
                         
@@ -11614,12 +11731,38 @@ class Game:
                     self.update()
                 self.draw()
                 delta_time = self.clock.tick(60) / 1000.0  # Convert to seconds
-                # Track play time for achievement
-                self.achievement_manager.track_play_time(delta_time)
-                if self.players and self.players[0].invincible:
-                    self.achievement_manager.track_invincibility_time(delta_time)
+                # Track play time for all players
+                self.track_for_all_players("track_play_time", delta_time)
+                # Track invincibility time for each player who is invincible
+                for player in self.players:
+                    if player.invincible:
+                        self.track_achievement(player.player_id, "track_invincibility_time", delta_time)
 
         return result
+
+def create_achievement_managers(user_manager):
+    """Create achievement managers for player slots and active user"""
+    managers = {}
+
+    # Create manager for Player 1 slot (if assigned)
+    p1_user = user_manager.get_player_slot_user(1)
+    if p1_user:
+        managers[1] = AchievementManager(user_manager.get_achievement_filename(p1_user["id"]))
+
+    # Create manager for Player 2 slot (if assigned)
+    p2_user = user_manager.get_player_slot_user(2)
+    if p2_user:
+        managers[2] = AchievementManager(user_manager.get_achievement_filename(p2_user["id"]))
+
+    # If no player slots assigned, use active user for single player (Player 1)
+    if not managers:
+        active_user = user_manager.get_active_user()
+        if active_user:
+            managers[1] = AchievementManager(user_manager.get_achievement_filename(active_user["id"]))
+        else:
+            managers[1] = AchievementManager(None)
+
+    return managers
 
 def main():
     score_manager = HighScoreManager()
@@ -11627,9 +11770,10 @@ def main():
     # Initialize sound manager
     sound_manager = SoundManager()
 
-    # Initialize user manager and achievement manager for active user
+    # Initialize user manager and achievement managers
     user_manager = UserManager()
     achievement_manager = AchievementManager(user_manager.get_achievement_filename())
+    achievement_managers = create_achievement_managers(user_manager)
 
     # Initialize profile manager and load last profile (or defaults)
     profile_manager = ProfileManager()
@@ -11727,6 +11871,16 @@ def main():
                             user_manager.delete_user(selected_user["id"])
                             achievement_manager = AchievementManager(user_manager.get_achievement_filename())
                         user_screen._refresh_menu()
+                    elif user_action == "assign_p1":
+                        selected_user = user_screen.get_selected_user()
+                        if selected_user:
+                            user_manager.set_player_slot(1, selected_user["id"])
+                        user_screen._refresh_menu()
+                    elif user_action == "assign_p2":
+                        selected_user = user_screen.get_selected_user()
+                        if selected_user:
+                            user_manager.set_player_slot(2, selected_user["id"])
+                        user_screen._refresh_menu()
                     elif user_action == "selected":
                         achievement_manager = AchievementManager(user_manager.get_achievement_filename())
                         break
@@ -11792,7 +11946,8 @@ def main():
                     sys.exit()
                 elif debug_action == "start":
                     game_mode = debug_config.get('mode', 'single')
-                    game = Game(score_manager, sound_manager, achievement_manager, key_bindings)
+                    achievement_managers = create_achievement_managers(user_manager)
+                    game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
                     game.setup_game(game_mode, debug_config)
                     result = game.run()
 
@@ -11805,7 +11960,8 @@ def main():
                     break
             elif action == "continue":
                 # Load saved game
-                game = Game(score_manager, sound_manager, achievement_manager, key_bindings)
+                achievement_managers = create_achievement_managers(user_manager)
+                game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
                 try:
                     game.load_game()
                     result = game.run()
@@ -11819,7 +11975,8 @@ def main():
                     print("Save file not found!")
                     break  # Go back to title screen
             elif action in ["single", "coop"]:
-                game = Game(score_manager, sound_manager, achievement_manager, key_bindings)
+                achievement_managers = create_achievement_managers(user_manager)
+                game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
                 game.setup_game(action)
                 result = game.run()
 
