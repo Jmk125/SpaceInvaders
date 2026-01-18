@@ -324,13 +324,6 @@ class UserManager:
             return 1
         return max(user["id"] for user in self.users) + 1
 
-    def _ensure_default_user(self):
-        if not self.users:
-            default_user = {"id": 1, "name": "Player 1"}
-            self.users = [default_user]
-            self.last_user_id = default_user["id"]
-            self.save_users()
-
     def load_users(self):
         """Load users from file"""
         if os.path.exists(self.filename):
@@ -343,7 +336,8 @@ class UserManager:
                 print(f"Error loading users: {e}")
                 self.users = []
                 self.last_user_id = None
-        self._ensure_default_user()
+        if self.last_user_id is not None and not any(user["id"] == self.last_user_id for user in self.users):
+            self.last_user_id = None
 
     def save_users(self):
         """Save users to file"""
@@ -361,13 +355,14 @@ class UserManager:
         return list(self.users)
 
     def get_active_user(self):
-        if self.last_user_id is None and self.users:
-            self.last_user_id = self.users[0]["id"]
-            self.save_users()
+        if not self.users:
+            return None
+        if self.last_user_id is None:
+            return None
         for user in self.users:
             if user["id"] == self.last_user_id:
                 return user
-        return self.users[0] if self.users else None
+        return None
 
     def set_active_user(self, user_id):
         if any(user["id"] == user_id for user in self.users):
@@ -400,13 +395,12 @@ class UserManager:
                 print(f"Error deleting achievements for user {user_id}: {e}")
         if self.last_user_id == user_id:
             self.last_user_id = self.users[0]["id"] if self.users else None
-        self._ensure_default_user()
         self.save_users()
 
     def get_achievement_filename(self, user_id=None):
         target_id = user_id if user_id is not None else (self.get_active_user() or {}).get("id")
         if target_id is None:
-            target_id = 1
+            return None
         return f"achievements_{target_id}.json"
 
 
@@ -1494,6 +1488,8 @@ class AchievementManager:
 
     def save(self):
         """Save achievements to JSON file"""
+        if not self.filename:
+            return
         data = {
             "achievements": {aid: a.to_dict() for aid, a in self.achievements.items()},
             "global_stats": self.global_stats,
@@ -1509,7 +1505,7 @@ class AchievementManager:
 
     def load(self):
         """Load achievements from JSON file"""
-        if not os.path.exists(self.filename):
+        if not self.filename or not os.path.exists(self.filename):
             return
 
         try:
@@ -4558,6 +4554,58 @@ class AchievementScreen:
             inst_text = self.font_tiny.render(inst, True, GRAY)
             inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, inst_y + i * 25))
             self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
+class NoUserAchievementScreen:
+    """Display message when no user exists for achievements"""
+    def __init__(self, screen, sound_manager, key_bindings=None):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 32)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
+
+        self.starfield = StarField(direction='horizontal')
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+            elif event.type == pygame.JOYBUTTONDOWN:
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 1:
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        title_text = self.font_large.render("ACHIEVEMENTS", True, GOLD)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 180))
+        self.screen.blit(title_text, title_rect)
+
+        message_lines = [
+            "No user found.",
+            "Create a user first to save achievements."
+        ]
+        for idx, line in enumerate(message_lines):
+            line_text = self.font_medium.render(line, True, WHITE)
+            line_rect = line_text.get_rect(center=(SCREEN_WIDTH // 2, 360 + idx * 50))
+            self.screen.blit(line_text, line_rect)
+
+        inst_text = self.font_small.render("Press ESC/ENTER or B/A to return", True, GRAY)
+        inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 920))
+        self.screen.blit(inst_text, inst_rect)
 
         pygame.display.flip()
 
@@ -8098,6 +8146,8 @@ class UserMenuScreen:
                 if item["type"] == "user" and item["user"]["id"] == active_user["id"]:
                     self.selected_index = idx
                     break
+        elif self.menu_items:
+            self.selected_index = 0
 
     def get_selected_user(self):
         if self.menu_items and self.menu_items[self.selected_index]["type"] == "user":
@@ -8666,8 +8716,8 @@ class TitleScreen:
             self.screen.blit(coop_text, coop_rect)
 
         active_user = self.user_manager.get_active_user()
-        active_user_name = active_user["name"] if active_user else "Player 1"
-        current_title = self.achievement_manager.get_current_title()
+        active_user_name = active_user["name"] if active_user else "No User"
+        current_title = self.achievement_manager.get_current_title() if active_user else "N/A"
 
         user_text = self.font_small.render(f"User: {active_user_name}", True, CYAN)
         title_text = self.font_small.render(f"Title: {current_title}", True, CYAN)
@@ -11610,7 +11660,10 @@ def main():
                     clock.tick(60)
                 break
             elif action == "achievements":
-                achievement_screen = AchievementScreen(screen, achievement_manager, sound_manager, key_bindings=key_bindings)
+                if user_manager.get_active_user() is None:
+                    achievement_screen = NoUserAchievementScreen(screen, sound_manager, key_bindings=key_bindings)
+                else:
+                    achievement_screen = AchievementScreen(screen, achievement_manager, sound_manager, key_bindings=key_bindings)
                 while True:
                     ach_action = achievement_screen.handle_events()
                     if ach_action == "back":
