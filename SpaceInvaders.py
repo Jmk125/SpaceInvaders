@@ -4037,8 +4037,18 @@ class AchievementScreen:
         self.scroll_hold_start = 0
         self.scroll_hold_last = 0
         self.scroll_hold_interval = 120
-        self.scroll_hold_fast_interval = 45
+        self.scroll_hold_fast_interval = 60
+        self.scroll_hold_faster_interval = 30
         self.scroll_hold_fast_delay = 2000
+        self.scroll_hold_faster_delay = 4000
+
+        self.controller = None
+        if pygame.joystick.get_count() > 0:
+            try:
+                self.controller = pygame.joystick.Joystick(0)
+                self.controller.init()
+            except pygame.error:
+                self.controller = None
 
         # Starfield background
         self.starfield = StarField(direction='horizontal')
@@ -4071,6 +4081,10 @@ class AchievementScreen:
             held = keys[pygame.K_DOWN] or keys[pygame.K_s]
 
         if not held:
+            binding_key = 'player1_up_button' if self.scroll_hold_direction < 0 else 'player1_down_button'
+            held = self._is_binding_held(binding_key)
+
+        if not held:
             self.scroll_hold_direction = 0
             return
 
@@ -4079,10 +4093,52 @@ class AchievementScreen:
         interval = self.scroll_hold_interval
         if elapsed >= self.scroll_hold_fast_delay:
             interval = self.scroll_hold_fast_interval
+        if elapsed >= self.scroll_hold_faster_delay:
+            interval = self.scroll_hold_faster_interval
 
         if now - self.scroll_hold_last >= interval:
             self.scroll_hold_last = now
             self._scroll_by(self.scroll_hold_direction)
+
+    def _is_binding_held(self, binding_key, threshold=0.5):
+        if not self.controller:
+            return False
+        button = self.key_bindings.get(binding_key)
+        if button is None:
+            return False
+
+        if isinstance(button, int):
+            if self.controller.get_numbuttons() > button:
+                return self.controller.get_button(button)
+            return False
+
+        if isinstance(button, str):
+            if button in (HAT_UP, HAT_DOWN, HAT_LEFT, HAT_RIGHT):
+                if self.controller.get_numhats() == 0:
+                    return False
+                hat = self.controller.get_hat(0)
+                if button == HAT_UP:
+                    return hat[1] == 1
+                if button == HAT_DOWN:
+                    return hat[1] == -1
+                if button == HAT_LEFT:
+                    return hat[0] == -1
+                if button == HAT_RIGHT:
+                    return hat[0] == 1
+            if button in (AXIS_UP, AXIS_DOWN, AXIS_LEFT, AXIS_RIGHT):
+                if self.controller.get_numaxes() < 2:
+                    return False
+                axis_x = self.controller.get_axis(0)
+                axis_y = self.controller.get_axis(1)
+                if button == AXIS_UP:
+                    return axis_y < -threshold
+                if button == AXIS_DOWN:
+                    return axis_y > threshold
+                if button == AXIS_LEFT:
+                    return axis_x < -threshold
+                if button == AXIS_RIGHT:
+                    return axis_x > threshold
+        return False
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -4111,10 +4167,10 @@ class AchievementScreen:
             # Use remapped button checks
             elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                 self.sound_manager.play_sound('menu_change')
-                self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
+                self._begin_scroll_hold(-1)
             elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
-                    self.sound_manager.play_sound('menu_change')
-                    self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
+                self.sound_manager.play_sound('menu_change')
+                self._begin_scroll_hold(1)
         self._update_scroll_hold()
         return None
 
