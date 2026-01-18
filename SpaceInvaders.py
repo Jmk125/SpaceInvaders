@@ -1543,7 +1543,10 @@ class PauseMenu:
         self.font_item = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
         self.menu_items = ["Resume (hold)", "Achievements", "Settings", "Quit"]
+        self.confirm_items = ["Save & Quit", "Quit Without Saving", "Cancel"]
+        self.menu_state = "main"
         self.selected_index = 0
+        self.confirm_selected_index = 2
         self.hold_start_time = None
         self.hold_duration = 2000
         self.hold_progress = 0.0
@@ -1553,7 +1556,7 @@ class PauseMenu:
         self.hold_progress = 0.0
 
     def _handle_resume_hold(self):
-        if self.menu_items[self.selected_index] != "Resume (hold)":
+        if self.menu_state != "main" or self.menu_items[self.selected_index] != "Resume (hold)":
             self.reset_hold()
             return None
 
@@ -1584,52 +1587,109 @@ class PauseMenu:
 
         return None
 
+    def open_confirm_quit(self):
+        self.menu_state = "confirm_quit"
+        self.confirm_selected_index = 2
+        self.reset_hold()
+
+    def close_confirm_quit(self):
+        self.menu_state = "main"
+        self.reset_hold()
+
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "quit"
             elif event.type == pygame.KEYDOWN:
+                if self.menu_state == "confirm_quit" and event.key == pygame.K_ESCAPE:
+                    self.close_confirm_quit()
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_select')
+                    continue
                 if event.key in (pygame.K_UP, pygame.K_w):
-                    self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                    if self.menu_state == "main":
+                        self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                    else:
+                        self.confirm_selected_index = (self.confirm_selected_index - 1) % len(self.confirm_items)
                     self.reset_hold()
                     if self.sound_manager:
                         self.sound_manager.play_sound('menu_change')
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                    if self.menu_state == "main":
+                        self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                    else:
+                        self.confirm_selected_index = (self.confirm_selected_index + 1) % len(self.confirm_items)
                     self.reset_hold()
                     if self.sound_manager:
                         self.sound_manager.play_sound('menu_change')
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    selected = self.menu_items[self.selected_index]
-                    if selected != "Resume (hold)":
+                    if self.menu_state == "main":
+                        selected = self.menu_items[self.selected_index]
+                        if selected != "Resume (hold)":
+                            if selected == "Quit":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.open_confirm_quit()
+                            else:
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                return selected.lower()
+                    else:
+                        selected = self.confirm_items[self.confirm_selected_index]
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_select')
-                        return selected.lower()
+                        if selected == "Save & Quit":
+                            return "save_and_quit"
+                        if selected == "Quit Without Saving":
+                            return "quit_without_save"
+                        self.close_confirm_quit()
             elif event.type == pygame.JOYBUTTONDOWN:
                 pause_button = self.key_bindings.get('pause_button', 7)
                 if isinstance(pause_button, int) and event.button == pause_button:
                     if self.sound_manager:
                         self.sound_manager.play_sound('menu_select')
                     return "resume"
-                fire_button = self.key_bindings.get('player1_fire_button', 0)
-                if event.button == 0 or (isinstance(fire_button, int) and event.button == fire_button):
-                    selected = self.menu_items[self.selected_index]
-                    if selected != "Resume (hold)":
-                        if self.sound_manager:
-                            self.sound_manager.play_sound('menu_select')
-                        return selected.lower()
-                elif event.button == 1:
+                if self.menu_state == "confirm_quit" and event.button == 1:
                     if self.sound_manager:
                         self.sound_manager.play_sound('menu_select')
-                    return "quit"
+                    self.close_confirm_quit()
+                    continue
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if event.button == 0 or (isinstance(fire_button, int) and event.button == fire_button):
+                    if self.menu_state == "main":
+                        selected = self.menu_items[self.selected_index]
+                        if selected != "Resume (hold)":
+                            if selected == "Quit":
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                self.open_confirm_quit()
+                            else:
+                                if self.sound_manager:
+                                    self.sound_manager.play_sound('menu_select')
+                                return selected.lower()
+                    else:
+                        selected = self.confirm_items[self.confirm_selected_index]
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_select')
+                        if selected == "Save & Quit":
+                            return "save_and_quit"
+                        if selected == "Quit Without Saving":
+                            return "quit_without_save"
+                        self.close_confirm_quit()
             # Check for remapped up/down buttons
             elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
-                self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                if self.menu_state == "main":
+                    self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                else:
+                    self.confirm_selected_index = (self.confirm_selected_index - 1) % len(self.confirm_items)
                 self.reset_hold()
                 if self.sound_manager:
                     self.sound_manager.play_sound('menu_change')
             elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
-                self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                if self.menu_state == "main":
+                    self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                else:
+                    self.confirm_selected_index = (self.confirm_selected_index + 1) % len(self.confirm_items)
                 self.reset_hold()
                 if self.sound_manager:
                     self.sound_manager.play_sound('menu_change')
@@ -1651,27 +1711,45 @@ class PauseMenu:
         self.screen.blit(background, (box_x, box_y))
         pygame.draw.rect(self.screen, GOLD, (box_x, box_y, box_width, box_height), 3)
 
-        title_text = self.font_title.render("PAUSED", True, GOLD)
-        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, box_y + 50))
-        self.screen.blit(title_text, title_rect)
+        if self.menu_state == "main":
+            title_text = self.font_title.render("PAUSED", True, GOLD)
+            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, box_y + 50))
+            self.screen.blit(title_text, title_rect)
 
-        start_y = box_y + 120
-        spacing = 50
+            start_y = box_y + 120
+            spacing = 50
 
-        for i, item in enumerate(self.menu_items):
-            color = YELLOW if i == self.selected_index else WHITE
-            item_text = self.font_item.render(item, True, color)
-            item_rect = item_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
-            self.screen.blit(item_text, item_rect)
+            for i, item in enumerate(self.menu_items):
+                color = YELLOW if i == self.selected_index else WHITE
+                item_text = self.font_item.render(item, True, color)
+                item_rect = item_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
+                self.screen.blit(item_text, item_rect)
 
-            if item == "Resume (hold)":
-                bar_width = 220
-                bar_height = 10
-                bar_x = SCREEN_WIDTH // 2 - bar_width // 2
-                bar_y = item_rect.bottom + 8
-                pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
-                pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, int(bar_width * self.hold_progress), bar_height))
-                pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+                if item == "Resume (hold)":
+                    bar_width = 220
+                    bar_height = 10
+                    bar_x = SCREEN_WIDTH // 2 - bar_width // 2
+                    bar_y = item_rect.bottom + 8
+                    pygame.draw.rect(self.screen, GRAY, (bar_x, bar_y, bar_width, bar_height))
+                    pygame.draw.rect(self.screen, GOLD, (bar_x, bar_y, int(bar_width * self.hold_progress), bar_height))
+                    pygame.draw.rect(self.screen, WHITE, (bar_x, bar_y, bar_width, bar_height), 2)
+        else:
+            title_text = self.font_title.render("QUIT GAME?", True, GOLD)
+            title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, box_y + 50))
+            self.screen.blit(title_text, title_rect)
+
+            prompt_text = self.font_small.render("Save your progress before quitting?", True, WHITE)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, box_y + 90))
+            self.screen.blit(prompt_text, prompt_rect)
+
+            start_y = box_y + 150
+            spacing = 50
+
+            for i, item in enumerate(self.confirm_items):
+                color = YELLOW if i == self.confirm_selected_index else WHITE
+                item_text = self.font_item.render(item, True, color)
+                item_rect = item_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
+                self.screen.blit(item_text, item_rect)
 
 
 class LevelUpScreen:
@@ -7916,6 +7994,7 @@ class TitleScreen:
     def open_pause_menu(self):
         if not self.pause_menu:
             self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers)
+        self.pause_menu.close_confirm_quit()
         self.pause_menu.selected_index = 0
         self.pause_menu.reset_hold()
         if self.sound_manager:
@@ -8534,6 +8613,7 @@ class Game:
     def open_pause_menu(self):
         if not self.pause_menu:
             self.pause_menu = PauseMenu(self.screen, self.sound_manager, self.key_bindings, self.controllers)
+        self.pause_menu.close_confirm_quit()
         self.pause_menu.selected_index = 0
         self.pause_menu.reset_hold()
         if self.sound_manager:
@@ -10842,6 +10922,11 @@ class Game:
                 if pause_action == "resume":
                     self.paused = False
                 elif pause_action == "quit":
+                    result = "title"
+                elif pause_action == "save_and_quit":
+                    self.save_game()
+                    result = "title"
+                elif pause_action == "quit_without_save":
                     result = "title"
                 elif pause_action == "achievements":
                     achievement_screen = AchievementScreen(
