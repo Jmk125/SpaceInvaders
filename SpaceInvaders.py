@@ -3583,32 +3583,32 @@ class NameInputScreen:
             
             # Use remapped button checks for all controller input
             elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
-                    self.input_mode = "controller"
-                    if not self.ok_selected:
-                        self.current_letter_index[self.current_position] = (
-                            self.current_letter_index[self.current_position] - 1
-                        ) % len(self.alphabet)
-                        self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
-                    self.input_mode = "controller"
-                    if not self.ok_selected:
-                        self.current_letter_index[self.current_position] = (
-                            self.current_letter_index[self.current_position] + 1
-                        ) % len(self.alphabet)
-                        self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
-                    self.input_mode = "controller"
-                    if self.ok_selected:
-                        self.ok_selected = False
-                        self.current_position = 2
-                    elif self.current_position > 0:
-                        self.current_position -= 1
-                elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
-                    self.input_mode = "controller"
-                    if self.current_position < 2:
-                        self.current_position += 1
-                    else:
-                        self.ok_selected = True
+                self.input_mode = "controller"
+                if not self.ok_selected:
+                    self.current_letter_index[self.current_position] = (
+                        self.current_letter_index[self.current_position] - 1
+                    ) % len(self.alphabet)
+                    self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self.input_mode = "controller"
+                if not self.ok_selected:
+                    self.current_letter_index[self.current_position] = (
+                        self.current_letter_index[self.current_position] + 1
+                    ) % len(self.alphabet)
+                    self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+            elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                self.input_mode = "controller"
+                if self.ok_selected:
+                    self.ok_selected = False
+                    self.current_position = 2
+                elif self.current_position > 0:
+                    self.current_position -= 1
+            elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                self.input_mode = "controller"
+                if self.current_position < 2:
+                    self.current_position += 1
+                else:
+                    self.ok_selected = True
 
         return None
     
