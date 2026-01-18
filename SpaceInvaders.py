@@ -2073,44 +2073,46 @@ class LevelUpScreen:
                         self.countdown_start = pygame.time.get_ticks()
                         
             # Check for remapped up/down buttons
-            elif self.game_instance:
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                 if not self.is_coop:
-                    # Single player controller - use remapped buttons
-                    if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
-                        if self.sound_manager:
-                            self.sound_manager.play_sound('menu_change')
-                        options = self.get_options_for_player(0)
-                        self.current_selection = (self.current_selection - 1) % len(options)
-                    elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
-                        if self.sound_manager:
-                            self.sound_manager.play_sound('menu_change')
-                        options = self.get_options_for_player(0)
-                        self.current_selection = (self.current_selection + 1) % len(options)
+                    # Single player controller
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                    options = self.get_options_for_player(0)
+                    self.current_selection = (self.current_selection - 1) % len(options)
                 else:
-                    # Co-op controller handling - use remapped buttons for each player
+                    # Co-op player 1
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
-                        if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
-                            if self.sound_manager:
-                                self.sound_manager.play_sound('menu_change')
-                            p1_options = self.get_options_for_player(0)
-                            self.player1_selection = (self.player1_selection - 1) % len(p1_options)
-                        elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
-                            if self.sound_manager:
-                                self.sound_manager.play_sound('menu_change')
-                            p1_options = self.get_options_for_player(0)
-                            self.player1_selection = (self.player1_selection + 1) % len(p1_options)
-
-                    if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
-                        if is_button_pressed(event, self.key_bindings, 'player2_up_button'):
-                            if self.sound_manager:
-                                self.sound_manager.play_sound('menu_change')
-                            p2_options = self.get_options_for_player(1)
-                            self.player2_selection = (self.player2_selection - 1) % len(p2_options)
-                        elif is_button_pressed(event, self.key_bindings, 'player2_down_button'):
-                            if self.sound_manager:
-                                self.sound_manager.play_sound('menu_change')
-                            p2_options = self.get_options_for_player(1)
-                            self.player2_selection = (self.player2_selection + 1) % len(p2_options)
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        p1_options = self.get_options_for_player(0)
+                        self.player1_selection = (self.player1_selection - 1) % len(p1_options)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                if not self.is_coop:
+                    # Single player controller
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                    options = self.get_options_for_player(0)
+                    self.current_selection = (self.current_selection + 1) % len(options)
+                else:
+                    # Co-op player 1
+                    if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        p1_options = self.get_options_for_player(0)
+                        self.player1_selection = (self.player1_selection + 1) % len(p1_options)
+            elif is_button_pressed(event, self.key_bindings, 'player2_up_button'):
+                if self.is_coop and len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                    p2_options = self.get_options_for_player(1)
+                    self.player2_selection = (self.player2_selection - 1) % len(p2_options)
+            elif is_button_pressed(event, self.key_bindings, 'player2_down_button'):
+                if self.is_coop and len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
+                    if self.sound_manager:
+                        self.sound_manager.play_sound('menu_change')
+                    p2_options = self.get_options_for_player(1)
+                    self.player2_selection = (self.player2_selection + 1) % len(p2_options)
 
         return None
         
@@ -3580,8 +3582,7 @@ class NameInputScreen:
                             self.ok_selected = True
             
             # Use remapped button checks for all controller input
-            elif self.game_instance:
-                if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                     self.input_mode = "controller"
                     if not self.ok_selected:
                         self.current_letter_index[self.current_position] = (
@@ -3971,11 +3972,10 @@ class AchievementScreen:
                     self.sound_manager.play_sound('menu_select')
                     return "back"
             # Use remapped button checks
-            elif self.game_instance:
-                if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
-                    self.sound_manager.play_sound('menu_change')
-                    self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
-                elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                     self.sound_manager.play_sound('menu_change')
                     self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
         return None
