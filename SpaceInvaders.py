@@ -186,7 +186,7 @@ COOP_SCORES_FILE = "high_scores_coop.json"
 STAR_COUNT_PER_LAYER = 100  # Number of stars per layer
 STAR_SIZE_MIN = 1  # Minimum star size
 STAR_SIZE_MAX = 3  # Maximum star size
-STAR_SHIMMER_INTENSITY = 0.50  # Shimmer brightness change for stars (0.0 to 1.0)
+STAR_SHIMMER_INTENSITY = 0.70  # Shimmer brightness change for stars (0.0 to 1.0)
 STAR_SHIMMER_BRIGHTEN = False  # If True, stars brighten; if False, stars dim (original brightness is brightest)
 
 # Layer 1 (Back/Darkest/Slowest)
