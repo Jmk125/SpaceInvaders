@@ -3941,6 +3941,7 @@ class UserNameInputScreen:
             elif event.type == pygame.JOYBUTTONDOWN:
                 self.input_mode = "controller"
                 fire_button = self.key_bindings.get('player1_fire_button', 0)
+                pause_button = self.key_bindings.get('pause_button', 7)
                 if isinstance(fire_button, int) and event.button == fire_button:
                     self.sound_manager.play_sound('menu_select')
                     if self.ok_selected:
@@ -3949,6 +3950,11 @@ class UserNameInputScreen:
                         self.current_position += 1
                     else:
                         self.ok_selected = True
+                elif isinstance(pause_button, int) and event.button == pause_button:
+                    self.sound_manager.play_sound('menu_select')
+                    if self.ok_selected:
+                        return self._get_trimmed_name()
+                    self.ok_selected = True
                 elif event.button == 1:  # B button
                     if self.ok_selected:
                         self.ok_selected = False
