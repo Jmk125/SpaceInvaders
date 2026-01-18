@@ -186,6 +186,8 @@ COOP_SCORES_FILE = "high_scores_coop.json"
 STAR_COUNT_PER_LAYER = 100  # Number of stars per layer
 STAR_SIZE_MIN = 1  # Minimum star size
 STAR_SIZE_MAX = 3  # Maximum star size
+STAR_SHIMMER_INTENSITY = 0.50  # Shimmer brightness change for stars (0.0 to 1.0)
+STAR_SHIMMER_BRIGHTEN = False  # If True, stars brighten; if False, stars dim (original brightness is brightest)
 
 # Layer 1 (Back/Darkest/Slowest)
 STAR_LAYER1_BRIGHTNESS = 80  # Darkest (0-255)
@@ -352,7 +354,8 @@ class StarField:
                 star = {
                     'x': random.randint(0, SCREEN_WIDTH),
                     'y': random.randint(0, SCREEN_HEIGHT),
-                    'size': random.randint(STAR_SIZE_MIN, STAR_SIZE_MAX)
+                    'size': random.randint(STAR_SIZE_MIN, STAR_SIZE_MAX),
+                    'shimmer_offset': random.uniform(0, math.pi * 2)
                 }
                 layer['stars'].append(star)
 
@@ -384,12 +387,16 @@ class StarField:
     def draw(self, screen):
         """Draw all three layers of stars with their respective brightness levels."""
         for layer in self.layers:
-            # Create color based on brightness (grayscale)
-            brightness = layer['brightness']
-            color = (brightness, brightness, brightness)
-
             # Draw each star in the layer
             for star in layer['stars']:
+                time_factor = pygame.time.get_ticks() * 0.002 + star['shimmer_offset']
+                sine_wave = (math.sin(time_factor) + 1) / 2
+                if STAR_SHIMMER_BRIGHTEN:
+                    shimmer = 1.0 + (sine_wave * STAR_SHIMMER_INTENSITY)
+                else:
+                    shimmer = 1.0 - (sine_wave * STAR_SHIMMER_INTENSITY)
+                brightness = max(0, min(255, int(layer['brightness'] * shimmer)))
+                color = (brightness, brightness, brightness)
                 pygame.draw.circle(screen, color,
                                  (int(star['x']), int(star['y'])),
                                  star['size'])
