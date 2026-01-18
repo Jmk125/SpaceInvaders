@@ -422,12 +422,18 @@ class UserManager:
         return f"achievements_{target_id}.json"
 
     def set_player_slot(self, player_num, user_id):
-        """Assign a user to a player slot (1 or 2)"""
+        """Assign a user to a player slot (1 or 2)
+
+        When assigning Player 1, automatically sets that user as active.
+        """
         if user_id is not None and not any(user["id"] == user_id for user in self.users):
             return False
 
         if player_num == 1:
             self.player1_user_id = user_id
+            # Auto-set Player 1 as active user
+            if user_id is not None:
+                self.last_user_id = user_id
         elif player_num == 2:
             self.player2_user_id = user_id
         else:
@@ -11870,27 +11876,46 @@ class Game:
 
         return result
 
-def create_achievement_managers(user_manager):
-    """Create achievement managers for player slots and active user"""
+def create_achievement_managers(user_manager, mode="single"):
+    """Create achievement managers based on game mode
+
+    Args:
+        user_manager: The user manager instance
+        mode: Game mode - "single" or "coop"
+    """
     managers = {}
 
-    # Create manager for Player 1 slot (if assigned)
-    p1_user = user_manager.get_player_slot_user(1)
-    if p1_user:
-        managers[1] = AchievementManager(user_manager.get_achievement_filename(p1_user["id"]))
+    # In coop mode, create managers for both player slots
+    if mode == "coop":
+        # Create manager for Player 1 slot (if assigned)
+        p1_user = user_manager.get_player_slot_user(1)
+        if p1_user:
+            managers[1] = AchievementManager(user_manager.get_achievement_filename(p1_user["id"]))
 
-    # Create manager for Player 2 slot (if assigned)
-    p2_user = user_manager.get_player_slot_user(2)
-    if p2_user:
-        managers[2] = AchievementManager(user_manager.get_achievement_filename(p2_user["id"]))
+        # Create manager for Player 2 slot (if assigned)
+        p2_user = user_manager.get_player_slot_user(2)
+        if p2_user:
+            managers[2] = AchievementManager(user_manager.get_achievement_filename(p2_user["id"]))
 
-    # If no player slots assigned, use active user for single player (Player 1)
-    if not managers:
-        active_user = user_manager.get_active_user()
-        if active_user:
-            managers[1] = AchievementManager(user_manager.get_achievement_filename(active_user["id"]))
+        # If no player slots assigned in coop, fall back to active user for P1
+        if not managers:
+            active_user = user_manager.get_active_user()
+            if active_user:
+                managers[1] = AchievementManager(user_manager.get_achievement_filename(active_user["id"]))
+            else:
+                managers[1] = AchievementManager(None)
+    else:
+        # In single-player mode, only use Player 1 slot (or active user)
+        p1_user = user_manager.get_player_slot_user(1)
+        if p1_user:
+            managers[1] = AchievementManager(user_manager.get_achievement_filename(p1_user["id"]))
         else:
-            managers[1] = AchievementManager(None)
+            # No P1 slot assigned, use active user
+            active_user = user_manager.get_active_user()
+            if active_user:
+                managers[1] = AchievementManager(user_manager.get_achievement_filename(active_user["id"]))
+            else:
+                managers[1] = AchievementManager(None)
 
     return managers
 
@@ -11900,10 +11925,9 @@ def main():
     # Initialize sound manager
     sound_manager = SoundManager()
 
-    # Initialize user manager and achievement managers
+    # Initialize user manager and achievement manager (for title screen)
     user_manager = UserManager()
     achievement_manager = AchievementManager(user_manager.get_achievement_filename())
-    achievement_managers = create_achievement_managers(user_manager)
 
     # Initialize profile manager and load last profile (or defaults)
     profile_manager = ProfileManager()
@@ -12066,7 +12090,7 @@ def main():
                     sys.exit()
                 elif debug_action == "start":
                     game_mode = debug_config.get('mode', 'single')
-                    achievement_managers = create_achievement_managers(user_manager)
+                    achievement_managers = create_achievement_managers(user_manager, game_mode)
                     game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
                     game.setup_game(game_mode, debug_config)
                     result = game.run()
@@ -12079,10 +12103,14 @@ def main():
                 else:
                     break
             elif action == "continue":
-                # Load saved game
-                achievement_managers = create_achievement_managers(user_manager)
-                game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
+                # Load saved game - first read save file to determine game mode
                 try:
+                    with open("savegame.json", 'r') as f:
+                        save_data = json.load(f)
+                    game_mode = "coop" if save_data.get('coop_mode', False) else "single"
+
+                    achievement_managers = create_achievement_managers(user_manager, game_mode)
+                    game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
                     game.load_game()
                     result = game.run()
 
@@ -12095,7 +12123,7 @@ def main():
                     print("Save file not found!")
                     break  # Go back to title screen
             elif action in ["single", "coop"]:
-                achievement_managers = create_achievement_managers(user_manager)
+                achievement_managers = create_achievement_managers(user_manager, action)
                 game = Game(score_manager, sound_manager, achievement_managers=achievement_managers, key_bindings=key_bindings)
                 game.setup_game(action)
                 result = game.run()
