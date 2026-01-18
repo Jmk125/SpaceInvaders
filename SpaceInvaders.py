@@ -1622,30 +1622,17 @@ class PauseMenu:
                     if self.sound_manager:
                         self.sound_manager.play_sound('menu_select')
                     return "quit"
-            elif event.type == pygame.JOYHATMOTION:
-                if event.value[1] == 1:
-                    self.selected_index = (self.selected_index - 1) % len(self.menu_items)
-                    self.reset_hold()
-                    if self.sound_manager:
-                        self.sound_manager.play_sound('menu_change')
-                elif event.value[1] == -1:
-                    self.selected_index = (self.selected_index + 1) % len(self.menu_items)
-                    self.reset_hold()
-                    if self.sound_manager:
-                        self.sound_manager.play_sound('menu_change')
-            elif event.type == pygame.JOYAXISMOTION:
-                threshold = 0.5
-                if event.axis == 1:
-                    if event.value < -threshold:
-                        self.selected_index = (self.selected_index - 1) % len(self.menu_items)
-                        self.reset_hold()
-                        if self.sound_manager:
-                            self.sound_manager.play_sound('menu_change')
-                    elif event.value > threshold:
-                        self.selected_index = (self.selected_index + 1) % len(self.menu_items)
-                        self.reset_hold()
-                        if self.sound_manager:
-                            self.sound_manager.play_sound('menu_change')
+            # Check for remapped up/down buttons
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                self.reset_hold()
+                if self.sound_manager:
+                    self.sound_manager.play_sound('menu_change')
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                self.reset_hold()
+                if self.sound_manager:
+                    self.sound_manager.play_sound('menu_change')
 
         return None
 
@@ -2085,88 +2072,45 @@ class LevelUpScreen:
                     if self.player1_confirmed and self.player2_confirmed and self.countdown_start is None:
                         self.countdown_start = pygame.time.get_ticks()
                         
-            elif event.type == pygame.JOYHATMOTION:
+            # Check for remapped up/down buttons
+            elif self.game_instance:
                 if not self.is_coop:
-                    # Single player controller
-                    if event.value[1] == 1:  # Up
+                    # Single player controller - use remapped buttons
+                    if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
                         options = self.get_options_for_player(0)
                         self.current_selection = (self.current_selection - 1) % len(options)
-                    elif event.value[1] == -1:  # Down
+                    elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
                         options = self.get_options_for_player(0)
                         self.current_selection = (self.current_selection + 1) % len(options)
                 else:
-                    # Co-op controller handling
+                    # Co-op controller handling - use remapped buttons for each player
                     if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
-                        if event.value[1] == 1:  # Up
+                        if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
                             p1_options = self.get_options_for_player(0)
                             self.player1_selection = (self.player1_selection - 1) % len(p1_options)
-                        elif event.value[1] == -1:  # Down
+                        elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
                             p1_options = self.get_options_for_player(0)
                             self.player1_selection = (self.player1_selection + 1) % len(p1_options)
 
                     if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
-                        if event.value[1] == 1:  # Up
+                        if is_button_pressed(event, self.key_bindings, 'player2_up_button'):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
                             p2_options = self.get_options_for_player(1)
                             self.player2_selection = (self.player2_selection - 1) % len(p2_options)
-                        elif event.value[1] == -1:  # Down
+                        elif is_button_pressed(event, self.key_bindings, 'player2_down_button'):
                             if self.sound_manager:
                                 self.sound_manager.play_sound('menu_change')
                             p2_options = self.get_options_for_player(1)
                             self.player2_selection = (self.player2_selection + 1) % len(p2_options)
-
-            elif event.type == pygame.JOYAXISMOTION:
-                # Support joystick axis for menu navigation
-                threshold = 0.5
-                if not self.is_coop:
-                    # Single player controller
-                    if event.axis == 1:  # Y-axis
-                        if event.value < -threshold:  # Up
-                            if self.sound_manager:
-                                self.sound_manager.play_sound('menu_change')
-                            options = self.get_options_for_player(0)
-                            self.current_selection = (self.current_selection - 1) % len(options)
-                        elif event.value > threshold:  # Down
-                            if self.sound_manager:
-                                self.sound_manager.play_sound('menu_change')
-                            options = self.get_options_for_player(0)
-                            self.current_selection = (self.current_selection + 1) % len(options)
-                else:
-                    # Co-op controller handling
-                    if len(self.controllers) > 0 and event.joy == 0 and not self.player1_confirmed:
-                        if event.axis == 1:  # Y-axis
-                            if event.value < -threshold:  # Up
-                                if self.sound_manager:
-                                    self.sound_manager.play_sound('menu_change')
-                                p1_options = self.get_options_for_player(0)
-                                self.player1_selection = (self.player1_selection - 1) % len(p1_options)
-                            elif event.value > threshold:  # Down
-                                if self.sound_manager:
-                                    self.sound_manager.play_sound('menu_change')
-                                p1_options = self.get_options_for_player(0)
-                                self.player1_selection = (self.player1_selection + 1) % len(p1_options)
-
-                    if len(self.controllers) > 1 and event.joy == 1 and not self.player2_confirmed:
-                        if event.axis == 1:  # Y-axis
-                            if event.value < -threshold:  # Up
-                                if self.sound_manager:
-                                    self.sound_manager.play_sound('menu_change')
-                                p2_options = self.get_options_for_player(1)
-                                self.player2_selection = (self.player2_selection - 1) % len(p2_options)
-                            elif event.value > threshold:  # Down
-                                if self.sound_manager:
-                                    self.sound_manager.play_sound('menu_change')
-                                p2_options = self.get_options_for_player(1)
-                                self.player2_selection = (self.player2_selection + 1) % len(p2_options)
 
         return None
         
@@ -3635,92 +3579,35 @@ class NameInputScreen:
                         else:
                             self.ok_selected = True
             
-            elif event.type == pygame.JOYHATMOTION:
-                self.input_mode = "controller"
-                # Check both standard D-pad and remappable direction assignments
-                up_button = self.key_bindings.get('player1_up_button')
-                down_button = self.key_bindings.get('player1_down_button')
-                left_button = self.key_bindings.get('player1_left_button')
-                right_button = self.key_bindings.get('player1_right_button')
-
-                # Up: check standard D-pad or HAT_UP assignment
-                if event.value[1] == 1 or (event.value[1] == 1 and up_button == HAT_UP):
+            # Use remapped button checks for all controller input
+            elif self.game_instance:
+                if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                    self.input_mode = "controller"
                     if not self.ok_selected:
                         self.current_letter_index[self.current_position] = (
                             self.current_letter_index[self.current_position] - 1
                         ) % len(self.alphabet)
                         self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                # Down: check standard D-pad or HAT_DOWN assignment
-                elif event.value[1] == -1 or (event.value[1] == -1 and down_button == HAT_DOWN):
+                elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                    self.input_mode = "controller"
                     if not self.ok_selected:
                         self.current_letter_index[self.current_position] = (
                             self.current_letter_index[self.current_position] + 1
                         ) % len(self.alphabet)
                         self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                # Left: check standard D-pad or HAT_LEFT assignment
-                elif event.value[0] == -1 or (event.value[0] == -1 and left_button == HAT_LEFT):
+                elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                    self.input_mode = "controller"
                     if self.ok_selected:
                         self.ok_selected = False
                         self.current_position = 2
                     elif self.current_position > 0:
                         self.current_position -= 1
-                # Right: check standard D-pad or HAT_RIGHT assignment
-                elif event.value[0] == 1 or (event.value[0] == 1 and right_button == HAT_RIGHT):
+                elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                    self.input_mode = "controller"
                     if self.current_position < 2:
                         self.current_position += 1
                     else:
                         self.ok_selected = True
-
-            elif event.type == pygame.JOYAXISMOTION:
-                self.input_mode = "controller"
-                # Cooldown to prevent too rapid changes
-                current_time = pygame.time.get_ticks()
-                if current_time - self.last_axis_input_time < self.axis_cooldown:
-                    continue
-
-                threshold = 0.5
-                up_button = self.key_bindings.get('player1_up_button')
-                down_button = self.key_bindings.get('player1_down_button')
-                left_button = self.key_bindings.get('player1_left_button')
-                right_button = self.key_bindings.get('player1_right_button')
-
-                if event.axis == 1:  # Y-axis (up/down)
-                    if event.value < -threshold:  # Up
-                        # Check if standard axis or assigned to AXIS_UP
-                        if up_button == AXIS_UP or up_button is None or isinstance(up_button, str) and 'hat' in up_button:
-                            if not self.ok_selected:
-                                self.current_letter_index[self.current_position] = (
-                                    self.current_letter_index[self.current_position] - 1
-                                ) % len(self.alphabet)
-                                self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                                self.last_axis_input_time = current_time
-                    elif event.value > threshold:  # Down
-                        # Check if standard axis or assigned to AXIS_DOWN
-                        if down_button == AXIS_DOWN or down_button is None or isinstance(down_button, str) and 'hat' in down_button:
-                            if not self.ok_selected:
-                                self.current_letter_index[self.current_position] = (
-                                    self.current_letter_index[self.current_position] + 1
-                                ) % len(self.alphabet)
-                                self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                                self.last_axis_input_time = current_time
-                elif event.axis == 0:  # X-axis (left/right)
-                    if event.value < -threshold:  # Left
-                        # Check if standard axis or assigned to AXIS_LEFT
-                        if left_button == AXIS_LEFT or left_button is None or isinstance(left_button, str) and 'hat' in left_button:
-                            if self.ok_selected:
-                                self.ok_selected = False
-                                self.current_position = 2
-                            elif self.current_position > 0:
-                                self.current_position -= 1
-                            self.last_axis_input_time = current_time
-                    elif event.value > threshold:  # Right
-                        # Check if standard axis or assigned to AXIS_RIGHT
-                        if right_button == AXIS_RIGHT or right_button is None or isinstance(right_button, str) and 'hat' in right_button:
-                            if self.current_position < 2:
-                                self.current_position += 1
-                            else:
-                                self.ok_selected = True
-                            self.last_axis_input_time = current_time
 
         return None
     
@@ -4083,22 +3970,14 @@ class AchievementScreen:
                 if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 1:
                     self.sound_manager.play_sound('menu_select')
                     return "back"
-            elif event.type == pygame.JOYHATMOTION:
-                if event.value[1] == 1:  # Up
+            # Use remapped button checks
+            elif self.game_instance:
+                if is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                     self.sound_manager.play_sound('menu_change')
                     self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
-                elif event.value[1] == -1:  # Down
+                elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                     self.sound_manager.play_sound('menu_change')
                     self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
-            elif event.type == pygame.JOYAXISMOTION:
-                threshold = 0.5
-                if event.axis == 1:  # Y-axis
-                    if event.value < -threshold:  # Up
-                        self.sound_manager.play_sound('menu_change')
-                        self.scroll_offset = max(0, self.scroll_offset - self.scroll_speed)
-                    elif event.value > threshold:  # Down
-                        self.sound_manager.play_sound('menu_change')
-                        self.scroll_offset = min(self.max_scroll, self.scroll_offset + self.scroll_speed)
         return None
 
     def draw(self):
@@ -4603,10 +4482,10 @@ class Player:
             if isinstance(right_button, int) and self.controller.get_numbuttons() > right_button:
                 right_pressed = self.controller.get_button(right_button)
 
-            # Also check hat and axis as fallback
-            if left_pressed or hat[0] == -1 or axis_x < -0.3:
+            # Only check remapped buttons (no fallback to hardware)
+            if left_pressed:
                 self.move_left()
-            elif right_pressed or hat[0] == 1 or axis_x > 0.3:
+            elif right_pressed:
                 self.move_right()
 
             # Auto-fire support for controller
@@ -7486,60 +7365,34 @@ class ProfileNameInputScreen:
                         if self.current_position >= self.name_length:
                             self.current_position = self.name_length - 1
 
-            elif event.type == pygame.JOYHATMOTION:
+            # Use remapped button checks for all controller input
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
                 self.input_mode = "controller"
-                if event.value[1] == 1:  # Up
-                    if not self.ok_selected:
-                        self.current_letter_index[self.current_position] = (
-                            self.current_letter_index[self.current_position] - 1
-                        ) % len(self.alphabet)
-                        self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif event.value[1] == -1:  # Down
-                    if not self.ok_selected:
-                        self.current_letter_index[self.current_position] = (
-                            self.current_letter_index[self.current_position] + 1
-                        ) % len(self.alphabet)
-                        self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif event.value[0] == -1:  # Left
-                    if self.ok_selected:
-                        self.ok_selected = False
-                        self.current_position = self.name_length - 1
-                    elif self.current_position > 0:
-                        self.current_position -= 1
-                elif event.value[0] == 1:  # Right
-                    if self.current_position < self.name_length - 1:
-                        self.current_position += 1
-                    else:
-                        self.ok_selected = True
-
-            elif event.type == pygame.JOYAXISMOTION:
+                if not self.ok_selected:
+                    self.current_letter_index[self.current_position] = (
+                        self.current_letter_index[self.current_position] - 1
+                    ) % len(self.alphabet)
+                    self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                 self.input_mode = "controller"
-                threshold = 0.5
-                if event.axis == 1:  # Y-axis
-                    if event.value < -threshold:  # Up
-                        if not self.ok_selected:
-                            self.current_letter_index[self.current_position] = (
-                                self.current_letter_index[self.current_position] - 1
-                            ) % len(self.alphabet)
-                            self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                    elif event.value > threshold:  # Down
-                        if not self.ok_selected:
-                            self.current_letter_index[self.current_position] = (
-                                self.current_letter_index[self.current_position] + 1
-                            ) % len(self.alphabet)
-                            self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
-                elif event.axis == 0:  # X-axis
-                    if event.value < -threshold:  # Left
-                        if self.ok_selected:
-                            self.ok_selected = False
-                            self.current_position = self.name_length - 1
-                        elif self.current_position > 0:
-                            self.current_position -= 1
-                    elif event.value > threshold:  # Right
-                        if self.current_position < self.name_length - 1:
-                            self.current_position += 1
-                        else:
-                            self.ok_selected = True
+                if not self.ok_selected:
+                    self.current_letter_index[self.current_position] = (
+                        self.current_letter_index[self.current_position] + 1
+                    ) % len(self.alphabet)
+                    self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+            elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                self.input_mode = "controller"
+                if self.ok_selected:
+                    self.ok_selected = False
+                    self.current_position = self.name_length - 1
+                elif self.current_position > 0:
+                    self.current_position -= 1
+            elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                self.input_mode = "controller"
+                if self.current_position < self.name_length - 1:
+                    self.current_position += 1
+                else:
+                    self.ok_selected = True
 
         return None
 
@@ -7667,23 +7520,13 @@ class ProfileSelectionScreen:
                 elif event.button == 1:  # B button
                     self.sound_manager.play_sound('menu_select')
                     return "cancel"
-            elif event.type == pygame.JOYHATMOTION:
-                if event.value[1] == 1:  # Up
-                    self.sound_manager.play_sound('menu_change')
-                    self.selected_index = (self.selected_index - 1) % len(self.profile_names)
-                elif event.value[1] == -1:  # Down
-                    self.sound_manager.play_sound('menu_change')
-                    self.selected_index = (self.selected_index + 1) % len(self.profile_names)
-            elif event.type == pygame.JOYAXISMOTION:
-                # Support joystick axis for menu navigation
-                threshold = 0.5
-                if event.axis == 1:  # Y-axis
-                    if event.value < -threshold:  # Up
-                        self.sound_manager.play_sound('menu_change')
-                        self.selected_index = (self.selected_index - 1) % len(self.profile_names)
-                    elif event.value > threshold:  # Down
-                        self.sound_manager.play_sound('menu_change')
-                        self.selected_index = (self.selected_index + 1) % len(self.profile_names)
+            # Use remapped button checks
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.selected_index = (self.selected_index - 1) % len(self.profile_names)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.selected_index = (self.selected_index + 1) % len(self.profile_names)
 
         return None
 
@@ -7919,16 +7762,13 @@ class SettingsScreen:
                             self.awaiting_input = False
                             self.awaiting_input_for = None
                             self.awaiting_input_type = None
-                elif not self.awaiting_input:
-                    # Allow axis motion for menu navigation
-                    threshold = 0.5
-                    if event.axis == 1:  # Y-axis
-                        if event.value < -threshold:  # Up
-                            self.sound_manager.play_sound('menu_change')
-                            self.selected_option = (self.selected_option - 1) % len(self.options)
-                        elif event.value > threshold:  # Down
-                            self.sound_manager.play_sound('menu_change')
-                            self.selected_option = (self.selected_option + 1) % len(self.options)
+            # Use remapped button checks for menu navigation when not awaiting input
+            elif not self.awaiting_input and is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.selected_option = (self.selected_option - 1) % len(self.options)
+            elif not self.awaiting_input and is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.selected_option = (self.selected_option + 1) % len(self.options)
 
         return None
 
@@ -8151,44 +7991,23 @@ class TitleScreen:
                         return "achievements"
                     elif selected_text == "Quit":
                         return "quit"
-            elif event.type == pygame.JOYHATMOTION:
-                if event.value[1] == 1:
-                    if self._register_debug_input("up"):
-                        return "debug_menu"
-                    self.sound_manager.play_sound('menu_change')
-                    self.selected_option = (self.selected_option - 1) % len(self.options)
-                elif event.value[1] == -1:
-                    if self._register_debug_input("down"):
-                        return "debug_menu"
-                    self.sound_manager.play_sound('menu_change')
-                    self.selected_option = (self.selected_option + 1) % len(self.options)
-                elif event.value[0] == -1:
-                    if self._register_debug_input("left"):
-                        return "debug_menu"
-                elif event.value[0] == 1:
-                    if self._register_debug_input("right"):
-                        return "debug_menu"
-            elif event.type == pygame.JOYAXISMOTION:
-                # Support joystick axis for menu navigation
-                threshold = 0.5
-                if event.axis == 1:  # Y-axis
-                    if event.value < -threshold:  # Up
-                        if self._register_debug_input("up"):
-                            return "debug_menu"
-                        self.sound_manager.play_sound('menu_change')
-                        self.selected_option = (self.selected_option - 1) % len(self.options)
-                    elif event.value > threshold:  # Down
-                        if self._register_debug_input("down"):
-                            return "debug_menu"
-                        self.sound_manager.play_sound('menu_change')
-                        self.selected_option = (self.selected_option + 1) % len(self.options)
-                elif event.axis == 0:  # X-axis for debug sequence
-                    if event.value < -threshold:  # Left
-                        if self._register_debug_input("left"):
-                            return "debug_menu"
-                    elif event.value > threshold:  # Right
-                        if self._register_debug_input("right"):
-                            return "debug_menu"
+            # Use remapped button checks for menu navigation and debug sequence
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                if self._register_debug_input("up"):
+                    return "debug_menu"
+                self.sound_manager.play_sound('menu_change')
+                self.selected_option = (self.selected_option - 1) % len(self.options)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                if self._register_debug_input("down"):
+                    return "debug_menu"
+                self.sound_manager.play_sound('menu_change')
+                self.selected_option = (self.selected_option + 1) % len(self.options)
+            elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                if self._register_debug_input("left"):
+                    return "debug_menu"
+            elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                if self._register_debug_input("right"):
+                    return "debug_menu"
 
         return None
         
@@ -8427,28 +8246,15 @@ class DebugMenu:
                     selected_item = self.menu_items[self.selected_index]
                     if selected_item['type'] == 'action':
                         return selected_item['action'], self.config
-            elif event.type == pygame.JOYHATMOTION:
-                if event.value[1] == 1:
-                    self._move_selection(-1)
-                elif event.value[1] == -1:
-                    self._move_selection(1)
-                elif event.value[0] == -1:
-                    self._adjust_value(self.menu_items[self.selected_index], -1)
-                elif event.value[0] == 1:
-                    self._adjust_value(self.menu_items[self.selected_index], 1)
-            elif event.type == pygame.JOYAXISMOTION:
-                # Support joystick axis for menu navigation
-                threshold = 0.5
-                if event.axis == 1:  # Y-axis
-                    if event.value < -threshold:  # Up
-                        self._move_selection(-1)
-                    elif event.value > threshold:  # Down
-                        self._move_selection(1)
-                elif event.axis == 0:  # X-axis
-                    if event.value < -threshold:  # Left
-                        self._adjust_value(self.menu_items[self.selected_index], -1)
-                    elif event.value > threshold:  # Right
-                        self._adjust_value(self.menu_items[self.selected_index], 1)
+            # Use remapped button checks
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self._move_selection(-1)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self._move_selection(1)
+            elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                self._adjust_value(self.menu_items[self.selected_index], -1)
+            elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                self._adjust_value(self.menu_items[self.selected_index], 1)
             elif event.type == pygame.JOYBUTTONDOWN:
                 if event.button == 1:  # B button - back
                     return 'back', None
@@ -8554,6 +8360,54 @@ class UFOWarningScreen:
         self.screen.blit(countdown_text, countdown_rect)
         
         pygame.display.flip()
+
+def is_button_pressed(event, key_bindings, button_binding_key, threshold=0.5):
+    """
+    Check if an event matches the remapped button binding.
+
+    Args:
+        event: pygame event to check
+        key_bindings: dictionary of key bindings
+        button_binding_key: key in key_bindings (e.g., 'player1_up_button')
+        threshold: threshold for analog stick axis detection (default 0.5)
+
+    Returns:
+        True if the event matches the remapped button, False otherwise
+    """
+    if not key_bindings:
+        return False
+
+    button = key_bindings.get(button_binding_key)
+    if button is None:
+        return False
+
+    # Check for regular button press
+    if event.type == pygame.JOYBUTTONDOWN and isinstance(button, int):
+        return event.button == button
+
+    # Check for HAT (D-pad) bindings
+    if event.type == pygame.JOYHATMOTION:
+        if button == HAT_LEFT and event.value[0] == -1:
+            return True
+        if button == HAT_RIGHT and event.value[0] == 1:
+            return True
+        if button == HAT_UP and event.value[1] == 1:
+            return True
+        if button == HAT_DOWN and event.value[1] == -1:
+            return True
+
+    # Check for AXIS (analog stick) bindings
+    if event.type == pygame.JOYAXISMOTION:
+        if button == AXIS_LEFT and event.axis == 0 and event.value < -threshold:
+            return True
+        if button == AXIS_RIGHT and event.axis == 0 and event.value > threshold:
+            return True
+        if button == AXIS_UP and event.axis == 1 and event.value < -threshold:
+            return True
+        if button == AXIS_DOWN and event.axis == 1 and event.value > threshold:
+            return True
+
+    return False
 
 class Game:
     def __init__(self, score_manager, sound_manager, achievement_manager=None, key_bindings=None):
@@ -8810,6 +8664,13 @@ class Game:
                 player.activate_laser()
 
             player.reset_position()
+
+    def is_button_pressed(self, event, button_binding_key, threshold=0.5):
+        """
+        Check if an event matches the remapped button binding.
+        Delegates to the standalone is_button_pressed function.
+        """
+        return is_button_pressed(event, self.key_bindings, button_binding_key, threshold)
 
     def save_game(self, filename="savegame.json"):
         """Save the current game state to a file"""
