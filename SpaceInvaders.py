@@ -8212,8 +8212,8 @@ class UserMenuScreen:
             {"type": "action", "action": "add", "label": "Add User"},
             {"type": "action", "action": "rename", "label": "Rename User"},
             {"type": "action", "action": "delete", "label": "Delete User"},
-            {"type": "action", "action": "assign_p1", "label": "Assign to Player 1"},
-            {"type": "action", "action": "assign_p2", "label": "Assign to Player 2"},
+            {"type": "player_slot", "slot": 1, "label": "Player 1"},
+            {"type": "player_slot", "slot": 2, "label": "Player 2"},
             {"type": "action", "action": "back", "label": "Back"}
         ])
 
@@ -8231,6 +8231,42 @@ class UserMenuScreen:
             return self.menu_items[self.selected_index]["user"]
         return self.user_manager.get_active_user()
 
+    def _cycle_player_slot(self, slot, direction):
+        """Cycle through users for a player slot (direction: 1 for right, -1 for left)"""
+        users = self.user_manager.get_users()
+        if not users:
+            return
+
+        current_user = self.user_manager.get_player_slot_user(slot)
+
+        # Build list of available users (excluding user assigned to other slot)
+        other_slot = 2 if slot == 1 else 1
+        other_user = self.user_manager.get_player_slot_user(other_slot)
+        available_users = [u for u in users if not other_user or u["id"] != other_user["id"]]
+
+        # Add None option for "unassigned"
+        options = [None] + available_users
+
+        # Find current index
+        current_idx = 0
+        if current_user:
+            for i, u in enumerate(options):
+                if u and u["id"] == current_user["id"]:
+                    current_idx = i
+                    break
+
+        # Cycle
+        new_idx = (current_idx + direction) % len(options)
+        new_user = options[new_idx]
+
+        # Assign
+        if new_user:
+            self.user_manager.set_player_slot(slot, new_user["id"])
+        else:
+            self.user_manager.clear_player_slot(slot)
+
+        self._refresh_menu()
+
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -8242,12 +8278,26 @@ class UserMenuScreen:
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
                     self.sound_manager.play_sound('menu_change')
                     self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
+                    selected = self.menu_items[self.selected_index]
+                    if selected["type"] == "player_slot":
+                        self.sound_manager.play_sound('menu_change')
+                        self._cycle_player_slot(selected["slot"], -1)
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    selected = self.menu_items[self.selected_index]
+                    if selected["type"] == "player_slot":
+                        self.sound_manager.play_sound('menu_change')
+                        self._cycle_player_slot(selected["slot"], 1)
                 elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
                     self.sound_manager.play_sound('menu_select')
                     selected = self.menu_items[self.selected_index]
                     if selected["type"] == "user":
                         self.user_manager.set_active_user(selected["user"]["id"])
                         return "selected"
+                    elif selected["type"] == "player_slot":
+                        # Treat Enter as right arrow for player slots
+                        self._cycle_player_slot(selected["slot"], 1)
+                        return None
                     return selected["action"]
                 elif event.key == pygame.K_ESCAPE:
                     self.sound_manager.play_sound('menu_select')
@@ -8260,6 +8310,10 @@ class UserMenuScreen:
                     if selected["type"] == "user":
                         self.user_manager.set_active_user(selected["user"]["id"])
                         return "selected"
+                    elif selected["type"] == "player_slot":
+                        # Treat A button as right arrow for player slots
+                        self._cycle_player_slot(selected["slot"], 1)
+                        return None
                     return selected["action"]
                 elif event.button == 1:
                     self.sound_manager.play_sound('menu_select')
@@ -8270,6 +8324,16 @@ class UserMenuScreen:
             elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
                 self.sound_manager.play_sound('menu_change')
                 self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+            elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                selected = self.menu_items[self.selected_index]
+                if selected["type"] == "player_slot":
+                    self.sound_manager.play_sound('menu_change')
+                    self._cycle_player_slot(selected["slot"], -1)
+            elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                selected = self.menu_items[self.selected_index]
+                if selected["type"] == "player_slot":
+                    self.sound_manager.play_sound('menu_change')
+                    self._cycle_player_slot(selected["slot"], 1)
 
         return None
 
@@ -8293,25 +8357,53 @@ class UserMenuScreen:
 
         for i, item in enumerate(self.menu_items):
             color = YELLOW if i == self.selected_index else WHITE
-            label = item["label"] if item["type"] == "action" else item["user"]["name"]
+            y_pos = start_y + i * spacing
 
-            # Add player slot indicators and active status for users
-            if item["type"] == "user":
-                tags = []
-                if active_user and item["user"]["id"] == active_user["id"]:
-                    tags.append("Active")
-                if p1_user and item["user"]["id"] == p1_user["id"]:
-                    tags.append("P1")
-                if p2_user and item["user"]["id"] == p2_user["id"]:
-                    tags.append("P2")
-                if tags:
-                    label = f"{label} ({', '.join(tags)})"
+            if item["type"] == "player_slot":
+                # Draw player slot with left/right arrows
+                slot_user = self.user_manager.get_player_slot_user(item["slot"])
+                user_name = slot_user["name"] if slot_user else "None"
 
-            option_text = self.font_medium.render(label, True, color)
-            option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
-            self.screen.blit(option_text, option_rect)
+                # Draw label
+                label_text = self.font_medium.render(f"{item['label']}:", True, color)
+                label_rect = label_text.get_rect(center=(SCREEN_WIDTH // 2 - 200, y_pos))
+                self.screen.blit(label_text, label_rect)
 
-        inst_text = self.font_small.render("Up/Down: Select | Enter/A: Confirm | ESC/B: Back", True, GRAY)
+                # Draw left arrow
+                left_arrow = self.font_medium.render("<", True, color)
+                left_rect = left_arrow.get_rect(center=(SCREEN_WIDTH // 2 - 50, y_pos))
+                self.screen.blit(left_arrow, left_rect)
+
+                # Draw user name
+                name_text = self.font_medium.render(user_name, True, color)
+                name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2 + 80, y_pos))
+                self.screen.blit(name_text, name_rect)
+
+                # Draw right arrow
+                right_arrow = self.font_medium.render(">", True, color)
+                right_rect = right_arrow.get_rect(center=(SCREEN_WIDTH // 2 + 210, y_pos))
+                self.screen.blit(right_arrow, right_rect)
+            else:
+                # Regular menu items
+                label = item["label"] if item["type"] == "action" else item["user"]["name"]
+
+                # Add player slot indicators and active status for users
+                if item["type"] == "user":
+                    tags = []
+                    if active_user and item["user"]["id"] == active_user["id"]:
+                        tags.append("Active")
+                    if p1_user and item["user"]["id"] == p1_user["id"]:
+                        tags.append("P1")
+                    if p2_user and item["user"]["id"] == p2_user["id"]:
+                        tags.append("P2")
+                    if tags:
+                        label = f"{label} ({', '.join(tags)})"
+
+                option_text = self.font_medium.render(label, True, color)
+                option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, y_pos))
+                self.screen.blit(option_text, option_rect)
+
+        inst_text = self.font_small.render("Up/Down: Navigate | Left/Right: Cycle Users | Enter/A: Confirm | ESC/B: Back", True, GRAY)
         inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 980))
         self.screen.blit(inst_text, inst_rect)
 
@@ -10620,7 +10712,7 @@ class Game:
                     stat.record_boss_encounter(boss_name)
 
                 # Track boss encounter start for achievement timing
-                self.achievement_manager.start_boss_encounter()
+                self.track_for_all_players("start_boss_encounter")
 
                 # Clear barriers for Asteroid Field Boss
                 if isinstance(self.current_boss, AsteroidFieldBoss):
@@ -11647,21 +11739,62 @@ class Game:
                 elif pause_action == "quit_without_save":
                     result = "title"
                 elif pause_action == "achievements":
-                    achievement_screen = AchievementScreen(
-                        self.screen,
-                        self.achievement_manager,
-                        self.sound_manager,
-                        key_bindings=self.key_bindings
-                    )
-                    while True:
-                        ach_action = achievement_screen.handle_events()
-                        if ach_action == "back":
-                            break
-                        elif ach_action == "quit":
-                            self.running = False
-                            return None
-                        achievement_screen.draw()
-                        self.clock.tick(60)
+                    # Single player - show active user's achievements
+                    manager = self.get_achievement_manager(1)
+                    if manager:
+                        achievement_screen = AchievementScreen(
+                            self.screen,
+                            manager,
+                            self.sound_manager,
+                            key_bindings=self.key_bindings
+                        )
+                        while True:
+                            ach_action = achievement_screen.handle_events()
+                            if ach_action == "back":
+                                break
+                            elif ach_action == "quit":
+                                self.running = False
+                                return None
+                            achievement_screen.draw()
+                            self.clock.tick(60)
+                elif pause_action == "p1 achievements":
+                    # Coop - show Player 1's achievements
+                    manager = self.get_achievement_manager(1)
+                    if manager:
+                        achievement_screen = AchievementScreen(
+                            self.screen,
+                            manager,
+                            self.sound_manager,
+                            key_bindings=self.key_bindings
+                        )
+                        while True:
+                            ach_action = achievement_screen.handle_events()
+                            if ach_action == "back":
+                                break
+                            elif ach_action == "quit":
+                                self.running = False
+                                return None
+                            achievement_screen.draw()
+                            self.clock.tick(60)
+                elif pause_action == "p2 achievements":
+                    # Coop - show Player 2's achievements
+                    manager = self.get_achievement_manager(2)
+                    if manager:
+                        achievement_screen = AchievementScreen(
+                            self.screen,
+                            manager,
+                            self.sound_manager,
+                            key_bindings=self.key_bindings
+                        )
+                        while True:
+                            ach_action = achievement_screen.handle_events()
+                            if ach_action == "back":
+                                break
+                            elif ach_action == "quit":
+                                self.running = False
+                                return None
+                            achievement_screen.draw()
+                            self.clock.tick(60)
                 elif pause_action == "settings":
                     profile_manager = ProfileManager()
                     settings_screen = SettingsScreen(self.screen, self.sound_manager, self.key_bindings, profile_manager)
@@ -11870,16 +12003,6 @@ def main():
                         if selected_user:
                             user_manager.delete_user(selected_user["id"])
                             achievement_manager = AchievementManager(user_manager.get_achievement_filename())
-                        user_screen._refresh_menu()
-                    elif user_action == "assign_p1":
-                        selected_user = user_screen.get_selected_user()
-                        if selected_user:
-                            user_manager.set_player_slot(1, selected_user["id"])
-                        user_screen._refresh_menu()
-                    elif user_action == "assign_p2":
-                        selected_user = user_screen.get_selected_user()
-                        if selected_user:
-                            user_manager.set_player_slot(2, selected_user["id"])
                         user_screen._refresh_menu()
                     elif user_action == "selected":
                         achievement_manager = AchievementManager(user_manager.get_achievement_filename())
