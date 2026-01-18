@@ -311,6 +311,99 @@ class ProfileManager:
         return self.get_default_bindings()
 
 
+class UserManager:
+    """Manages achievement users with save/load functionality"""
+    def __init__(self, filename="users.json"):
+        self.filename = filename
+        self.users = []
+        self.last_user_id = None
+        self.load_users()
+
+    def _generate_next_id(self):
+        if not self.users:
+            return 1
+        return max(user["id"] for user in self.users) + 1
+
+    def load_users(self):
+        """Load users from file"""
+        if os.path.exists(self.filename):
+            try:
+                with open(self.filename, 'r') as f:
+                    data = json.load(f)
+                    self.users = data.get("users", [])
+                    self.last_user_id = data.get("last_user_id")
+            except Exception as e:
+                print(f"Error loading users: {e}")
+                self.users = []
+                self.last_user_id = None
+        if self.last_user_id is not None and not any(user["id"] == self.last_user_id for user in self.users):
+            self.last_user_id = None
+
+    def save_users(self):
+        """Save users to file"""
+        data = {
+            "users": self.users,
+            "last_user_id": self.last_user_id
+        }
+        try:
+            with open(self.filename, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error saving users: {e}")
+
+    def get_users(self):
+        return list(self.users)
+
+    def get_active_user(self):
+        if not self.users:
+            return None
+        if self.last_user_id is None:
+            return None
+        for user in self.users:
+            if user["id"] == self.last_user_id:
+                return user
+        return None
+
+    def set_active_user(self, user_id):
+        if any(user["id"] == user_id for user in self.users):
+            self.last_user_id = user_id
+            self.save_users()
+
+    def add_user(self, name):
+        user_id = self._generate_next_id()
+        new_user = {"id": user_id, "name": name}
+        self.users.append(new_user)
+        self.last_user_id = user_id
+        self.save_users()
+        return new_user
+
+    def rename_user(self, user_id, new_name):
+        for user in self.users:
+            if user["id"] == user_id:
+                user["name"] = new_name
+                self.save_users()
+                return True
+        return False
+
+    def delete_user(self, user_id):
+        self.users = [user for user in self.users if user["id"] != user_id]
+        achievement_file = self.get_achievement_filename(user_id)
+        if os.path.exists(achievement_file):
+            try:
+                os.remove(achievement_file)
+            except Exception as e:
+                print(f"Error deleting achievements for user {user_id}: {e}")
+        if self.last_user_id == user_id:
+            self.last_user_id = self.users[0]["id"] if self.users else None
+        self.save_users()
+
+    def get_achievement_filename(self, user_id=None):
+        target_id = user_id if user_id is not None else (self.get_active_user() or {}).get("id")
+        if target_id is None:
+            return None
+        return f"achievements_{target_id}.json"
+
+
 class StarField:
     """
     Three-layer starfield with parallax scrolling effect.
@@ -1395,6 +1488,8 @@ class AchievementManager:
 
     def save(self):
         """Save achievements to JSON file"""
+        if not self.filename:
+            return
         data = {
             "achievements": {aid: a.to_dict() for aid, a in self.achievements.items()},
             "global_stats": self.global_stats,
@@ -1410,7 +1505,7 @@ class AchievementManager:
 
     def load(self):
         """Load achievements from JSON file"""
-        if not os.path.exists(self.filename):
+        if not self.filename or not os.path.exists(self.filename):
             return
 
         try:
@@ -3781,6 +3876,195 @@ class NameInputScreen:
         
         pygame.display.flip()
 
+class UserNameInputScreen:
+    """Screen for entering a user name (similar to NameInputScreen)"""
+    def __init__(self, screen, sound_manager, key_bindings=None, initial_name=""):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+
+        self.max_name_length = 10
+        self.name = [" "] * self.max_name_length
+        self.current_position = 0
+        self.alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
+        self.current_letter_index = [0] * self.max_name_length
+        self.input_mode = "controller"
+        self.keyboard_name = ""
+        self.ok_selected = False
+
+        if initial_name:
+            cleaned = initial_name.upper()[:self.max_name_length]
+            for idx, char in enumerate(cleaned):
+                if char in self.alphabet:
+                    self.name[idx] = char
+                    self.current_letter_index[idx] = self.alphabet.index(char)
+                else:
+                    self.name[idx] = " "
+                    self.current_letter_index[idx] = self.alphabet.index(" ")
+
+        # Detect input method
+        self.controllers = []
+        for i in range(pygame.joystick.get_count()):
+            controller = pygame.joystick.Joystick(i)
+            controller.init()
+            self.controllers.append(controller)
+
+    def _get_trimmed_name(self):
+        name = "".join(self.name).rstrip()
+        return name if name else "PLAYER"
+
+    def _clear_trailing_letters(self, start_index):
+        for idx in range(start_index, self.max_name_length):
+            self.name[idx] = " "
+            self.current_letter_index[idx] = self.alphabet.index(" ")
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                self.input_mode = "keyboard"
+                if event.key == pygame.K_RETURN:
+                    if self.keyboard_name.strip():
+                        self.sound_manager.play_sound('menu_select')
+                        return self.keyboard_name.strip()[:self.max_name_length]
+                    return None
+                elif event.key == pygame.K_BACKSPACE:
+                    self.keyboard_name = self.keyboard_name[:-1]
+                elif event.key == pygame.K_ESCAPE:
+                    self.sound_manager.play_sound('menu_select')
+                    return "cancel"
+                elif len(self.keyboard_name) < self.max_name_length and event.unicode.isprintable():
+                    self.keyboard_name += event.unicode.upper()
+
+            elif event.type == pygame.JOYBUTTONDOWN:
+                self.input_mode = "controller"
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                pause_button = self.key_bindings.get('pause_button', 7)
+                if isinstance(fire_button, int) and event.button == fire_button:
+                    self.sound_manager.play_sound('menu_select')
+                    if self.ok_selected:
+                        return self._get_trimmed_name()
+                    if self.current_position < self.max_name_length - 1:
+                        self.current_position += 1
+                    else:
+                        self.ok_selected = True
+                elif isinstance(pause_button, int) and event.button == pause_button:
+                    self.sound_manager.play_sound('menu_select')
+                    if self.ok_selected:
+                        return self._get_trimmed_name()
+                    self.ok_selected = True
+                elif event.button == 1:  # B button
+                    if self.ok_selected:
+                        self.ok_selected = False
+                        self.current_position = self.max_name_length - 1
+                    elif self.current_position > 0:
+                        self.current_position -= 1
+                    else:
+                        self.sound_manager.play_sound('menu_select')
+                        return "cancel"
+
+            # Use remapped button checks for all controller input
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self.input_mode = "controller"
+                if not self.ok_selected:
+                    self._clear_trailing_letters(self.current_position + 1)
+                    self.current_letter_index[self.current_position] = (
+                        self.current_letter_index[self.current_position] - 1
+                    ) % len(self.alphabet)
+                    self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self.input_mode = "controller"
+                if not self.ok_selected:
+                    self._clear_trailing_letters(self.current_position + 1)
+                    self.current_letter_index[self.current_position] = (
+                        self.current_letter_index[self.current_position] + 1
+                    ) % len(self.alphabet)
+                    self.name[self.current_position] = self.alphabet[self.current_letter_index[self.current_position]]
+            elif is_button_pressed(event, self.key_bindings, 'player1_left_button'):
+                self.input_mode = "controller"
+                if self.ok_selected:
+                    self.ok_selected = False
+                    self.current_position = self.max_name_length - 1
+                elif self.current_position > 0:
+                    self.current_position -= 1
+            elif is_button_pressed(event, self.key_bindings, 'player1_right_button'):
+                self.input_mode = "controller"
+                if self.current_position < self.max_name_length - 1:
+                    self.current_position += 1
+                else:
+                    self.ok_selected = True
+
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        title_text = self.font_large.render("USER NAME", True, GREEN)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 180))
+        self.screen.blit(title_text, title_rect)
+
+        if self.input_mode == "keyboard":
+            prompt_text = self.font_medium.render("Enter user name:", True, WHITE)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 380))
+            self.screen.blit(prompt_text, prompt_rect)
+
+            name_display = self.keyboard_name + "_" if len(self.keyboard_name) < self.max_name_length else self.keyboard_name
+            name_text = self.font_large.render(name_display, True, CYAN)
+            name_rect = name_text.get_rect(center=(SCREEN_WIDTH // 2, 480))
+
+            box_rect = name_rect.inflate(40, 20)
+            pygame.draw.rect(self.screen, WHITE, box_rect, 3)
+            self.screen.blit(name_text, name_rect)
+
+            inst_text = self.font_small.render("Type name and press ENTER (ESC to cancel)", True, GRAY)
+            inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 600))
+            self.screen.blit(inst_text, inst_rect)
+        else:
+            prompt_text = self.font_medium.render("Enter user name:", True, WHITE)
+            prompt_rect = prompt_text.get_rect(center=(SCREEN_WIDTH // 2, 320))
+            self.screen.blit(prompt_text, prompt_rect)
+
+            letter_spacing = min(90, 800 // self.max_name_length)
+            start_x = SCREEN_WIDTH // 2 - (letter_spacing * (self.max_name_length - 1)) // 2
+
+            for i in range(self.max_name_length):
+                x = start_x + i * letter_spacing
+                color = YELLOW if i == self.current_position and not self.ok_selected else WHITE
+                if i == self.current_position and not self.ok_selected:
+                    box_rect = pygame.Rect(x - 30, 430, 60, 60)
+                    pygame.draw.rect(self.screen, YELLOW, box_rect, 3)
+
+                letter_text = self.font_large.render(self.name[i], True, color)
+                letter_rect = letter_text.get_rect(center=(x, 460))
+                self.screen.blit(letter_text, letter_rect)
+
+            ok_color = YELLOW if self.ok_selected else WHITE
+            ok_text = self.font_medium.render("OK", True, ok_color)
+            ok_rect = ok_text.get_rect(center=(SCREEN_WIDTH // 2, 580))
+
+            if self.ok_selected:
+                box_rect = ok_rect.inflate(40, 20)
+                pygame.draw.rect(self.screen, YELLOW, box_rect, 3)
+
+            self.screen.blit(ok_text, ok_rect)
+
+            instructions = [
+                "D-pad Up/Down: Change letter",
+                "D-pad Left/Right: Move cursor",
+                "A: Confirm/Next | B: Back/Cancel"
+            ]
+
+            for i, inst in enumerate(instructions):
+                inst_text = self.font_small.render(inst, True, GRAY)
+                inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 690 + i * 35))
+                self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
 class HighScoreScreen:
     def __init__(self, screen, score_manager, sound_manager, player_stats=None, players=None, key_bindings=None):
         self.screen = screen
@@ -4270,6 +4554,58 @@ class AchievementScreen:
             inst_text = self.font_tiny.render(inst, True, GRAY)
             inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, inst_y + i * 25))
             self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
+class NoUserAchievementScreen:
+    """Display message when no user exists for achievements"""
+    def __init__(self, screen, sound_manager, key_bindings=None):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.key_bindings = key_bindings if key_bindings else {}
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 32)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 16)
+
+        self.starfield = StarField(direction='horizontal')
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+            elif event.type == pygame.JOYBUTTONDOWN:
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 1:
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        title_text = self.font_large.render("ACHIEVEMENTS", True, GOLD)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 180))
+        self.screen.blit(title_text, title_rect)
+
+        message_lines = [
+            "No user found.",
+            "Create a user first to save achievements."
+        ]
+        for idx, line in enumerate(message_lines):
+            line_text = self.font_medium.render(line, True, WHITE)
+            line_rect = line_text.get_rect(center=(SCREEN_WIDTH // 2, 360 + idx * 50))
+            self.screen.blit(line_text, line_rect)
+
+        inst_text = self.font_small.render("Press ESC/ENTER or B/A to return", True, GRAY)
+        inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 920))
+        self.screen.blit(inst_text, inst_rect)
 
         pygame.display.flip()
 
@@ -7776,6 +8112,121 @@ class ProfileSelectionScreen:
 
         pygame.display.flip()
 
+class UserMenuScreen:
+    """Screen for selecting and managing achievement users"""
+    def __init__(self, screen, sound_manager, user_manager, key_bindings=None):
+        self.screen = screen
+        self.sound_manager = sound_manager
+        self.user_manager = user_manager
+        self.key_bindings = key_bindings if key_bindings else {}
+        self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 36)
+        self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 24)
+        self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 18)
+
+        self.selected_index = 0
+        self.menu_items = []
+        self._refresh_menu()
+
+        # Starfield background
+        self.starfield = StarField(direction='horizontal')
+
+    def _refresh_menu(self):
+        users = self.user_manager.get_users()
+        self.menu_items = [{"type": "user", "user": user} for user in users]
+        self.menu_items.extend([
+            {"type": "action", "action": "add", "label": "Add User"},
+            {"type": "action", "action": "rename", "label": "Rename User"},
+            {"type": "action", "action": "delete", "label": "Delete User"},
+            {"type": "action", "action": "back", "label": "Back"}
+        ])
+
+        active_user = self.user_manager.get_active_user()
+        if active_user:
+            for idx, item in enumerate(self.menu_items):
+                if item["type"] == "user" and item["user"]["id"] == active_user["id"]:
+                    self.selected_index = idx
+                    break
+        elif self.menu_items:
+            self.selected_index = 0
+
+    def get_selected_user(self):
+        if self.menu_items and self.menu_items[self.selected_index]["type"] == "user":
+            return self.menu_items[self.selected_index]["user"]
+        return self.user_manager.get_active_user()
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    self.sound_manager.play_sound('menu_change')
+                    self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    self.sound_manager.play_sound('menu_change')
+                    self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+                elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                    self.sound_manager.play_sound('menu_select')
+                    selected = self.menu_items[self.selected_index]
+                    if selected["type"] == "user":
+                        self.user_manager.set_active_user(selected["user"]["id"])
+                        return "selected"
+                    return selected["action"]
+                elif event.key == pygame.K_ESCAPE:
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+            elif event.type == pygame.JOYBUTTONDOWN:
+                fire_button = self.key_bindings.get('player1_fire_button', 0)
+                if isinstance(fire_button, int) and event.button == fire_button:
+                    self.sound_manager.play_sound('menu_select')
+                    selected = self.menu_items[self.selected_index]
+                    if selected["type"] == "user":
+                        self.user_manager.set_active_user(selected["user"]["id"])
+                        return "selected"
+                    return selected["action"]
+                elif event.button == 1:
+                    self.sound_manager.play_sound('menu_select')
+                    return "back"
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.selected_index = (self.selected_index - 1) % len(self.menu_items)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                self.sound_manager.play_sound('menu_change')
+                self.selected_index = (self.selected_index + 1) % len(self.menu_items)
+
+        return None
+
+    def draw(self):
+        self.screen.fill(BLACK)
+
+        # Update and draw starfield background
+        self.starfield.update(parallax_active=True)
+        self.starfield.draw(self.screen)
+
+        title_text = self.font_large.render("USERS", True, GREEN)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, 140))
+        self.screen.blit(title_text, title_rect)
+
+        start_y = 260
+        spacing = 55
+
+        active_user = self.user_manager.get_active_user()
+
+        for i, item in enumerate(self.menu_items):
+            color = YELLOW if i == self.selected_index else WHITE
+            label = item["label"] if item["type"] == "action" else item["user"]["name"]
+            if item["type"] == "user" and active_user and item["user"]["id"] == active_user["id"]:
+                label = f"{label} (Active)"
+            option_text = self.font_medium.render(label, True, color)
+            option_rect = option_text.get_rect(center=(SCREEN_WIDTH // 2, start_y + i * spacing))
+            self.screen.blit(option_text, option_rect)
+
+        inst_text = self.font_small.render("Up/Down: Select | Enter/A: Confirm | ESC/B: Back", True, GRAY)
+        inst_rect = inst_text.get_rect(center=(SCREEN_WIDTH // 2, 980))
+        self.screen.blit(inst_text, inst_rect)
+
+        pygame.display.flip()
+
 class SettingsScreen:
     def __init__(self, screen, sound_manager, key_bindings, profile_manager):
         self.screen = screen
@@ -8090,11 +8541,13 @@ class SettingsScreen:
         pygame.display.flip()
 
 class TitleScreen:
-    def __init__(self, screen, score_manager, sound_manager, key_bindings):
+    def __init__(self, screen, score_manager, sound_manager, key_bindings, user_manager, achievement_manager):
         self.screen = screen
         self.score_manager = score_manager
         self.sound_manager = sound_manager
         self.key_bindings = key_bindings
+        self.user_manager = user_manager
+        self.achievement_manager = achievement_manager
         self.font_large = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 48)
         self.font_medium = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -8103,9 +8556,9 @@ class TitleScreen:
         # Check if save file exists and add Continue option if it does
         self.has_save_file = os.path.exists("savegame.json")
         if self.has_save_file:
-            self.options = ["Continue", "Single Player", "Co-op", "Settings", "High Scores", "Achievements", "Quit"]
+            self.options = ["Continue", "Single Player", "Co-op", "Users", "Settings", "High Scores", "Achievements", "Quit"]
         else:
-            self.options = ["Single Player", "Co-op", "Settings", "High Scores", "Achievements", "Quit"]
+            self.options = ["Single Player", "Co-op", "Users", "Settings", "High Scores", "Achievements", "Quit"]
 
         self.controllers = []
         self.scan_controllers()
@@ -8171,6 +8624,8 @@ class TitleScreen:
                         return "coop"
                     elif selected_text == "Settings":
                         return "settings"
+                    elif selected_text == "Users":
+                        return "users"
                     elif selected_text == "High Scores":
                         return "highscores"
                     elif selected_text == "Achievements":
@@ -8197,6 +8652,8 @@ class TitleScreen:
                         return "coop"
                     elif selected_text == "Settings":
                         return "settings"
+                    elif selected_text == "Users":
+                        return "users"
                     elif selected_text == "High Scores":
                         return "highscores"
                     elif selected_text == "Achievements":
@@ -8257,6 +8714,17 @@ class TitleScreen:
             coop_text = self.font_small.render(f"Best Co-op: {coop_best['score']:,} - {coop_best['name']}", True, CYAN)
             coop_rect = coop_text.get_rect(center=(SCREEN_WIDTH // 2, preview_y))
             self.screen.blit(coop_text, coop_rect)
+
+        active_user = self.user_manager.get_active_user()
+        active_user_name = active_user["name"] if active_user else "No User"
+        current_title = self.achievement_manager.get_current_title() if active_user else "N/A"
+
+        user_text = self.font_small.render(f"User: {active_user_name}", True, CYAN)
+        title_text = self.font_small.render(f"Title: {current_title}", True, CYAN)
+        user_rect = user_text.get_rect(topright=(SCREEN_WIDTH - 40, 40))
+        title_rect = title_text.get_rect(topright=(SCREEN_WIDTH - 40, 75))
+        self.screen.blit(user_text, user_rect)
+        self.screen.blit(title_text, title_rect)
 
         pygame.display.flip()
 
@@ -11159,8 +11627,9 @@ def main():
     # Initialize sound manager
     sound_manager = SoundManager()
 
-    # Initialize achievement manager
-    achievement_manager = AchievementManager()
+    # Initialize user manager and achievement manager for active user
+    user_manager = UserManager()
+    achievement_manager = AchievementManager(user_manager.get_achievement_filename())
 
     # Initialize profile manager and load last profile (or defaults)
     profile_manager = ProfileManager()
@@ -11171,7 +11640,7 @@ def main():
     clock = pygame.time.Clock()
 
     while True:
-        title_screen = TitleScreen(screen, score_manager, sound_manager, key_bindings)
+        title_screen = TitleScreen(screen, score_manager, sound_manager, key_bindings, user_manager, achievement_manager)
         
         while True:
             action = title_screen.handle_events()
@@ -11191,7 +11660,10 @@ def main():
                     clock.tick(60)
                 break
             elif action == "achievements":
-                achievement_screen = AchievementScreen(screen, achievement_manager, sound_manager, key_bindings=key_bindings)
+                if user_manager.get_active_user() is None:
+                    achievement_screen = NoUserAchievementScreen(screen, sound_manager, key_bindings=key_bindings)
+                else:
+                    achievement_screen = AchievementScreen(screen, achievement_manager, sound_manager, key_bindings=key_bindings)
                 while True:
                     ach_action = achievement_screen.handle_events()
                     if ach_action == "back":
@@ -11200,6 +11672,65 @@ def main():
                         pygame.quit()
                         sys.exit()
                     achievement_screen.draw()
+                    clock.tick(60)
+                break
+            elif action == "users":
+                user_screen = UserMenuScreen(screen, sound_manager, user_manager, key_bindings=key_bindings)
+                while True:
+                    user_action = user_screen.handle_events()
+                    if user_action == "back":
+                        break
+                    elif user_action == "quit":
+                        pygame.quit()
+                        sys.exit()
+                    elif user_action == "add":
+                        name_screen = UserNameInputScreen(screen, sound_manager, key_bindings)
+                        while True:
+                            name_result = name_screen.handle_events()
+                            if name_result == "quit":
+                                pygame.quit()
+                                sys.exit()
+                            elif name_result == "cancel":
+                                break
+                            elif name_result:
+                                user_manager.add_user(name_result)
+                                achievement_manager = AchievementManager(user_manager.get_achievement_filename())
+                                break
+                            name_screen.draw()
+                            clock.tick(60)
+                        user_screen._refresh_menu()
+                    elif user_action == "rename":
+                        selected_user = user_screen.get_selected_user()
+                        if selected_user:
+                            name_screen = UserNameInputScreen(
+                                screen,
+                                sound_manager,
+                                key_bindings,
+                                initial_name=selected_user["name"]
+                            )
+                            while True:
+                                name_result = name_screen.handle_events()
+                                if name_result == "quit":
+                                    pygame.quit()
+                                    sys.exit()
+                                elif name_result == "cancel":
+                                    break
+                                elif name_result:
+                                    user_manager.rename_user(selected_user["id"], name_result)
+                                    break
+                                name_screen.draw()
+                                clock.tick(60)
+                        user_screen._refresh_menu()
+                    elif user_action == "delete":
+                        selected_user = user_screen.get_selected_user()
+                        if selected_user:
+                            user_manager.delete_user(selected_user["id"])
+                            achievement_manager = AchievementManager(user_manager.get_achievement_filename())
+                        user_screen._refresh_menu()
+                    elif user_action == "selected":
+                        achievement_manager = AchievementManager(user_manager.get_achievement_filename())
+                        break
+                    user_screen.draw()
                     clock.tick(60)
                 break
             elif action == "settings":
