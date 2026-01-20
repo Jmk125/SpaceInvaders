@@ -6967,6 +6967,9 @@ class SnakeBoss:
                     self.particles.remove(particle)
             return None
 
+        if not self.segments:
+            return None
+
         current_time = pygame.time.get_ticks()
 
         # Check if in final phase (only head remains)
@@ -7177,6 +7180,17 @@ class SnakeBoss:
                         self.head_health -= 1
                         return 'damaged'  # Hit vulnerable part - award XP
                     else:
+                        if len(self.segments) == 1:
+                            # Transition to final phase without removing the head
+                            self.final_phase = True
+                            self.speed *= SNAKE_BOSS_FINAL_PHASE_SPEED_MULTIPLIER
+                            self.fireball_cooldown = int(
+                                self.fireball_cooldown / SNAKE_BOSS_FINAL_PHASE_FIREBALL_MULTIPLIER
+                            )
+                            # Recalculate turn speed for doubled speed (turn radius stays constant)
+                            self.turn_speed = (self.speed / self.turn_radius) * 57.2958
+                            self.head_health -= 1
+                            return 'damaged'  # Hit vulnerable part - award XP
                         # Remove tail segment
                         self.create_segment_explosion(segment['x'], segment['y'])
                         self.segments.pop()
