@@ -4900,11 +4900,26 @@ class Player:
             return False
         current_time = pygame.time.get_ticks()
         cooldown = self.get_shoot_cooldown()
-        return current_time - self.last_shot_time >= cooldown
+        time_since_last = current_time - self.last_shot_time
+        can_fire = time_since_last >= cooldown
+
+        # DEBUG: Log when shot is blocked by cooldown
+        if not can_fire and time_since_last > 0:
+            fire_rate_mult = self.upgrades.get_multiplier('fire_rate')
+            print(f"[FIRE DEBUG P{self.player_id}] Shot BLOCKED - cooldown={cooldown:.1f}ms, time_since_last={time_since_last}ms, needs={cooldown-time_since_last:.1f}ms more, fire_rate_mult={fire_rate_mult:.2f}, rapid_fire={self.rapid_fire}")
+
+        return can_fire
         
     def shoot(self, sound_manager=None):
         if not self.can_shoot():
             return []
+
+        # DEBUG: Log fire rate information
+        current_time = pygame.time.get_ticks()
+        cooldown = self.get_shoot_cooldown()
+        time_since_last = current_time - self.last_shot_time
+        fire_rate_mult = self.upgrades.get_multiplier('fire_rate')
+        print(f"[FIRE DEBUG P{self.player_id}] Shot fired! cooldown={cooldown:.1f}ms, time_since_last={time_since_last}ms, fire_rate_mult={fire_rate_mult:.2f}, rapid_fire={self.rapid_fire}, rapid_ammo={self.rapid_fire_ammo}")
 
         self.last_shot_time = pygame.time.get_ticks()
         bullets = []
