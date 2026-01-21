@@ -7524,6 +7524,10 @@ class Enemy:
         self.last_afterimage_time = 0
         # Random offset for shimmer effect so each alien shimmers at different times
         self.shimmer_offset = random.uniform(0, math.pi * 2)
+        # Invincibility properties
+        self.is_invincible = False
+        self.invincibility_start_time = 0
+        self.invincibility_duration = 1000  # 1 second in milliseconds
         
     def move(self):
         # Track position for afterimage if this is a special enemy
@@ -7703,6 +7707,16 @@ class Enemy:
         # Double the speed for special enemies
         self.speed = self.speed * 2
         self.base_speed = self.base_speed * 2
+        # Enable invincibility for 1 second
+        self.is_invincible = True
+        self.invincibility_start_time = pygame.time.get_ticks()
+
+    def update_invincibility(self):
+        """Update invincibility status - disable after duration expires"""
+        if self.is_invincible:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.invincibility_start_time >= self.invincibility_duration:
+                self.is_invincible = False
 
     def draw_afterimages(self, screen):
         """Draw afterimages for special enemies"""
@@ -7746,6 +7760,26 @@ class Enemy:
             pygame.draw.rect(overlay_surface, (*overlay_color, 100), (0, 0, self.width, self.height))
             pygame.draw.rect(overlay_surface, overlay_color, (0, 0, self.width, self.height), 2)  # Border
             screen.blit(overlay_surface, (self.x, self.y))
+
+        # Draw invincibility shield effect
+        if self.is_invincible:
+            # Create a pulsing shield effect
+            current_time = pygame.time.get_ticks()
+            pulse = abs(math.sin(current_time * 0.01))  # Pulsing effect
+            shield_alpha = int(100 + pulse * 100)  # Alpha between 100-200
+
+            # Draw circular shield around enemy
+            shield_surface = pygame.Surface((self.width + 20, self.height + 20), pygame.SRCALPHA)
+            center_x = (self.width + 20) // 2
+            center_y = (self.height + 20) // 2
+            radius = max(self.width, self.height) // 2 + 10
+
+            # Draw pulsing blue shield circle
+            pygame.draw.circle(shield_surface, (100, 200, 255, shield_alpha), (center_x, center_y), radius, 3)
+            # Draw inner glow
+            pygame.draw.circle(shield_surface, (150, 220, 255, shield_alpha // 2), (center_x, center_y), radius - 3, 2)
+
+            screen.blit(shield_surface, (self.x - 10, self.y - 10))
 
 class EnemyExplosion:
     """Simple explosion effect when enemy is destroyed"""
@@ -10920,6 +10954,7 @@ class Game:
             edge_hit = False
             for enemy in self.enemies:
                 enemy.move()
+                enemy.update_invincibility()  # Update invincibility timer
                 if enemy.x <= 0 or enemy.x >= SCREEN_WIDTH - enemy.width:
                     edge_hit = True
                     
@@ -11158,6 +11193,10 @@ class Game:
             else:
                 for enemy in self.enemies[:]:
                     if bullet.rect.colliderect(enemy.rect):
+                        # Skip collision if enemy is invincible
+                        if enemy.is_invincible:
+                            continue
+
                         if bullet.pierce_hits <= 0:
                             self.player_bullets.remove(bullet)
                         # PLAY SMALL EXPLOSION SOUND
@@ -11274,6 +11313,10 @@ class Game:
                 else:
                     for enemy in self.enemies[:]:
                         if laser.rect.colliderect(enemy.rect):
+                            # Skip collision if enemy is invincible
+                            if enemy.is_invincible:
+                                continue
+
                             # PLAY SMALL EXPLOSION SOUND
                             self.sound_manager.play_sound('explosion_small', volume_override=0.4)
                             # CREATE EXPLOSION BEFORE REMOVING ENEMY
