@@ -740,7 +740,7 @@ class PlayerUpgrades:
         """Get the multiplier for a specific stat"""
         level = getattr(self, f"{stat}_level")
         if stat == "bullet_length":
-            return 1.0 + (level * 0.10)
+            return 1.0 + (level * 0.50)
         if stat == "powerup_spawn":
             return 1.0 + (level * 0.05)
         if stat == "boss_damage":
@@ -1962,7 +1962,7 @@ class LevelUpScreen:
 
         self.permanent_upgrade_pool = [
             ("pierce", "Piercing Shot", "Bullets pierce through +1 enemy (stacks to 5)"),
-            ("bullet_length", "Longer Bullets", "Bullet length grows by 10% (stackable)"),
+            ("bullet_length", "Longer Bullets", "Bullet length grows by 50% (stackable)"),
             ("barrier_phase", "Barrier Phasing", "Bullets pass through green barriers"),
             ("powerup_spawn", "Lucky Drops", "Power-ups spawn 5% more often (up to 5)"),
             ("boss_damage", "Boss Breaker", "Bullets deal +10% boss damage (up to 5)"),
@@ -4460,8 +4460,10 @@ class AchievementScreen:
             held = keys[pygame.K_DOWN] or keys[pygame.K_s]
 
         if not held:
-            binding_key = 'player1_up_button' if self.scroll_hold_direction < 0 else 'player1_down_button'
-            held = self._is_binding_held(binding_key)
+            # Check both player 1 and player 2 controller buttons
+            binding_key_p1 = 'player1_up_button' if self.scroll_hold_direction < 0 else 'player1_down_button'
+            binding_key_p2 = 'player2_up_button' if self.scroll_hold_direction < 0 else 'player2_down_button'
+            held = self._is_binding_held(binding_key_p1) or self._is_binding_held(binding_key_p2)
 
         if not held:
             self.scroll_hold_direction = 0
@@ -4543,11 +4545,13 @@ class AchievementScreen:
                 if (isinstance(fire_button, int) and event.button == fire_button) or event.button == 1:
                     self.sound_manager.play_sound('menu_select')
                     return "back"
-            # Use remapped button checks
-            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+            # Use remapped button checks for both players
+            elif (is_button_pressed(event, self.key_bindings, 'player1_up_button') or
+                  is_button_pressed(event, self.key_bindings, 'player2_up_button')):
                 self.sound_manager.play_sound('menu_change')
                 self._begin_scroll_hold(-1)
-            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+            elif (is_button_pressed(event, self.key_bindings, 'player1_down_button') or
+                  is_button_pressed(event, self.key_bindings, 'player2_down_button')):
                 self.sound_manager.play_sound('menu_change')
                 self._begin_scroll_hold(1)
         self._update_scroll_hold()
@@ -9667,7 +9671,9 @@ class Game:
                     'boss_damage_level': player.upgrades.boss_damage_level,
                     'ammo_capacity_level': player.upgrades.ammo_capacity_level,
                     'extra_bullet_level': player.upgrades.extra_bullet_level,
-                    'boss_shield_level': player.upgrades.boss_shield_level
+                    'boss_shield_level': player.upgrades.boss_shield_level,
+                    'reinforced_barriers_level': player.upgrades.reinforced_barriers_level,
+                    'auto_fire_level': player.upgrades.auto_fire_level
                 }
             }
             save_data['players'].append(player_data)
