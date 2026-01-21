@@ -2343,7 +2343,8 @@ class LevelUpScreen:
                         self.countdown_start = pygame.time.get_ticks()
                         
             # Check for remapped up/down buttons
-            elif is_button_pressed(event, self.key_bindings, 'player1_up_button'):
+            # Check if it's an up or down button press
+            elif is_button_pressed(event, self.key_bindings, 'player1_up_button') or is_button_pressed(event, self.key_bindings, 'player2_up_button'):
                 if not self.is_coop:
                     # Single player controller
                     if self.sound_manager:
@@ -2351,14 +2352,21 @@ class LevelUpScreen:
                     options = self.get_options_for_player(0)
                     self.current_selection = (self.current_selection - 1) % len(options)
                 else:
-                    # Co-op player 1
+                    # Co-op - determine which player by controller ID
                     player1_controller_id = self.get_player_controller_id(0)
+                    player2_controller_id = self.get_player_controller_id(1)
+
                     if player1_controller_id is not None and event.joy == player1_controller_id and not self.player1_confirmed:
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
                         p1_options = self.get_options_for_player(0)
                         self.player1_selection = (self.player1_selection - 1) % len(p1_options)
-            elif is_button_pressed(event, self.key_bindings, 'player1_down_button'):
+                    elif player2_controller_id is not None and event.joy == player2_controller_id and not self.player2_confirmed:
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        p2_options = self.get_options_for_player(1)
+                        self.player2_selection = (self.player2_selection - 1) % len(p2_options)
+            elif is_button_pressed(event, self.key_bindings, 'player1_down_button') or is_button_pressed(event, self.key_bindings, 'player2_down_button'):
                 if not self.is_coop:
                     # Single player controller
                     if self.sound_manager:
@@ -2366,27 +2374,20 @@ class LevelUpScreen:
                     options = self.get_options_for_player(0)
                     self.current_selection = (self.current_selection + 1) % len(options)
                 else:
-                    # Co-op player 1
+                    # Co-op - determine which player by controller ID
                     player1_controller_id = self.get_player_controller_id(0)
+                    player2_controller_id = self.get_player_controller_id(1)
+
                     if player1_controller_id is not None and event.joy == player1_controller_id and not self.player1_confirmed:
                         if self.sound_manager:
                             self.sound_manager.play_sound('menu_change')
                         p1_options = self.get_options_for_player(0)
                         self.player1_selection = (self.player1_selection + 1) % len(p1_options)
-            elif is_button_pressed(event, self.key_bindings, 'player2_up_button'):
-                player2_controller_id = self.get_player_controller_id(1)
-                if self.is_coop and player2_controller_id is not None and event.joy == player2_controller_id and not self.player2_confirmed:
-                    if self.sound_manager:
-                        self.sound_manager.play_sound('menu_change')
-                    p2_options = self.get_options_for_player(1)
-                    self.player2_selection = (self.player2_selection - 1) % len(p2_options)
-            elif is_button_pressed(event, self.key_bindings, 'player2_down_button'):
-                player2_controller_id = self.get_player_controller_id(1)
-                if self.is_coop and player2_controller_id is not None and event.joy == player2_controller_id and not self.player2_confirmed:
-                    if self.sound_manager:
-                        self.sound_manager.play_sound('menu_change')
-                    p2_options = self.get_options_for_player(1)
-                    self.player2_selection = (self.player2_selection + 1) % len(p2_options)
+                    elif player2_controller_id is not None and event.joy == player2_controller_id and not self.player2_confirmed:
+                        if self.sound_manager:
+                            self.sound_manager.play_sound('menu_change')
+                        p2_options = self.get_options_for_player(1)
+                        self.player2_selection = (self.player2_selection + 1) % len(p2_options)
 
         return None
         
