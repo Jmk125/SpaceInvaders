@@ -64,6 +64,7 @@ XP_INCREASE_RATE = 0.075  # 10% increase per level (configurable)
 UPGRADE_PERCENTAGE = 0.1  # 10% increase per upgrade (configurable)
 MAX_UPGRADE_MULTIPLIER = 2.0  # 100% increase maximum (configurable)
 BASE_POWERUP_DURATION = 10000  # Base power-up duration in milliseconds
+REPEAT_ACHIEVEMENT_XP = 500  # XP bonus for re-earning an already unlocked achievement
 
 # Boss Configuration
 BOSS_HEALTH_BASE = 50  # Base boss health
@@ -980,6 +981,8 @@ class AchievementManager:
         self.run_stats = {}  # Stats for current run (reset each game)
         self.global_stats = {}  # Global cumulative stats (persist forever)
         self.newly_unlocked = []  # Track newly unlocked achievements this session
+        self.repeated_achievements = []  # Track repeat achievement unlocks for XP bonuses
+        self.repeated_this_run = set()  # Track which achievements awarded repeat bonus this run
 
         # Define all achievements
         self.achievement_definitions = [
@@ -1202,6 +1205,7 @@ class AchievementManager:
 
     def reset_run_stats(self):
         """Reset stats that are tracked per-run"""
+        self.repeated_this_run.clear()  # Clear repeat achievement tracking for new run
         self.run_stats = {
             "run_bosses": 0,
             "run_unique_bosses": set(),
@@ -1263,7 +1267,7 @@ class AchievementManager:
             # Check relevant achievements
             for achievement in self.achievements.values():
                 if achievement.track_key == key and achievement.achievement_type == ACHIEVEMENT_TYPE_CUMULATIVE:
-                    # Defensive check: only add if not already unlocked
+                    # Cumulative achievements don't repeat - they're permanent progress across all playthroughs
                     if not achievement.unlocked and achievement.update_progress(self.global_stats[key]):
                         self.newly_unlocked.append(achievement)
 
@@ -1277,7 +1281,7 @@ class AchievementManager:
         # Check relevant achievements
         for achievement in self.achievements.values():
             if achievement.track_key == key and achievement.achievement_type == ACHIEVEMENT_TYPE_MILESTONE:
-                # Defensive check: only add if not already unlocked
+                # Milestone achievements don't repeat - they're one-time permanent unlocks
                 if not achievement.unlocked and achievement.update_progress(self.global_stats[key]):
                     self.newly_unlocked.append(achievement)
 
@@ -1298,17 +1302,29 @@ class AchievementManager:
                         progress_value = len(self.run_stats[key])
                     else:
                         progress_value = self.run_stats[key]
-                    # Defensive check: only add if not already unlocked
-                    if not achievement.unlocked and achievement.update_progress(progress_value):
-                        self.newly_unlocked.append(achievement)
+                    # Check if achievement criteria are met
+                    if progress_value >= achievement.target_value:
+                        if achievement.unlocked and achievement.id not in self.repeated_this_run:
+                            # Already unlocked - award repeat XP bonus (once per run)
+                            self.repeated_achievements.append(achievement)
+                            self.repeated_this_run.add(achievement.id)
+                        elif not achievement.unlocked and achievement.update_progress(progress_value):
+                            # First time unlock
+                            self.newly_unlocked.append(achievement)
                 elif achievement.achievement_type == ACHIEVEMENT_TYPE_CHALLENGE:
                     if key in ["run_unique_bosses", "bosses_no_death"]:
                         progress_value = len(self.run_stats[key])
                     else:
                         progress_value = self.run_stats[key]
-                    # Defensive check: only add if not already unlocked
-                    if not achievement.unlocked and achievement.update_progress(progress_value):
-                        self.newly_unlocked.append(achievement)
+                    # Check if achievement criteria are met
+                    if progress_value >= achievement.target_value:
+                        if achievement.unlocked and achievement.id not in self.repeated_this_run:
+                            # Already unlocked - award repeat XP bonus (once per run)
+                            self.repeated_achievements.append(achievement)
+                            self.repeated_this_run.add(achievement.id)
+                        elif not achievement.unlocked and achievement.update_progress(progress_value):
+                            # First time unlock
+                            self.newly_unlocked.append(achievement)
 
     def player_died(self):
         """Called when player 1 dies - resets challenge achievements"""
@@ -1514,6 +1530,12 @@ class AchievementManager:
         self.newly_unlocked.clear()
         return unlocked
 
+    def get_repeated_achievements(self):
+        """Get and clear repeated achievement unlocks"""
+        repeated = self.repeated_achievements.copy()
+        self.repeated_achievements.clear()
+        return repeated
+
     def get_completion_percentage(self):
         """Get percentage of achievements unlocked"""
         total = len(self.achievements)
@@ -1610,11 +1632,12 @@ class FloatingText:
 
 class AchievementNotification:
     """Achievement unlock notification (RetroAchievements style)"""
-    def __init__(self, achievement, duration=3000, stack_index=0, player_id=None):
+    def __init__(self, achievement, duration=3000, stack_index=0, player_id=None, is_repeat=False):
         self.achievement = achievement
         self.duration = duration
         self.start_time = pygame.time.get_ticks()
         self.player_id = player_id
+        self.is_repeat = is_repeat
         self.font_title = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
         self.font_text = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14)
         self.font_small = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12)
@@ -1664,20 +1687,33 @@ class AchievementNotification:
 
         # Create text surfaces
         player_text = self.font_small.render(player_label, True, player_color) if player_label else None
-        header_text = self.font_text.render("ACHIEVEMENT UNLOCKED", True, GOLD)
+        if self.is_repeat:
+            header_text = self.font_text.render("ACHIEVEMENT REPEATED", True, CYAN)
+            # Add XP bonus indicator
+            xp_text = self.font_small.render(f"+{REPEAT_ACHIEVEMENT_XP} XP BONUS", True, GOLD)
+        else:
+            header_text = self.font_text.render("ACHIEVEMENT UNLOCKED", True, GOLD)
+            xp_text = None
         name_text = self.font_title.render(self.achievement.name, True, WHITE)
         desc_text = self.font_text.render(self.achievement.description, True, GRAY)
 
-        # Calculate max width including player label if present
+        # Calculate max width including player label and XP bonus if present
         text_widths = [header_text.get_width(), name_text.get_width(), desc_text.get_width()]
         if player_text:
             text_widths.append(player_text.get_width())
+        if xp_text:
+            text_widths.append(xp_text.get_width())
         max_text_width = max(text_widths)
 
-        # Background box (expand width and height if needed for player label)
+        # Background box (expand width and height if needed for player label and XP bonus)
         box_padding_x = 30
         box_width = max(600, max_text_width + (box_padding_x * 2))
-        box_height = 140 if player_label else 120
+        # Adjust height: +20 for player label, +25 for XP bonus
+        box_height = 120
+        if player_label:
+            box_height += 20
+        if xp_text:
+            box_height += 25
         box_x = self.x - box_width // 2
         box_y = int(self.y)
 
@@ -1687,8 +1723,13 @@ class AchievementNotification:
         background.fill((20, 20, 40))
         screen.blit(background, (box_x, box_y))
 
-        # Draw border with player color
-        border_color = player_color if player_label else GOLD
+        # Draw border with player color (cyan for repeats)
+        if self.is_repeat:
+            border_color = CYAN
+        elif player_label:
+            border_color = player_color
+        else:
+            border_color = GOLD
         pygame.draw.rect(screen, border_color, (box_x, box_y, box_width, box_height), 3)
 
         # Draw player label if present
@@ -1708,6 +1749,11 @@ class AchievementNotification:
         # Draw achievement description
         desc_rect = desc_text.get_rect(center=(self.x, box_y + 85 + y_offset))
         screen.blit(desc_text, desc_rect)
+
+        # Draw XP bonus if repeat achievement
+        if xp_text:
+            xp_rect = xp_text.get_rect(center=(self.x, box_y + 110 + y_offset))
+            screen.blit(xp_text, xp_rect)
 
 
 class PauseMenu:
@@ -9411,7 +9457,7 @@ class Game:
         self.key_bindings = key_bindings
         self.awaiting_name_input = False
         self.awaiting_level_up = False
-        self.pending_level_up = False  # Track if player leveled up during current level
+        self.pending_level_ups = 0  # Track how many levels player gained (for consecutive level-up screens)
         self.player_xp_level = 1  # Track player's XP level separately from game level
         self.showing_ufo_warning = False
         self.ufo_warning_screen = None
@@ -9657,7 +9703,7 @@ class Game:
             'score': self.score,
             'total_enemies_killed': self.total_enemies_killed,
             'awaiting_level_up': self.awaiting_level_up,
-            'pending_level_up': self.pending_level_up,
+            'pending_level_ups': self.pending_level_ups,
             'xp_system': {
                 'current_xp': self.xp_system.current_xp,
                 'level': self.xp_system.level,
@@ -9836,7 +9882,7 @@ class Game:
 
         # Restore level up state (if saved from level up screen)
         self.awaiting_level_up = save_data.get('awaiting_level_up', False)
-        self.pending_level_up = save_data.get('pending_level_up', False)
+        self.pending_level_ups = save_data.get('pending_level_ups', 0)
 
         # Setup barriers and level (only if not awaiting level up)
         if not self.awaiting_level_up:
@@ -10122,15 +10168,16 @@ class Game:
         """Add XP and handle level up"""
         old_level = self.xp_system.level
         leveled_up = self.xp_system.add_xp(amount)
-        
+
         # Visual feedback
         if source_x and source_y:
             self.floating_texts.append(FloatingText(source_x, source_y, f"+{amount} XP", GOLD))
-        
-        # Check if XP level increased
+
+        # Check if XP level increased (may increase multiple times!)
         if self.xp_system.level > old_level:
-            self.pending_level_up = True
-            print(f"Player leveled up! XP Level: {self.xp_system.level}, Game Level: {self.level}")  # Debug
+            levels_gained = self.xp_system.level - old_level
+            self.pending_level_ups += levels_gained
+            print(f"Player leveled up {levels_gained} time(s)! XP Level: {self.xp_system.level}, Game Level: {self.level}")  # Debug
 
             # Track XP level achievement for all players
             self.track_for_all_players("track_xp_level", self.xp_system.level)
@@ -10143,7 +10190,7 @@ class Game:
             for player in self.players:
                 if player.is_alive:
                     player.show_level_up_indicator()
-        
+
         return leveled_up
             
     def spawn_power_up(self, player=None):
@@ -10417,14 +10464,25 @@ class Game:
                 print("Saving game and returning to title screen...")
                 self.save_game()
                 self.awaiting_level_up = False
-                self.pending_level_up = False
+                self.pending_level_ups = 0  # Clear all pending level-ups
                 del self.level_up_screen
                 return "title"
             elif result == "continue":
                 print("Level up complete, continuing...")  # Debug
-                self.awaiting_level_up = False
-                self.pending_level_up = False  # Clear the flag
+                self.pending_level_ups -= 1  # Process one level-up
+                print(f"Pending level-ups remaining: {self.pending_level_ups}")  # Debug
+
+                # Delete the current level-up screen
                 del self.level_up_screen
+
+                # Check if there are more level-ups pending
+                if self.pending_level_ups > 0:
+                    # Keep awaiting_level_up True to show next level-up screen
+                    print(f"Showing next level-up screen...")  # Debug
+                else:
+                    # All level-ups processed
+                    self.awaiting_level_up = False
+                    print("All level-ups processed")  # Debug
 
                 # Check if players have maxed any upgrades (for achievements)
                 for player in self.players:
@@ -10693,10 +10751,10 @@ class Game:
                 level_complete = True
 
         if level_complete:
-            print(f"Level complete! pending_level_up: {self.pending_level_up}")  # Debug
+            print(f"Level complete! pending_level_ups: {self.pending_level_ups}")  # Debug
             # Check if player leveled up during this level - show level up screen first
-            if self.pending_level_up:
-                print("Showing level up screen...")  # Debug
+            if self.pending_level_ups > 0:
+                print(f"Showing level up screen ({self.pending_level_ups} level(s) pending)...")  # Debug
                 self.awaiting_level_up = True
                 return False  # Don't advance game level yet, wait for upgrade selection
 
@@ -10844,10 +10902,22 @@ class Game:
             for achievement in newly_unlocked:
                 # Stack notifications vertically - use current number of active notifications as stack index
                 stack_index = len(self.achievement_notifications)
-                notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id)
+                notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id, is_repeat=False)
                 self.achievement_notifications.append(notification)
                 self.sound_manager.play_sound('powerup')  # Play a sound for achievement unlock
                 manager.save()  # Save immediately when achievement unlocks
+
+        # Check for repeated achievements and award XP bonus
+        for player_id, manager in self.achievement_managers.items():
+            repeated = manager.get_repeated_achievements()
+            for achievement in repeated:
+                # Award XP bonus for repeat achievement
+                self.add_xp(REPEAT_ACHIEVEMENT_XP)
+                # Create notification for repeat achievement
+                stack_index = len(self.achievement_notifications)
+                notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id, is_repeat=True)
+                self.achievement_notifications.append(notification)
+                self.sound_manager.play_sound('powerup')  # Play a sound for repeat achievement
 
         # Update achievement notifications
         self.achievement_notifications = [notif for notif in self.achievement_notifications if notif.update()]
@@ -11488,7 +11558,7 @@ class Game:
         self.game_over = False
         self.awaiting_name_input = False
         self.awaiting_level_up = False
-        self.pending_level_up = False
+        self.pending_level_ups = 0
         if hasattr(self, 'name_input_screen'):
             del self.name_input_screen
         if hasattr(self, 'level_up_screen'):
@@ -11557,7 +11627,10 @@ class Game:
         # Handle level up screen
         if self.awaiting_level_up:
             if not hasattr(self, 'level_up_screen'):
-                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, self.xp_system.level, self.level, self.score, self.key_bindings)
+                # Calculate which level-up screen to show
+                # If we have 2 pending level-ups and current level is 10, show level 9 first, then 10
+                level_to_show = self.xp_system.level - (self.pending_level_ups - 1)
+                self.level_up_screen = LevelUpScreen(self.screen, self.players, self.coop_mode, self.sound_manager, level_to_show, self.level, self.score, self.key_bindings)
             self.level_up_screen.draw()
             return
         
