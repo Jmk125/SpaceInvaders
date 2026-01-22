@@ -4764,6 +4764,8 @@ class Player:
         self.base_speed = BASE_PLAYER_SPEED
         self.rect = pygame.Rect(x, y, self.width, self.height)
         self.last_shot_time = 0
+        self.shot_queued = False  # Input buffer for fire button
+        self.shot_queue_time = 0
         self.invincible = False
         self.invincible_end_time = 0
         self.rapid_fire = False
@@ -5042,6 +5044,51 @@ class Player:
                 sound_manager.play_sound('shoot', force_play=True)  # Always play normal shots
 
         return bullets
+
+    def request_shot(self):
+        """Request a shot - will queue it if cooldown hasn't expired yet"""
+        if not self.is_alive:
+            return
+
+        current_time = pygame.time.get_ticks()
+        cooldown = self.get_shoot_cooldown()
+        time_since_last = current_time - self.last_shot_time
+
+        # If we can shoot now, don't bother queuing
+        if time_since_last >= cooldown:
+            return
+
+        # Queue the shot if we're within a reasonable buffer window (50ms)
+        time_remaining = cooldown - time_since_last
+        if time_remaining <= 50:  # Only queue if we're close to being ready
+            if not self.shot_queued:
+                self.shot_queued = True
+                self.shot_queue_time = current_time
+                fire_rate_mult = self.upgrades.get_multiplier('fire_rate')
+                print(f"[FIRE DEBUG P{self.player_id}] Shot QUEUED - will fire in {time_remaining:.1f}ms, fire_rate_mult={fire_rate_mult:.2f}")
+
+    def process_shot_queue(self):
+        """Check if queued shot is ready to fire"""
+        if not self.shot_queued:
+            return []
+
+        current_time = pygame.time.get_ticks()
+
+        # Clear stale queued shots (older than 100ms)
+        if current_time - self.shot_queue_time > 100:
+            self.shot_queued = False
+            return []
+
+        # Check if we can shoot now
+        cooldown = self.get_shoot_cooldown()
+        time_since_last = current_time - self.last_shot_time
+
+        if time_since_last >= cooldown:
+            self.shot_queued = False
+            print(f"[FIRE DEBUG P{self.player_id}] Processing QUEUED shot (queued {current_time - self.shot_queue_time}ms ago)")
+            return self.shoot()
+
+        return []
 
     def create_muzzle_flash(self, offsets):
         """Create muzzle flash particles and bright flash circles for bullet firing"""
@@ -10263,6 +10310,9 @@ class Game:
                             shot_stat_type = 'normal'
 
                         shots = player.shoot(self.sound_manager)
+                        # If shot was blocked by cooldown, queue it for later
+                        if not shots:
+                            player.request_shot()
                         for shot_type, shot in shots:
                             if shot_type == 'bullet':
                                 self.sound_manager.play_sound('shoot')
@@ -10302,6 +10352,9 @@ class Game:
                             shot_stat_type = 'normal'
 
                         shots = player.shoot(self.sound_manager)
+                        # If shot was blocked by cooldown, queue it for later
+                        if not shots:
+                            player.request_shot()
                         for shot_type, shot in shots:
                             if shot_type == 'bullet':
                                 self.sound_manager.play_sound('shoot')
@@ -10366,6 +10419,9 @@ class Game:
                                     shot_stat_type = 'normal'
 
                                 shots = player.shoot(self.sound_manager)
+                                # If shot was blocked by cooldown, queue it for later
+                                if not shots:
+                                    player.request_shot()
                                 for shot_type, shot in shots:
                                     if shot_type == 'bullet':
                                         self.sound_manager.play_sound('shoot')
@@ -10889,6 +10945,41 @@ class Game:
 
         if self.game_over or self.awaiting_level_up:
             return
+
+        # Process queued shots for all players
+        for i, player in enumerate(self.players):
+            if player.is_alive:
+                shots = player.process_shot_queue()
+                if shots:
+                    # Determine shot type for stats tracking
+                    if player.has_laser:
+                        shot_stat_type = 'laser'
+                    elif player.has_multi_shot and player.multi_shot_ammo > 0:
+                        shot_stat_type = 'multi'
+                    elif player.rapid_fire and player.rapid_fire_ammo > 0:
+                        shot_stat_type = 'rapid'
+                    else:
+                        shot_stat_type = 'normal'
+
+                    for shot_type, shot in shots:
+                        if shot_type == 'bullet':
+                            self.sound_manager.play_sound('shoot')
+                            self.player_bullets.append(shot)
+                            if i < len(self.player_stats):
+                                self.player_stats[i].record_shot(shot_stat_type)
+                            self.track_shot_at_last_enemy(player.player_id)
+                            self.track_shot_for_achievements(player.player_id, shot_stat_type)
+                        elif shot_type == 'laser':
+                            self.sound_manager.play_sound('laser')
+                            self.laser_beams.append(shot)
+                            if i < len(self.player_stats):
+                                self.player_stats[i].record_shot(shot_stat_type)
+                            self.track_shot_at_last_enemy(player.player_id)
+                            self.track_shot_for_achievements(player.player_id, shot_stat_type)
+                        elif shot_type == 'muzzle_flash':
+                            self.muzzle_flash_particles.extend(shot)
+                        elif shot_type == 'muzzle_flash_flashes':
+                            self.muzzle_flash_flashes.extend(shot)
 
         # Update floating texts
         self.floating_texts = [text for text in self.floating_texts if text.update()]
