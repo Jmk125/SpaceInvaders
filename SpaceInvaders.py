@@ -1101,24 +1101,24 @@ class AchievementManager:
              "description": "Defeat a level 5 boss",
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "five_for_fighting"},
 
-            # Boss-specific achievements
+            # Boss-specific achievements (SINGLE_RUN so they can be re-earned for repeat XP bonuses)
             {"id": "thlithery_thnake", "name": "Thlithery Thnake!", "description": "Kill the Snake Boss",
-             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "snake_boss_defeated"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "snake_boss_defeated"},
 
             {"id": "solve_puzzle", "name": "Solve the Puzzle", "description": "Kill the Rubik's Cube boss",
-             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "rubiks_boss_defeated"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "rubiks_boss_defeated"},
 
             {"id": "dodged_bullet", "name": "Dodged A Bullet!", "description": "Kill the Bullet Hell boss",
-             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "bullet_hell_boss_defeated"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "bullet_hell_boss_defeated"},
 
             {"id": "object_identified", "name": "Object Identified", "description": "Kill the UFO boss",
-             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "ufo_boss_defeated"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "ufo_boss_defeated"},
 
             {"id": "look_ma_no_hands", "name": "Look Ma! No Hands!", "description": "Kill the Alien Overlord boss",
-             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "overlord_boss_defeated"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "overlord_boss_defeated"},
 
             {"id": "never_tell_odds", "name": "Never Tell Me The Odds!", "description": "Get through the asteroid field",
-             "type": ACHIEVEMENT_TYPE_MILESTONE, "target": 1, "track_key": "asteroid_boss_defeated"},
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "asteroid_boss_defeated"},
 
             # Time-based achievement
             {"id": "hero_of_time", "name": "Hero of Time", "description": "Log 10 hours of play",
@@ -1245,6 +1245,13 @@ class AchievementManager:
             # Boss encounter tracking (per boss type)
             "boss_defeats_by_type": {},
             "five_for_fighting": 0,
+            # Boss-specific defeats (per run for repeat achievements)
+            "snake_boss_defeated": 0,
+            "rubiks_boss_defeated": 0,
+            "bullet_hell_boss_defeated": 0,
+            "ufo_boss_defeated": 0,
+            "overlord_boss_defeated": 0,
+            "asteroid_boss_defeated": 0,
         }
 
     def start_new_run(self, is_coop=False):
@@ -1401,7 +1408,7 @@ class AchievementManager:
             self.run_stats["five_for_fighting"] = 1
             self.track_run_stat("five_for_fighting", 1)
 
-        # Track boss-specific achievements
+        # Track boss-specific achievements (changed to run_stat for repeat bonuses)
         boss_achievement_map = {
             "SnakeBoss": "snake_boss_defeated",
             "RubiksCubeBoss": "rubiks_boss_defeated",
@@ -1412,7 +1419,8 @@ class AchievementManager:
         }
         if boss_name in boss_achievement_map:
             achievement_key = boss_achievement_map[boss_name]
-            self.track_milestone(achievement_key, 1)
+            self.run_stats[achievement_key] = 1  # Mark as defeated in this run
+            self.track_run_stat(achievement_key, 1)  # Trigger achievement check
 
         # Track fast boss kill (less than 10 seconds)
         if self.run_stats["current_boss_start_time"] is not None:
@@ -9505,6 +9513,9 @@ class Game:
         self.xp_system = XPSystem()
         self.last_permanent_powerup = {}  # Track last permanent powerup per player to prevent consecutive repeats
 
+        # Shared tracking for repeat achievement XP bonuses (prevents double-dipping in coop)
+        self.repeat_bonuses_awarded_this_run = set()  # Track which achievements already awarded repeat XP this run
+
         # Player statistics tracking
         self.player_stats = []  # Will be populated when players are created
 
@@ -9598,6 +9609,9 @@ class Game:
         self.coop_mode = (mode == "coop")
         self.players = []
         self.player_stats = []  # Reset stats
+
+        # Clear shared repeat bonus tracking for new run
+        self.repeat_bonuses_awarded_this_run.clear()
 
         # Start new achievement run for all active managers
         for player_id, manager in self.achievement_managers.items():
@@ -10944,9 +10958,16 @@ class Game:
         for player_id, manager in self.achievement_managers.items():
             repeated = manager.get_repeated_achievements()
             for achievement in repeated:
-                # Award XP bonus for repeat achievement
-                self.add_xp(REPEAT_ACHIEVEMENT_XP)
-                # Create notification for repeat achievement
+                # Check if this achievement already awarded repeat XP this run (prevents double-dipping in coop)
+                if achievement.id not in self.repeat_bonuses_awarded_this_run:
+                    # Award XP bonus for repeat achievement (only once per playthrough)
+                    self.add_xp(REPEAT_ACHIEVEMENT_XP)
+                    self.repeat_bonuses_awarded_this_run.add(achievement.id)
+                    print(f"[DEBUG] Awarded {REPEAT_ACHIEVEMENT_XP} XP for repeat achievement '{achievement.name}' (player {player_id})")
+                else:
+                    print(f"[DEBUG] Skipping repeat XP for '{achievement.name}' (player {player_id}) - already awarded this run")
+
+                # Always create notification for this player (even if XP already awarded by other player)
                 stack_index = len(self.achievement_notifications)
                 notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id, is_repeat=True)
                 self.achievement_notifications.append(notification)
