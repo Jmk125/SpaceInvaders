@@ -1205,6 +1205,7 @@ class AchievementManager:
 
     def reset_run_stats(self):
         """Reset stats that are tracked per-run"""
+        print(f"[DEBUG] reset_run_stats() called - clearing repeated_this_run")
         self.repeated_this_run.clear()  # Clear repeat achievement tracking for new run
         self.run_stats = {
             "run_bosses": 0,
@@ -1304,13 +1305,22 @@ class AchievementManager:
                         progress_value = self.run_stats[key]
                     # Check if achievement criteria are met
                     if progress_value >= achievement.target_value:
+                        print(f"[DEBUG] SINGLE_RUN Achievement '{achievement.name}' (key={key}) criteria met:")
+                        print(f"  - progress_value: {progress_value}, target: {achievement.target_value}")
+                        print(f"  - achievement.unlocked: {achievement.unlocked}")
+                        print(f"  - achievement.id in repeated_this_run: {achievement.id in self.repeated_this_run}")
+                        print(f"  - repeated_this_run contents: {self.repeated_this_run}")
                         if achievement.unlocked and achievement.id not in self.repeated_this_run:
                             # Already unlocked - award repeat XP bonus (once per run)
+                            print(f"  -> Adding to repeated_achievements (repeat bonus!)")
                             self.repeated_achievements.append(achievement)
                             self.repeated_this_run.add(achievement.id)
                         elif not achievement.unlocked and achievement.update_progress(progress_value):
                             # First time unlock
+                            print(f"  -> Adding to newly_unlocked (first time!)")
                             self.newly_unlocked.append(achievement)
+                        else:
+                            print(f"  -> Already processed this run or other condition not met")
                 elif achievement.achievement_type == ACHIEVEMENT_TYPE_CHALLENGE:
                     if key in ["run_unique_bosses", "bosses_no_death"]:
                         progress_value = len(self.run_stats[key])
@@ -1318,13 +1328,22 @@ class AchievementManager:
                         progress_value = self.run_stats[key]
                     # Check if achievement criteria are met
                     if progress_value >= achievement.target_value:
+                        print(f"[DEBUG] CHALLENGE Achievement '{achievement.name}' (key={key}) criteria met:")
+                        print(f"  - progress_value: {progress_value}, target: {achievement.target_value}")
+                        print(f"  - achievement.unlocked: {achievement.unlocked}")
+                        print(f"  - achievement.id in repeated_this_run: {achievement.id in self.repeated_this_run}")
+                        print(f"  - repeated_this_run contents: {self.repeated_this_run}")
                         if achievement.unlocked and achievement.id not in self.repeated_this_run:
                             # Already unlocked - award repeat XP bonus (once per run)
+                            print(f"  -> Adding to repeated_achievements (repeat bonus!)")
                             self.repeated_achievements.append(achievement)
                             self.repeated_this_run.add(achievement.id)
                         elif not achievement.unlocked and achievement.update_progress(progress_value):
                             # First time unlock
+                            print(f"  -> Adding to newly_unlocked (first time!)")
                             self.newly_unlocked.append(achievement)
+                        else:
+                            print(f"  -> Already processed this run or other condition not met")
 
     def player_died(self):
         """Called when player 1 dies - resets challenge achievements"""
