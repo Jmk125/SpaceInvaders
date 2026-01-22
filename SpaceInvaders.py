@@ -5058,14 +5058,17 @@ class Player:
         if time_since_last >= cooldown:
             return
 
-        # Queue the shot if we're within a reasonable buffer window (50ms)
-        time_remaining = cooldown - time_since_last
-        if time_remaining <= 50:  # Only queue if we're close to being ready
-            if not self.shot_queued:
-                self.shot_queued = True
-                self.shot_queue_time = current_time
-                fire_rate_mult = self.upgrades.get_multiplier('fire_rate')
-                print(f"[FIRE DEBUG P{self.player_id}] Shot QUEUED - will fire in {time_remaining:.1f}ms, fire_rate_mult={fire_rate_mult:.2f}")
+        # Always queue the shot, regardless of how far from cooldown we are
+        # This allows rapid button mashing to maintain a queued shot at all times
+        if not self.shot_queued:
+            self.shot_queued = True
+            self.shot_queue_time = current_time
+            time_remaining = cooldown - time_since_last
+            fire_rate_mult = self.upgrades.get_multiplier('fire_rate')
+            print(f"[FIRE DEBUG P{self.player_id}] Shot QUEUED - will fire in {time_remaining:.1f}ms, fire_rate_mult={fire_rate_mult:.2f}")
+        else:
+            # Update queue time to keep it fresh if player keeps pressing
+            self.shot_queue_time = current_time
 
     def process_shot_queue(self):
         """Check if queued shot is ready to fire"""
@@ -5074,9 +5077,11 @@ class Player:
 
         current_time = pygame.time.get_ticks()
 
-        # Clear stale queued shots (older than 100ms)
-        if current_time - self.shot_queue_time > 100:
+        # Clear stale queued shots (older than 300ms - roughly 2 cooldown cycles)
+        # This prevents shots from firing after player stops pressing
+        if current_time - self.shot_queue_time > 300:
             self.shot_queued = False
+            print(f"[FIRE DEBUG P{self.player_id}] Cleared STALE queued shot")
             return []
 
         # Check if we can shoot now
