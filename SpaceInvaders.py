@@ -1288,6 +1288,7 @@ class AchievementManager:
 
     def track_run_stat(self, key, value):
         """Track stats for current run only"""
+        print(f"[DEBUG] track_run_stat() called with key='{key}', value={value}")
         if key == "run_unique_bosses" or key == "bosses_no_death":
             # These use sets for unique boss tracking
             if isinstance(value, str):
@@ -1296,8 +1297,12 @@ class AchievementManager:
             self.run_stats[key] = value
 
         # Check relevant achievements
+        print(f"[DEBUG] Checking {len(self.achievements)} achievements for track_key='{key}'")
+        matching_count = 0
         for achievement in self.achievements.values():
             if achievement.track_key == key:
+                matching_count += 1
+                print(f"[DEBUG] Found matching achievement #{matching_count}: '{achievement.name}' (type={achievement.achievement_type})")
                 if achievement.achievement_type == ACHIEVEMENT_TYPE_SINGLE_RUN:
                     if key in ["run_unique_bosses", "bosses_no_death"]:
                         progress_value = len(self.run_stats[key])
@@ -1344,6 +1349,8 @@ class AchievementManager:
                             self.newly_unlocked.append(achievement)
                         else:
                             print(f"  -> Already processed this run or other condition not met")
+
+        print(f"[DEBUG] track_run_stat() finished: found {matching_count} matching achievements for key='{key}'")
 
     def player_died(self):
         """Called when player 1 dies - resets challenge achievements"""
@@ -1474,13 +1481,20 @@ class AchievementManager:
         if remaining_enemies == 1:
             # Start tracking shots when only 1 enemy remains
             if not self.run_stats["tracking_last_enemy"]:
+                print(f"[DEBUG] Sharp Shooter: Starting tracking (1 enemy left)")
                 self.run_stats["tracking_last_enemy"] = True
                 self.run_stats["last_enemy_shots_fired"] = 0
         elif remaining_enemies == 0:
             # Level complete - check if we killed last enemy with 1 shot
+            print(f"[DEBUG] Sharp Shooter: Level complete check")
+            print(f"  - tracking_last_enemy: {self.run_stats['tracking_last_enemy']}")
+            print(f"  - last_enemy_shots_fired: {self.run_stats['last_enemy_shots_fired']}")
             if self.run_stats["tracking_last_enemy"] and self.run_stats["last_enemy_shots_fired"] == 1:
+                print(f"[DEBUG] Sharp Shooter: CRITERIA MET! Setting run_stats and calling track_run_stat")
                 self.run_stats["sharp_shooter"] = 1
                 self.track_run_stat("sharp_shooter", 1)
+            else:
+                print(f"[DEBUG] Sharp Shooter: Criteria NOT met")
             # Reset for next level
             self.run_stats["last_enemy_shots_fired"] = 0
             self.run_stats["tracking_last_enemy"] = False
