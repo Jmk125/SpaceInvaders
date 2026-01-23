@@ -741,7 +741,7 @@ class PlayerUpgrades:
         """Get the multiplier for a specific stat"""
         level = getattr(self, f"{stat}_level")
         if stat == "bullet_length":
-            return 1.0 + (level * 0.50)
+            return 1.0 + (level * 1.0)
         if stat == "powerup_spawn":
             return 1.0 + (level * 0.05)
         if stat == "boss_damage":
@@ -2049,7 +2049,7 @@ class LevelUpScreen:
 
         self.permanent_upgrade_pool = [
             ("pierce", "Piercing Shot", "Bullets pierce through +1 enemy (stacks to 5)"),
-            ("bullet_length", "Longer Bullets", "Bullet length grows by 50% (stackable)"),
+            ("bullet_length", "Longer Bullets", "Bullet length grows by 100% (stackable)"),
             ("barrier_phase", "Barrier Phasing", "Bullets pass through green barriers"),
             ("powerup_spawn", "Lucky Drops", "Power-ups spawn 5% more often (up to 5)"),
             ("boss_damage", "Boss Breaker", "Bullets deal +10% boss damage (up to 5)"),
