@@ -7723,125 +7723,159 @@ class Enemy:
         shimmer = self.get_shimmer_factor()
         return tuple(min(255, int(c * shimmer)) for c in color)
     
-    def draw_squid_enemy(self, screen):
+    def _scale_color(self, color, factor):
+        return tuple(max(0, min(255, int(c * factor))) for c in color)
+
+    def _get_special_base_color(self):
+        return GOLD if self.special_type == 'gold' else SILVER
+
+    def draw_squid_enemy(self, screen, x=None, y=None):
         """Top row - Green squid-like alien (most points) - EVEN BIGGER VERSION"""
         # Main body (green) - expanded further
-        body_color = self.apply_shimmer_to_color((0, 200, 0))
-        dark_green = self.apply_shimmer_to_color((0, 150, 0))
+        draw_x = self.x if x is None else x
+        draw_y = self.y if y is None else y
+        if self.is_special:
+            base_color = self._get_special_base_color()
+            body_color = self._scale_color(base_color, 1.0)
+            dark_green = self._scale_color(base_color, 0.7)
+        else:
+            body_color = self.apply_shimmer_to_color((0, 200, 0))
+            dark_green = self.apply_shimmer_to_color((0, 150, 0))
         
         # Body outline - made bigger
-        pygame.draw.rect(screen, body_color, (self.x + 3, self.y + 2, 39, 26))
+        pygame.draw.rect(screen, body_color, (draw_x + 3, draw_y + 2, 39, 26))
         
         # Head bumps - bigger
-        pygame.draw.rect(screen, body_color, (self.x - 2, self.y + 5, 12, 12))
-        pygame.draw.rect(screen, body_color, (self.x + 35, self.y + 5, 12, 12))
+        pygame.draw.rect(screen, body_color, (draw_x - 2, draw_y + 5, 12, 12))
+        pygame.draw.rect(screen, body_color, (draw_x + 35, draw_y + 5, 12, 12))
         
         # Eyes (white with black pupils) - bigger
-        pygame.draw.rect(screen, WHITE, (self.x + 8, self.y + 6, 10, 10))
-        pygame.draw.rect(screen, WHITE, (self.x + 27, self.y + 6, 10, 10))
-        pygame.draw.rect(screen, BLACK, (self.x + 10, self.y + 8, 6, 6))
-        pygame.draw.rect(screen, BLACK, (self.x + 29, self.y + 8, 6, 6))
+        pygame.draw.rect(screen, WHITE, (draw_x + 8, draw_y + 6, 10, 10))
+        pygame.draw.rect(screen, WHITE, (draw_x + 27, draw_y + 6, 10, 10))
+        pygame.draw.rect(screen, BLACK, (draw_x + 10, draw_y + 8, 6, 6))
+        pygame.draw.rect(screen, BLACK, (draw_x + 29, draw_y + 8, 6, 6))
         
         # Tentacles - bigger and more
-        pygame.draw.rect(screen, dark_green, (self.x + 3, self.y + 24, 5, 10))
-        pygame.draw.rect(screen, dark_green, (self.x + 10, self.y + 26, 5, 8))
-        pygame.draw.rect(screen, dark_green, (self.x + 17, self.y + 24, 5, 10))
-        pygame.draw.rect(screen, dark_green, (self.x + 24, self.y + 26, 5, 8))
-        pygame.draw.rect(screen, dark_green, (self.x + 31, self.y + 24, 5, 10))
-        pygame.draw.rect(screen, dark_green, (self.x + 38, self.y + 26, 5, 8))
+        pygame.draw.rect(screen, dark_green, (draw_x + 3, draw_y + 24, 5, 10))
+        pygame.draw.rect(screen, dark_green, (draw_x + 10, draw_y + 26, 5, 8))
+        pygame.draw.rect(screen, dark_green, (draw_x + 17, draw_y + 24, 5, 10))
+        pygame.draw.rect(screen, dark_green, (draw_x + 24, draw_y + 26, 5, 8))
+        pygame.draw.rect(screen, dark_green, (draw_x + 31, draw_y + 24, 5, 10))
+        pygame.draw.rect(screen, dark_green, (draw_x + 38, draw_y + 26, 5, 8))
         
-    def draw_crab_enemy(self, screen):
+    def draw_crab_enemy(self, screen, x=None, y=None):
         """Second row - Red crab-like alien - EVEN BIGGER VERSION"""
         # Main body (red) - expanded further
-        body_color = self.apply_shimmer_to_color((220, 20, 20))
-        dark_red = self.apply_shimmer_to_color((180, 0, 0))
+        draw_x = self.x if x is None else x
+        draw_y = self.y if y is None else y
+        if self.is_special:
+            base_color = self._get_special_base_color()
+            body_color = self._scale_color(base_color, 1.0)
+            dark_red = self._scale_color(base_color, 0.7)
+        else:
+            body_color = self.apply_shimmer_to_color((220, 20, 20))
+            dark_red = self.apply_shimmer_to_color((180, 0, 0))
         
         # Main body - bigger
-        pygame.draw.rect(screen, body_color, (self.x + 2, self.y + 6, 41, 18))
+        pygame.draw.rect(screen, body_color, (draw_x + 2, draw_y + 6, 41, 18))
         
         # Claws - bigger
-        pygame.draw.rect(screen, dark_red, (self.x - 3, self.y + 3, 12, 10))
-        pygame.draw.rect(screen, dark_red, (self.x + 36, self.y + 3, 12, 10))
+        pygame.draw.rect(screen, dark_red, (draw_x - 3, draw_y + 3, 12, 10))
+        pygame.draw.rect(screen, dark_red, (draw_x + 36, draw_y + 3, 12, 10))
         
         # Claw details - bigger
-        pygame.draw.rect(screen, body_color, (self.x - 5, self.y, 8, 8))
-        pygame.draw.rect(screen, body_color, (self.x + 42, self.y, 8, 8))
+        pygame.draw.rect(screen, body_color, (draw_x - 5, draw_y, 8, 8))
+        pygame.draw.rect(screen, body_color, (draw_x + 42, draw_y, 8, 8))
         
         # Eyes - bigger
-        pygame.draw.rect(screen, WHITE, (self.x + 9, self.y + 8, 8, 8))
-        pygame.draw.rect(screen, WHITE, (self.x + 28, self.y + 8, 8, 8))
-        pygame.draw.rect(screen, BLACK, (self.x + 11, self.y + 10, 4, 4))
-        pygame.draw.rect(screen, BLACK, (self.x + 30, self.y + 10, 4, 4))
+        pygame.draw.rect(screen, WHITE, (draw_x + 9, draw_y + 8, 8, 8))
+        pygame.draw.rect(screen, WHITE, (draw_x + 28, draw_y + 8, 8, 8))
+        pygame.draw.rect(screen, BLACK, (draw_x + 11, draw_y + 10, 4, 4))
+        pygame.draw.rect(screen, BLACK, (draw_x + 30, draw_y + 10, 4, 4))
         
         # Legs - more and bigger
-        pygame.draw.rect(screen, dark_red, (self.x + 6, self.y + 24, 4, 6))
-        pygame.draw.rect(screen, dark_red, (self.x + 13, self.y + 24, 4, 6))
-        pygame.draw.rect(screen, dark_red, (self.x + 20, self.y + 24, 4, 6))
-        pygame.draw.rect(screen, dark_red, (self.x + 27, self.y + 24, 4, 6))
-        pygame.draw.rect(screen, dark_red, (self.x + 34, self.y + 24, 4, 6))
-        pygame.draw.rect(screen, dark_red, (self.x + 41, self.y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (draw_x + 6, draw_y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (draw_x + 13, draw_y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (draw_x + 20, draw_y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (draw_x + 27, draw_y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (draw_x + 34, draw_y + 24, 4, 6))
+        pygame.draw.rect(screen, dark_red, (draw_x + 41, draw_y + 24, 4, 6))
         
-    def draw_octopus_enemy(self, screen):
+    def draw_octopus_enemy(self, screen, x=None, y=None):
         """Middle rows - Blue octopus-like alien - EVEN BIGGER VERSION"""
         # Main body (blue) - expanded further
-        body_color = self.apply_shimmer_to_color((20, 100, 220))
-        dark_blue = self.apply_shimmer_to_color((0, 60, 180))
+        draw_x = self.x if x is None else x
+        draw_y = self.y if y is None else y
+        if self.is_special:
+            base_color = self._get_special_base_color()
+            body_color = self._scale_color(base_color, 1.0)
+            dark_blue = self._scale_color(base_color, 0.7)
+        else:
+            body_color = self.apply_shimmer_to_color((20, 100, 220))
+            dark_blue = self.apply_shimmer_to_color((0, 60, 180))
         
         # Round head - bigger
-        pygame.draw.rect(screen, body_color, (self.x + 5, self.y, 35, 24))
-        pygame.draw.rect(screen, body_color, (self.x + 1, self.y + 6, 43, 14))
+        pygame.draw.rect(screen, body_color, (draw_x + 5, draw_y, 35, 24))
+        pygame.draw.rect(screen, body_color, (draw_x + 1, draw_y + 6, 43, 14))
         
         # Eyes - bigger
-        pygame.draw.rect(screen, WHITE, (self.x + 10, self.y + 6, 9, 10))
-        pygame.draw.rect(screen, WHITE, (self.x + 26, self.y + 6, 9, 10))
-        pygame.draw.rect(screen, BLACK, (self.x + 12, self.y + 8, 5, 6))
-        pygame.draw.rect(screen, BLACK, (self.x + 28, self.y + 8, 5, 6))
+        pygame.draw.rect(screen, WHITE, (draw_x + 10, draw_y + 6, 9, 10))
+        pygame.draw.rect(screen, WHITE, (draw_x + 26, draw_y + 6, 9, 10))
+        pygame.draw.rect(screen, BLACK, (draw_x + 12, draw_y + 8, 5, 6))
+        pygame.draw.rect(screen, BLACK, (draw_x + 28, draw_y + 8, 5, 6))
         
         # Wavy tentacles - bigger and more
-        pygame.draw.rect(screen, dark_blue, (self.x + 1, self.y + 18, 4, 10))
-        pygame.draw.rect(screen, dark_blue, (self.x + 7, self.y + 20, 4, 8))
-        pygame.draw.rect(screen, dark_blue, (self.x + 13, self.y + 18, 4, 10))
-        pygame.draw.rect(screen, dark_blue, (self.x + 19, self.y + 20, 4, 8))
-        pygame.draw.rect(screen, dark_blue, (self.x + 25, self.y + 18, 4, 10))
-        pygame.draw.rect(screen, dark_blue, (self.x + 31, self.y + 20, 4, 8))
-        pygame.draw.rect(screen, dark_blue, (self.x + 37, self.y + 18, 4, 10))
-        pygame.draw.rect(screen, dark_blue, (self.x + 43, self.y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 1, draw_y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 7, draw_y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 13, draw_y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 19, draw_y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 25, draw_y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 31, draw_y + 20, 4, 8))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 37, draw_y + 18, 4, 10))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 43, draw_y + 20, 4, 8))
         
         # Tentacle curves - bigger
-        pygame.draw.rect(screen, dark_blue, (self.x - 1, self.y + 26, 4, 4))
-        pygame.draw.rect(screen, dark_blue, (self.x + 42, self.y + 26, 4, 4))
+        pygame.draw.rect(screen, dark_blue, (draw_x - 1, draw_y + 26, 4, 4))
+        pygame.draw.rect(screen, dark_blue, (draw_x + 42, draw_y + 26, 4, 4))
         
-    def draw_basic_enemy(self, screen):
+    def draw_basic_enemy(self, screen, x=None, y=None):
         """Bottom rows - Simple geometric alien - EVEN BIGGER VERSION"""
         # Main body (mixed colors) - expanded further
-        if self.enemy_type == 3:
-            body_color = self.apply_shimmer_to_color((200, 100, 0))  # Orange
-            accent_color = self.apply_shimmer_to_color((255, 150, 0))
+        draw_x = self.x if x is None else x
+        draw_y = self.y if y is None else y
+        if self.is_special:
+            base_color = self._get_special_base_color()
+            body_color = self._scale_color(base_color, 0.9)
+            accent_color = self._scale_color(base_color, 1.2)
         else:
-            body_color = self.apply_shimmer_to_color((150, 0, 150))  # Purple
-            accent_color = self.apply_shimmer_to_color((200, 0, 200))
+            if self.enemy_type == 3:
+                body_color = self.apply_shimmer_to_color((200, 100, 0))  # Orange
+                accent_color = self.apply_shimmer_to_color((255, 150, 0))
+            else:
+                body_color = self.apply_shimmer_to_color((150, 0, 150))  # Purple
+                accent_color = self.apply_shimmer_to_color((200, 0, 200))
         
         # Simple rectangular body - bigger
-        pygame.draw.rect(screen, body_color, (self.x + 2, self.y + 4, 41, 22))
+        pygame.draw.rect(screen, body_color, (draw_x + 2, draw_y + 4, 41, 22))
         
         # Top details - bigger
-        pygame.draw.rect(screen, accent_color, (self.x - 2, self.y, 12, 12))
-        pygame.draw.rect(screen, accent_color, (self.x + 35, self.y, 12, 12))
+        pygame.draw.rect(screen, accent_color, (draw_x - 2, draw_y, 12, 12))
+        pygame.draw.rect(screen, accent_color, (draw_x + 35, draw_y, 12, 12))
         
         # Eyes - bigger
-        pygame.draw.rect(screen, WHITE, (self.x + 8, self.y + 6, 10, 10))
-        pygame.draw.rect(screen, WHITE, (self.x + 27, self.y + 6, 10, 10))
-        pygame.draw.rect(screen, BLACK, (self.x + 10, self.y + 8, 6, 6))
-        pygame.draw.rect(screen, BLACK, (self.x + 29, self.y + 8, 6, 6))
+        pygame.draw.rect(screen, WHITE, (draw_x + 8, draw_y + 6, 10, 10))
+        pygame.draw.rect(screen, WHITE, (draw_x + 27, draw_y + 6, 10, 10))
+        pygame.draw.rect(screen, BLACK, (draw_x + 10, draw_y + 8, 6, 6))
+        pygame.draw.rect(screen, BLACK, (draw_x + 29, draw_y + 8, 6, 6))
         
         # Bottom spikes - bigger and more
-        pygame.draw.rect(screen, accent_color, (self.x + 5, self.y + 26, 5, 6))
-        pygame.draw.rect(screen, accent_color, (self.x + 11, self.y + 26, 5, 6))
-        pygame.draw.rect(screen, accent_color, (self.x + 17, self.y + 26, 5, 6))
-        pygame.draw.rect(screen, accent_color, (self.x + 23, self.y + 26, 5, 6))
-        pygame.draw.rect(screen, accent_color, (self.x + 29, self.y + 26, 5, 6))
-        pygame.draw.rect(screen, accent_color, (self.x + 35, self.y + 26, 5, 6))
-        pygame.draw.rect(screen, accent_color, (self.x + 41, self.y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 5, draw_y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 11, draw_y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 17, draw_y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 23, draw_y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 29, draw_y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 35, draw_y + 26, 5, 6))
+        pygame.draw.rect(screen, accent_color, (draw_x + 41, draw_y + 26, 5, 6))
         
     def make_special(self, special_type):
         """Convert this enemy to a special gold or silver enemy"""
@@ -7866,18 +7900,23 @@ class Enemy:
         if not self.is_special or not self.afterimage_positions:
             return
 
-        color = GOLD if self.special_type == 'gold' else SILVER
-
         # Draw afterimages with fading alpha
         for i, (old_x, old_y) in enumerate(self.afterimage_positions):
             alpha = int(50 + (i / len(self.afterimage_positions)) * 100)  # 50-150 alpha
             afterimage_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-
-            # Draw a simple colored rectangle for afterimage
-            afterimage_rect = pygame.Rect(0, 0, self.width, self.height)
-            pygame.draw.rect(afterimage_surface, (*color, alpha), afterimage_rect)
-
+            self._draw_enemy_shape(afterimage_surface, 0, 0)
+            afterimage_surface.set_alpha(alpha)
             screen.blit(afterimage_surface, (old_x, old_y))
+
+    def _draw_enemy_shape(self, screen, x, y):
+        if self.enemy_type == 0:  # Top row
+            self.draw_squid_enemy(screen, x, y)
+        elif self.enemy_type == 1:  # Second row
+            self.draw_crab_enemy(screen, x, y)
+        elif self.enemy_type == 2:  # Middle row
+            self.draw_octopus_enemy(screen, x, y)
+        else:  # Bottom rows (3 and 4)
+            self.draw_basic_enemy(screen, x, y)
 
     def draw(self, screen):
         """Draw the enemy based on its type"""
@@ -7886,23 +7925,7 @@ class Enemy:
             self.draw_afterimages(screen)
 
         # Draw the normal enemy
-        if self.enemy_type == 0:  # Top row
-            self.draw_squid_enemy(screen)
-        elif self.enemy_type == 1:  # Second row
-            self.draw_crab_enemy(screen)
-        elif self.enemy_type == 2:  # Middle row
-            self.draw_octopus_enemy(screen)
-        else:  # Bottom rows (3 and 4)
-            self.draw_basic_enemy(screen)
-
-        # Apply special color overlay for gold/silver enemies
-        if self.is_special:
-            overlay_surface = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            overlay_color = GOLD if self.special_type == 'gold' else SILVER
-            # Add a semi-transparent overlay and glowing border
-            pygame.draw.rect(overlay_surface, (*overlay_color, 100), (0, 0, self.width, self.height))
-            pygame.draw.rect(overlay_surface, overlay_color, (0, 0, self.width, self.height), 2)  # Border
-            screen.blit(overlay_surface, (self.x, self.y))
+        self._draw_enemy_shape(screen, self.x, self.y)
 
         # Draw invincibility shield effect
         if self.is_invincible:
