@@ -1331,6 +1331,8 @@ class AchievementManager:
                             # First time unlock
                             print(f"  -> Adding to newly_unlocked (first time!)")
                             self.newly_unlocked.append(achievement)
+                            # Prevent repeat bonus in the same run for a freshly unlocked achievement
+                            self.repeated_this_run.add(achievement.id)
                         else:
                             print(f"  -> Already processed this run or other condition not met")
                 elif achievement.achievement_type == ACHIEVEMENT_TYPE_CHALLENGE:
@@ -1354,6 +1356,8 @@ class AchievementManager:
                             # First time unlock
                             print(f"  -> Adding to newly_unlocked (first time!)")
                             self.newly_unlocked.append(achievement)
+                            # Prevent repeat bonus in the same run for a freshly unlocked achievement
+                            self.repeated_this_run.add(achievement.id)
                         else:
                             print(f"  -> Already processed this run or other condition not met")
 
