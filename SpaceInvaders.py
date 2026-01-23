@@ -1733,7 +1733,7 @@ class AchievementNotification:
         # Create text surfaces
         player_text = self.font_small.render(player_label, True, player_color) if player_label else None
         if self.is_repeat:
-            header_text = self.font_text.render("ACHIEVEMENT REPEATED", True, CYAN)
+            header_text = self.font_text.render("ACHIEVEMENT REPEATED", True, GOLD)
             # Add XP bonus indicator
             xp_text = self.font_small.render(f"+{REPEAT_ACHIEVEMENT_XP} XP BONUS", True, GOLD)
         else:
@@ -1770,7 +1770,7 @@ class AchievementNotification:
 
         # Draw border with player color (cyan for repeats)
         if self.is_repeat:
-            border_color = CYAN
+            border_color = GOLD
         elif player_label:
             border_color = player_color
         else:
