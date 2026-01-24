@@ -1241,6 +1241,8 @@ class AchievementManager:
             "dead_eye": 0,
             "pinpoint_shots": 0,
             "pinpoint_kills": 0,
+            "pinpoint_streak": 0,
+            "pinpoint_pending_shots": 0,
             "pinpoint_tracking": False,
             # Boss encounter tracking (per boss type)
             "boss_defeats_by_type": {},
@@ -1266,6 +1268,8 @@ class AchievementManager:
         """Called when a new level starts"""
         self.run_stats["pinpoint_shots"] = 0
         self.run_stats["pinpoint_kills"] = 0
+        self.run_stats["pinpoint_streak"] = 0
+        self.run_stats["pinpoint_pending_shots"] = 0
         self.run_stats["pinpoint_tracking"] = not is_boss_level
 
     def track_cumulative(self, key, value):
@@ -1451,20 +1455,31 @@ class AchievementManager:
         """Track shots fired for pinpoint accuracy challenge"""
         if self.run_stats["pinpoint_tracking"]:
             self.run_stats["pinpoint_shots"] += 1
+            self.run_stats["pinpoint_pending_shots"] += 1
 
     def track_pinpoint_kill(self):
         """Track kills for pinpoint accuracy challenge"""
         if self.run_stats["pinpoint_tracking"]:
             self.run_stats["pinpoint_kills"] += 1
-            # Check if player has reached exactly 20 kills with perfect accuracy
-            if (self.run_stats["pinpoint_kills"] == 20 and
-                    self.run_stats["pinpoint_shots"] == 20):
+            if self.run_stats["pinpoint_pending_shots"] > 0:
+                self.run_stats["pinpoint_pending_shots"] -= 1
+            self.run_stats["pinpoint_streak"] += 1
+
+            # Award based on streaks of kills without misses, regardless of early misses.
+            if self.run_stats["pinpoint_streak"] >= 20 and not self.run_stats.get("pinpoint_accuracy", 0):
                 self.run_stats["pinpoint_accuracy"] = 1
                 self.track_run_stat("pinpoint_accuracy", 1)
-            if (self.run_stats["pinpoint_kills"] == 50 and
-                    self.run_stats["pinpoint_shots"] == 50):
+            if self.run_stats["pinpoint_streak"] >= 50 and not self.run_stats.get("dead_eye", 0):
                 self.run_stats["dead_eye"] = 1
                 self.track_run_stat("dead_eye", 1)
+
+    def track_pinpoint_miss(self):
+        """Reset pinpoint streak when a tracked shot fails to land a kill."""
+        if not self.run_stats["pinpoint_tracking"]:
+            return
+        if self.run_stats["pinpoint_pending_shots"] > 0:
+            self.run_stats["pinpoint_pending_shots"] -= 1
+            self.run_stats["pinpoint_streak"] = 0
 
     def check_pinpoint_accuracy(self, is_boss_level):
         """Check pinpoint accuracy challenge completion for a level"""
@@ -5030,7 +5045,8 @@ class Player:
             'pierce_hits': pierce_hits,
             'length_multiplier': length_multiplier,
             'can_phase_barriers': can_phase_barriers,
-            'boss_damage_multiplier': boss_damage_multiplier
+            'boss_damage_multiplier': boss_damage_multiplier,
+            'counts_for_pinpoint': True,
         }
         base_x = self.x + self.width // 2
 
@@ -8013,7 +8029,7 @@ class EnemyExplosion:
 
 class Bullet:
     def __init__(self, x, y, speed, owner_id=None, pierce_hits=0, length_multiplier=1.0,
-                 can_phase_barriers=False, boss_damage_multiplier=1.0):
+                 can_phase_barriers=False, boss_damage_multiplier=1.0, counts_for_pinpoint=False):
         self.x = x
         self.y = y
         self.width = 5
@@ -8024,6 +8040,7 @@ class Bullet:
         self.pierce_hits = pierce_hits
         self.can_phase_barriers = can_phase_barriers
         self.boss_damage_multiplier = boss_damage_multiplier
+        self.counts_for_pinpoint = counts_for_pinpoint
 
     def move(self):
         self.y += self.speed
@@ -9593,7 +9610,7 @@ class Game:
         self.last_permanent_powerup = {}  # Track last permanent powerup per player to prevent consecutive repeats
 
         # Shared tracking for repeat achievement XP bonuses (prevents double-dipping in coop)
-        self.repeat_bonuses_awarded_this_run = set()  # Track which achievements already awarded repeat XP this run
+        self.repeat_bonuses_awarded_this_tick = set()  # Track which achievements already awarded repeat XP this update
 
         # Player statistics tracking
         self.player_stats = []  # Will be populated when players are created
@@ -9690,7 +9707,7 @@ class Game:
         self.player_stats = []  # Reset stats
 
         # Clear shared repeat bonus tracking for new run
-        self.repeat_bonuses_awarded_this_run.clear()
+        self.repeat_bonuses_awarded_this_tick.clear()
 
         # Start new achievement run for all active managers
         for player_id, manager in self.achievement_managers.items():
@@ -11078,23 +11095,28 @@ class Game:
                 manager.save()  # Save immediately when achievement unlocks
 
         # Check for repeated achievements and award XP bonus
+        # Reset per-update tracking so repeats can award again on later events,
+        # while still preventing double-dipping between players on the same event.
+        self.repeat_bonuses_awarded_this_tick.clear()
         for player_id, manager in self.achievement_managers.items():
             repeated = manager.get_repeated_achievements()
             for achievement in repeated:
-                # Check if this achievement already awarded repeat XP this run (prevents double-dipping in coop)
-                if achievement.id not in self.repeat_bonuses_awarded_this_run:
-                    # Award XP bonus for repeat achievement (only once per playthrough)
+                # In coop, only award the repeat bonus once per update so shared XP
+                # does not double dip. In single-player, always award it.
+                already_awarded = self.coop_mode and achievement.id in self.repeat_bonuses_awarded_this_tick
+                if not already_awarded:
                     self.add_xp(REPEAT_ACHIEVEMENT_XP)
-                    self.repeat_bonuses_awarded_this_run.add(achievement.id)
+                    self.repeat_bonuses_awarded_this_tick.add(achievement.id)
                     print(f"[DEBUG] Awarded {REPEAT_ACHIEVEMENT_XP} XP for repeat achievement '{achievement.name}' (player {player_id})")
                 else:
-                    print(f"[DEBUG] Skipping repeat XP for '{achievement.name}' (player {player_id}) - already awarded this run")
+                    print(f"[DEBUG] Skipping repeat XP for '{achievement.name}' (player {player_id}) - already awarded this update")
 
-                # Always create notification for this player (even if XP already awarded by other player)
-                stack_index = len(self.achievement_notifications)
-                notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id, is_repeat=True)
-                self.achievement_notifications.append(notification)
-                self.sound_manager.play_sound('powerup')  # Play a sound for repeat achievement
+                # In coop, suppress duplicate repeat notifications for the same event.
+                if not (self.coop_mode and already_awarded):
+                    stack_index = len(self.achievement_notifications)
+                    notification = AchievementNotification(achievement, stack_index=stack_index, player_id=player_id, is_repeat=True)
+                    self.achievement_notifications.append(notification)
+                    self.sound_manager.play_sound('powerup')  # Play a sound for repeat achievement
 
         # Update achievement notifications
         self.achievement_notifications = [notif for notif in self.achievement_notifications if notif.update()]
@@ -11149,6 +11171,8 @@ class Game:
         for bullet in self.player_bullets[:]:
             bullet.move()
             if bullet.is_off_screen():
+                if bullet.owner_id and getattr(bullet, "counts_for_pinpoint", False):
+                    self.track_achievement(bullet.owner_id, "track_pinpoint_miss")
                 self.player_bullets.remove(bullet)
                 
         for bullet in self.enemy_bullets[:]:
@@ -11622,6 +11646,8 @@ class Game:
                 continue
             for barrier in self.barriers:
                 if barrier.check_collision(bullet.rect) and not getattr(bullet, 'can_phase_barriers', False):
+                    if bullet.owner_id and getattr(bullet, "counts_for_pinpoint", False):
+                        self.track_achievement(bullet.owner_id, "track_pinpoint_miss")
                     self.player_bullets.remove(bullet)
                     break
                     
