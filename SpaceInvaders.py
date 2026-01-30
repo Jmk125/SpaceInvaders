@@ -10660,35 +10660,54 @@ class Game:
                     if player.has_boss_shield_upgrade:
                         self.track_achievement(player.player_id, "track_powerup_selection", "boss_shield")
 
-                # DEBUG: Log powerup stats before advancing to next level
-                if self.enemies_killed_this_level > 0:
-                    drop_rate = (self.powerups_spawned_this_level / self.enemies_killed_this_level) * 100
-                    print(f"\n{'='*70}")
-                    print(f"[POWERUP DEBUG] LEVEL {self.level} SUMMARY:")
-                    print(f"  Enemies killed: {self.enemies_killed_this_level}")
-                    print(f"  Powerups spawned: {self.powerups_spawned_this_level}")
-                    print(f"  Actual drop rate: {drop_rate:.2f}%")
-                    print(f"{'='*70}\n")
+                if self.pending_level_ups == 0:
+                    # DEBUG: Log powerup stats before advancing to next level
+                    if self.enemies_killed_this_level > 0:
+                        drop_rate = (self.powerups_spawned_this_level / self.enemies_killed_this_level) * 100
+                        print(f"\n{'='*70}")
+                        print(f"[POWERUP DEBUG] LEVEL {self.level} SUMMARY:")
+                        print(f"  Enemies killed: {self.enemies_killed_this_level}")
+                        print(f"  Powerups spawned: {self.powerups_spawned_this_level}")
+                        print(f"  Actual drop rate: {drop_rate:.2f}%")
+                        print(f"{'='*70}\n")
 
-                # Now advance the game level
-                self.level += 1
-                print(f"Advanced to game level {self.level} after level up")  # Debug
+                    completed_level = self.level
+                    self.level += 1
+                    print(f"Advanced to game level {self.level} after level up")  # Debug
 
-                # Reset powerup tracking for new level
-                self.powerups_spawned_this_level = 0
-                self.enemies_killed_this_level = 0
+                    # Track level completion for achievements (all players)
+                    self.track_for_all_players("player_completed_level", completed_level)
 
-                # Respawn dead players with 1 life if their partner survived
-                if self.coop_mode and len(self.players) == 2:
-                    if not self.players[0].is_alive and self.players[1].is_alive:
-                        self.players[0].lives = 1
-                        self.players[0].respawn()
-                    elif not self.players[1].is_alive and self.players[0].is_alive:
-                        self.players[1].lives = 1
-                        self.players[1].respawn()
+                    # Check laser-only level achievement
+                    self.track_for_all_players("check_laser_only_level", self.is_boss_level)
 
-                self.setup_level()
-                self.create_barriers()
+                    # Check sharp shooter achievement (killed last enemy with one shot)
+                    self.track_for_all_players("check_sharp_shooter", 0)  # 0 enemies remaining
+
+                    # Check pinpoint accuracy achievement
+                    self.track_for_all_players("check_pinpoint_accuracy", self.is_boss_level)
+
+                    # Reset powerup tracking for new level
+                    self.powerups_spawned_this_level = 0
+                    self.enemies_killed_this_level = 0
+
+                    # Reset special enemy tracking for new level
+                    self.special_enemy_spawned_this_level = False
+
+                    # Clear all enemy bullets to prevent them from carrying over to the next level
+                    self.enemy_bullets.clear()
+
+                    # Respawn dead players with 1 life if their partner survived
+                    if self.coop_mode and len(self.players) == 2:
+                        if not self.players[0].is_alive and self.players[1].is_alive:
+                            self.players[0].lives = 1
+                            self.players[0].respawn()
+                        elif not self.players[1].is_alive and self.players[0].is_alive:
+                            self.players[1].lives = 1
+                            self.players[1].respawn()
+
+                    self.setup_level()
+                    self.create_barriers()
         return None
 
     def handle_stats_screen_events(self):
