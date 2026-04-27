@@ -188,6 +188,8 @@ ROGUE_TERMINAL_BOSS_PHASE_DURATION = 6000  # ms per text-art form
 ROGUE_TERMINAL_BOSS_SYMBOL_SIZE = 22  # Font size for text symbols
 ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X = 17  # Horizontal spacing between symbols
 ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y = 20  # Vertical spacing between symbols
+ROGUE_TERMINAL_BOSS_GRID_COLS = 44  # Fixed text columns for every form
+ROGUE_TERMINAL_BOSS_GRID_ROWS = 14  # Fixed text rows for every form
 ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT = 5  # Number of red symbols in each weakpoint cycle
 ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION = 2500  # How long weakpoints stay active (ms)
 ROGUE_TERMINAL_BOSS_WEAKPOINT_COOLDOWN = 1700  # Delay before next weakpoint set appears (ms)
@@ -7690,14 +7692,19 @@ class SnakeBoss:
 
 
 class RogueTerminalBoss:
-    """Seventh boss - Glitched ASCII supercomputer with shifting forms and red weakpoints."""
+    """Seventh boss - Shifting ASCII-art supercomputer with hidden red weakpoints."""
     def __init__(self, encounter):
         self.encounter = max(1, encounter)
         self.speed = ROGUE_TERMINAL_BOSS_SPEED_BASE + (self.encounter - 1) * ROGUE_TERMINAL_BOSS_SPEED_GROWTH
         self.max_health = ROGUE_TERMINAL_BOSS_HEALTH_BASE + (self.encounter - 1) * ROGUE_TERMINAL_BOSS_HEALTH_PER_LEVEL
         self.health = self.max_health
-        self.width = 620
-        self.height = 300
+
+        self.grid_cols = ROGUE_TERMINAL_BOSS_GRID_COLS
+        self.grid_rows = ROGUE_TERMINAL_BOSS_GRID_ROWS
+        self.symbol_spacing_x = ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X
+        self.symbol_spacing_y = ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y
+        self.width = self.grid_cols * self.symbol_spacing_x
+        self.height = self.grid_rows * self.symbol_spacing_y
         self.x = SCREEN_WIDTH // 2 - self.width // 2
         self.y = 120
         self.direction = random.choice([-1, 1])
@@ -7706,7 +7713,7 @@ class RogueTerminalBoss:
         self.phase_duration = ROGUE_TERMINAL_BOSS_PHASE_DURATION
         self.phase_index = 0
         self.last_phase_change = pygame.time.get_ticks()
-        self.last_shot = pygame.time.get_ticks()
+        self.last_shot = pygame.time.get_ticks() - 500
 
         self.weakpoint_count = ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT
         self.weakpoint_duration = ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION
@@ -7716,36 +7723,98 @@ class RogueTerminalBoss:
         self.weakpoint_cells = set()
 
         self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", ROGUE_TERMINAL_BOSS_SYMBOL_SIZE)
-        self.symbol_spacing_x = ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X
-        self.symbol_spacing_y = ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y
-
         self.forms = [
-            {"name": "BOOT", "template": [" .------. ", " | 0xA1 | ", "<| [##] |>", " |_/__\\_| ", "   /||\\   "], "color": (120, 220, 255)},
-            {"name": "SCAN", "template": [" [=] [=] ", " |||||||| ", "<!>----<!>", " |||||||| ", " [_][_]  "], "color": (160, 255, 180)},
-            {"name": "MELTDOWN", "template": ["  .-^^-.  ", " ( x  x ) ", "<|  ##  |>", " ( \\__/ ) ", "  `-..-'  "], "color": (255, 170, 120)},
+            {
+                "name": "MONA",
+                "attack": "curtain",
+                "color": (170, 220, 255),
+                "template": self._normalize_art([
+                    "                .-====-.                    ",
+                    "             .-'  _  _  '-.                 ",
+                    "            /   (o)(o)    \\                ",
+                    "           ;      __       ;                ",
+                    "           |   .-'__'-.    |                ",
+                    "           ;  /  .--.  \\   ;                ",
+                    "            \\ | (____) |  /                 ",
+                    "             '.\\______/.'                   ",
+                    "               /|::::|\\                     ",
+                    "            .-' |::::| '-.                  ",
+                    "          .'    |::::|    '.                ",
+                    "         /   ___|::::|___   \\              ",
+                    "        /___/   |::::|   \\___\\             ",
+                    "              .-\\\\::__//-.                 ",
+                ]),
+            },
+            {
+                "name": "SCREAM",
+                "attack": "wail",
+                "color": (255, 190, 150),
+                "template": self._normalize_art([
+                    "~~~~~~~~~~~~^^~~~~~~~~~~~~^^~~~~~~~~~~~~~~~",
+                    "~~~~~~~^^~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~",
+                    "                .-====-.                    ",
+                    "              .'  .--.  '.                  ",
+                    "             /   /    \\   \\                ",
+                    "            ;   |  oo  |   ;                ",
+                    "            |   |  --  |   |                ",
+                    "            ;   | .__. |   ;                ",
+                    "             \\   \\____/   /                ",
+                    "              '.        .'                  ",
+                    "               /'.____.'\\                  ",
+                    "          ____/  /||||\\  \\____            ",
+                    "       __/______/ |||| \\______\\__         ",
+                    "~~~~~~~~~~~~~~  ||||  ~~~~~~~~~~~^^^^^^^^^",
+                ]),
+            },
+            {
+                "name": "STARRY",
+                "attack": "swirl",
+                "color": (170, 255, 190),
+                "template": self._normalize_art([
+                    "  *      .        *      .       *         ",
+                    "      .      *      .       *       .      ",
+                    "   .-~~~~-.      *       .-~~~~-.          ",
+                    "  /  *  *  \\   .       /  *  *  \\         ",
+                    " |   .--.   |       *   |   .--.   |       ",
+                    " |  (____)  |   .       |  (____)  |       ",
+                    "  \\  .__.  /      .      \\  .__.  /       ",
+                    "   '-.__.-'   *       .   '-.__.-'         ",
+                    " *       .         *      .      *         ",
+                    "    .          *      .       *      .     ",
+                    "  *      .        *      .       *         ",
+                    "      .      *      .       *       .      ",
+                    "    ~~~~~~~~  ~~~~~~~~  ~~~~~~~~           ",
+                    "~~~~~~~~~~~~~~  ~~~~~~~~~~~~~~~~  ~~~~~~~~~",
+                ]),
+            },
         ]
 
         self.destruction_complete = False
         self.destruction_start_time = 0
         self.explosion_effects = []
 
+    def _normalize_art(self, rows):
+        normalized = []
+        for i in range(self.grid_rows):
+            row = rows[i] if i < len(rows) else ""
+            normalized.append(row[:self.grid_cols].ljust(self.grid_cols))
+        return normalized
+
     def _current_form(self):
         return self.forms[self.phase_index]
 
     def _symbol_cells(self):
         template = self._current_form()["template"]
-        rows = len(template)
-        cols = max(len(row) for row in template)
-        origin_x = int(self.x + (self.width - cols * self.symbol_spacing_x) / 2)
-        origin_y = int(self.y + (self.height - rows * self.symbol_spacing_y) / 2)
         cells = []
+        base_x = int(self.x)
+        base_y = int(self.y)
         for row_idx, row in enumerate(template):
             for col_idx, char in enumerate(row):
                 if char == " ":
                     continue
-                x = origin_x + col_idx * self.symbol_spacing_x
-                y = origin_y + row_idx * self.symbol_spacing_y
-                rect = pygame.Rect(x - 7, y - 7, self.symbol_spacing_x, self.symbol_spacing_y)
+                x = base_x + col_idx * self.symbol_spacing_x
+                y = base_y + row_idx * self.symbol_spacing_y
+                rect = pygame.Rect(x - 5, y - 5, self.symbol_spacing_x, self.symbol_spacing_y)
                 cells.append((row_idx, col_idx, char, x, y, rect))
         return cells
 
@@ -7754,8 +7823,8 @@ class RogueTerminalBoss:
         if not cells:
             self.weakpoint_cells = set()
             return
-        choices = random.sample(cells, min(self.weakpoint_count, len(cells)))
-        self.weakpoint_cells = {(r, c) for r, c, _, _, _, _ in choices}
+        picks = random.sample(cells, min(self.weakpoint_count, len(cells)))
+        self.weakpoint_cells = {(r, c) for r, c, _, _, _, _ in picks}
 
     def update(self, players=None, sound_manager=None):
         if self.destruction_complete:
@@ -7766,24 +7835,23 @@ class RogueTerminalBoss:
             return []
 
         now = pygame.time.get_ticks()
-
         self.x += self.speed * self.direction
-        if self.x <= 40 or self.x >= SCREEN_WIDTH - self.width - 40:
+        if self.x <= 20 or self.x >= SCREEN_WIDTH - self.width - 20:
             self.direction *= -1
         self.rect.x = int(self.x)
 
         if now - self.last_phase_change >= self.phase_duration:
             self.phase_index = (self.phase_index + 1) % len(self.forms)
             self.last_phase_change = now
-            self.weakpoint_cells.clear()
             self.weakpoint_active = False
+            self.weakpoint_cells.clear()
             self.last_weakpoint_change = now
 
         if self.weakpoint_active:
             if now - self.last_weakpoint_change >= self.weakpoint_duration:
                 self.weakpoint_active = False
-                self.last_weakpoint_change = now
                 self.weakpoint_cells.clear()
+                self.last_weakpoint_change = now
         else:
             if now - self.last_weakpoint_change >= self.weakpoint_cooldown:
                 self.weakpoint_active = True
@@ -7795,41 +7863,46 @@ class RogueTerminalBoss:
     def shoot(self, players, sound_manager=None):
         if self.destruction_complete:
             return []
+
         now = pygame.time.get_ticks()
         phase_name = self._current_form()["name"]
-        cooldown = {
-            "BOOT": ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN,
-            "SCAN": ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN,
-            "MELTDOWN": ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN,
-        }.get(phase_name, 900)
+        cooldown_map = {
+            "MONA": ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN,
+            "SCREAM": ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN,
+            "STARRY": ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN,
+        }
+        cooldown = cooldown_map.get(phase_name, 750)
         if now - self.last_shot < cooldown:
             return []
+
         self.last_shot = now
         bullets = []
-        cx = int(self.x + self.width // 2)
-        cy = int(self.y + self.height - 20)
+        left = int(self.x + 16)
+        right = int(self.x + self.width - 16)
+        bottom = int(self.y + self.height - 12)
 
-        if phase_name == "BOOT":
-            for vx in (-2.3, 0, 2.3):
-                bullets.append(TargetedBullet(cx, cy, vx, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
-        elif phase_name == "SCAN":
-            for _ in range(3):
-                drop_x = random.randint(int(self.x + 40), int(self.x + self.width - 40))
-                bullets.append(Bullet(drop_x, int(self.y + self.height), ROGUE_TERMINAL_BOSS_BULLET_SPEED * 0.9))
-        else:
-            alive_players = [p for p in players if p.is_alive]
-            if alive_players:
-                target = random.choice(alive_players)
-                tx, ty = target.x + target.width // 2, target.y + target.height // 2
-                dx, dy = tx - cx, ty - cy
-                distance = max(1, math.sqrt(dx * dx + dy * dy))
-                speed = ROGUE_TERMINAL_BOSS_BULLET_SPEED + 1.0
-                bullets.append(TargetedBullet(cx, cy, (dx / distance) * speed, (dy / distance) * speed))
-            bullets.append(Bullet(cx - 30, cy, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
-            bullets.append(Bullet(cx + 30, cy, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
+        attack = self._current_form()["attack"]
+        if attack == "curtain":
+            for i in range(6):
+                x = left + int((right - left) * (i / 5))
+                bullets.append(Bullet(x, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
+        elif attack == "wail":
+            center = int(self.x + self.width // 2)
+            offsets = [-110, -70, -35, 0, 35, 70, 110]
+            for off in offsets:
+                speed = ROGUE_TERMINAL_BOSS_BULLET_SPEED + (abs(off) / 110.0)
+                bullets.append(Bullet(center + off, bottom, speed))
+        else:  # swirl
+            symbol_cells = self._symbol_cells()
+            if symbol_cells:
+                for _ in range(5):
+                    _, _, _, sx, _, _ = random.choice(symbol_cells)
+                    bullets.append(Bullet(sx, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED * random.uniform(0.75, 1.2)))
+            else:
+                bullets.append(Bullet(int(self.x + self.width // 2), bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
 
         if sound_manager and bullets:
-            sound_manager.play_sound('enemy_shoot', volume_override=0.4)
+            sound_manager.play_sound('enemy_shoot', volume_override=0.45)
         return bullets
 
     def hit_weakpoint(self, projectile_rect, damage=1):
@@ -7901,10 +7974,6 @@ class RogueTerminalBoss:
             return
 
         phase_color = self._current_form()["color"]
-        frame_rect = pygame.Rect(int(self.x), int(self.y), self.width, self.height)
-        pygame.draw.rect(screen, (25, 25, 35), frame_rect, border_radius=14)
-        pygame.draw.rect(screen, (80, 120, 160), frame_rect, 3, border_radius=14)
-
         for row, col, char, x, y, _ in self._symbol_cells():
             symbol_color = RED if (row, col) in self.weakpoint_cells else phase_color
             glyph = self.font.render(char, True, symbol_color)
@@ -7918,10 +7987,6 @@ class RogueTerminalBoss:
         label = f"ROGUE TERMINAL [{self._current_form()['name']}] {self.health}/{self.max_health}"
         text = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14).render(label, True, WHITE)
         screen.blit(text, (int(self.x), bar_y - 20))
-
-        if self.weakpoint_active:
-            hint = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 12).render("RED SYMBOLS = WEAKPOINTS", True, RED)
-            screen.blit(hint, (int(self.x + 10), int(self.y + self.height - 24)))
 
 
 class Enemy:
