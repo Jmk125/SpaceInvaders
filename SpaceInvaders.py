@@ -179,6 +179,26 @@ SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MIN = 1000  # Minimum time between direction ch
 SNAKE_BOSS_CURVE_CHANGE_INTERVAL_MAX = 3000  # Maximum time between direction changes (ms)
 SNAKE_BOSS_CURVE_STRENGTH = 2.0  # How sharply the snake curves during movement (higher = tighter curves, 0.5 = gentle, 1.0 = normal, 2.0 = sharp)
 
+# Rogue Terminal Boss Configuration (ASCII/text-art supercomputer)
+ROGUE_TERMINAL_BOSS_HEALTH_BASE = 70
+ROGUE_TERMINAL_BOSS_HEALTH_PER_LEVEL = 12
+ROGUE_TERMINAL_BOSS_SPEED_BASE = 3.2
+ROGUE_TERMINAL_BOSS_SPEED_GROWTH = 0.25
+ROGUE_TERMINAL_BOSS_PHASE_DURATION = 6000  # ms per text-art form
+ROGUE_TERMINAL_BOSS_SYMBOL_SIZE = 22  # Font size for text symbols
+ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X = 17  # Horizontal spacing between symbols
+ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y = 20  # Vertical spacing between symbols
+ROGUE_TERMINAL_BOSS_GRID_COLS = 44  # Fixed text columns for every form
+ROGUE_TERMINAL_BOSS_GRID_ROWS = 14  # Fixed text rows for every form
+ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT = 5  # Number of red symbols in each weakpoint cycle
+ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION = 2500  # How long weakpoints stay active (ms)
+ROGUE_TERMINAL_BOSS_WEAKPOINT_COOLDOWN = 1700  # Delay before next weakpoint set appears (ms)
+ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN = 900
+ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN = 650
+ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN = 500
+ROGUE_TERMINAL_BOSS_BULLET_SPEED = 7.5
+ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE = "rogue_terminal_art.json"  # Optional JSON file for custom forms
+
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
 COOP_SCORES_FILE = "high_scores_coop.json"
@@ -1020,7 +1040,7 @@ class AchievementManager:
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 10, "track_key": "run_bosses"},
 
             {"id": "no_stone_unturned", "name": "No Stone Unturned", "description": "Kill all existing bosses in one playthrough",
-             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 6, "track_key": "run_unique_bosses"},  # 6 unique boss types
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 7, "track_key": "run_unique_bosses"},  # 7 unique boss types
 
             {"id": "flawless", "name": "Flawless", "description": "Get through 50 levels without dying",
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 50, "track_key": "flawless_levels"},
@@ -1029,7 +1049,7 @@ class AchievementManager:
              "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 100, "track_key": "flawless_levels"},
 
             {"id": "i_have_your_number", "name": "I Have Your Number!", "description": "Kill every boss without dying",
-             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 6, "track_key": "bosses_no_death"},  # All 6 unique boss types
+             "type": ACHIEVEMENT_TYPE_CHALLENGE, "target": 7, "track_key": "bosses_no_death"},  # All 7 unique boss types
 
             # Level clearing achievements
             {"id": "five_o", "name": "Five O", "description": "Beat Level 50",
@@ -1119,6 +1139,9 @@ class AchievementManager:
 
             {"id": "never_tell_odds", "name": "Never Tell Me The Odds!", "description": "Get through the asteroid field",
              "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "asteroid_boss_defeated"},
+            {"id": "prompt_and_circumstance", "name": "Prompt and Circumstance",
+             "description": "Pull the plug on the Rogue Terminal boss",
+             "type": ACHIEVEMENT_TYPE_SINGLE_RUN, "target": 1, "track_key": "rogue_terminal_boss_defeated"},
 
             # Time-based achievement
             {"id": "hero_of_time", "name": "Hero of Time", "description": "Log 10 hours of play",
@@ -1188,6 +1211,7 @@ class AchievementManager:
             "ufo_boss_defeated": 0,
             "overlord_boss_defeated": 0,
             "asteroid_boss_defeated": 0,
+            "rogue_terminal_boss_defeated": 0,
             # Powerup selections
             "powerup_spawn_selected": 0,
             "ammo_capacity_selected": 0,
@@ -1254,6 +1278,7 @@ class AchievementManager:
             "ufo_boss_defeated": 0,
             "overlord_boss_defeated": 0,
             "asteroid_boss_defeated": 0,
+            "rogue_terminal_boss_defeated": 0,
         }
 
     def start_new_run(self, is_coop=False):
@@ -1424,6 +1449,7 @@ class AchievementManager:
             "Boss": "ufo_boss_defeated",  # Original UFO boss
             "AlienOverlordBoss": "overlord_boss_defeated",
             "AsteroidFieldBoss": "asteroid_boss_defeated",
+            "RogueTerminalBoss": "rogue_terminal_boss_defeated",
         }
         if boss_name in boss_achievement_map:
             achievement_key = boss_achievement_map[boss_name]
@@ -7666,6 +7692,343 @@ class SnakeBoss:
             screen.blit(text, text_rect)
 
 
+class RogueTerminalBoss:
+    """Seventh boss - Shifting ASCII-art supercomputer with hidden red weakpoints."""
+    def __init__(self, encounter):
+        self.encounter = max(1, encounter)
+        self.speed = ROGUE_TERMINAL_BOSS_SPEED_BASE + (self.encounter - 1) * ROGUE_TERMINAL_BOSS_SPEED_GROWTH
+        self.max_health = ROGUE_TERMINAL_BOSS_HEALTH_BASE + (self.encounter - 1) * ROGUE_TERMINAL_BOSS_HEALTH_PER_LEVEL
+        self.health = self.max_health
+
+        self.grid_cols = ROGUE_TERMINAL_BOSS_GRID_COLS
+        self.grid_rows = ROGUE_TERMINAL_BOSS_GRID_ROWS
+        self.symbol_spacing_x = ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X
+        self.symbol_spacing_y = ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y
+        self.width = self.grid_cols * self.symbol_spacing_x
+        self.height = self.grid_rows * self.symbol_spacing_y
+        self.x = SCREEN_WIDTH // 2 - self.width // 2
+        self.y = 120
+        self.direction = random.choice([-1, 1])
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+
+        self.phase_duration = ROGUE_TERMINAL_BOSS_PHASE_DURATION
+        self.phase_index = 0
+        self.last_phase_change = pygame.time.get_ticks()
+        self.last_shot = pygame.time.get_ticks() - 500
+
+        self.weakpoint_count = ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT
+        self.weakpoint_duration = ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION
+        self.weakpoint_cooldown = ROGUE_TERMINAL_BOSS_WEAKPOINT_COOLDOWN
+        self.weakpoint_active = False
+        self.last_weakpoint_change = pygame.time.get_ticks()
+        self.weakpoint_cells = set()
+
+        self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", ROGUE_TERMINAL_BOSS_SYMBOL_SIZE)
+        self.forms = self._load_forms()
+
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        self.explosion_effects = []
+
+    def _default_forms(self):
+        return [
+            {
+                "name": "MONA",
+                "attack": "curtain",
+                "color": (170, 220, 255),
+                "template": self._normalize_art([
+                    "                .-====-.                    ",
+                    "             .-'  _  _  '-.                 ",
+                    "            /   (o)(o)    \\                ",
+                    "           ;      __       ;                ",
+                    "           |   .-'__'-.    |                ",
+                    "           ;  /  .--.  \\   ;                ",
+                    "            \\ | (____) |  /                 ",
+                    "             '.\\______/.'                   ",
+                    "               /|::::|\\                     ",
+                    "            .-' |::::| '-.                  ",
+                    "          .'    |::::|    '.                ",
+                    "         /   ___|::::|___   \\              ",
+                    "        /___/   |::::|   \\___\\             ",
+                    "              .-\\\\::__//-.                 ",
+                ]),
+            },
+            {
+                "name": "SCREAM",
+                "attack": "wail",
+                "color": (255, 190, 150),
+                "template": self._normalize_art([
+                    "~~~~~~~~~~~~^^~~~~~~~~~~~~^^~~~~~~~~~~~~~~~",
+                    "~~~~~~~^^~~~~~~~~~~~~~~^^~~~~~~~~~~~~~~~~~~",
+                    "                .-====-.                    ",
+                    "              .'  .--.  '.                  ",
+                    "             /   /    \\   \\                ",
+                    "            ;   |  oo  |   ;                ",
+                    "            |   |  --  |   |                ",
+                    "            ;   | .__. |   ;                ",
+                    "             \\   \\____/   /                ",
+                    "              '.        .'                  ",
+                    "               /'.____.'\\                  ",
+                    "          ____/  /||||\\  \\____            ",
+                    "       __/______/ |||| \\______\\__         ",
+                    "~~~~~~~~~~~~~~  ||||  ~~~~~~~~~~~^^^^^^^^^",
+                ]),
+            },
+            {
+                "name": "STARRY",
+                "attack": "swirl",
+                "color": (170, 255, 190),
+                "template": self._normalize_art([
+                    "  *      .        *      .       *         ",
+                    "      .      *      .       *       .      ",
+                    "   .-~~~~-.      *       .-~~~~-.          ",
+                    "  /  *  *  \\   .       /  *  *  \\         ",
+                    " |   .--.   |       *   |   .--.   |       ",
+                    " |  (____)  |   .       |  (____)  |       ",
+                    "  \\  .__.  /      .      \\  .__.  /       ",
+                    "   '-.__.-'   *       .   '-.__.-'         ",
+                    " *       .         *      .      *         ",
+                    "    .          *      .       *      .     ",
+                    "  *      .        *      .       *         ",
+                    "      .      *      .       *       .      ",
+                    "    ~~~~~~~~  ~~~~~~~~  ~~~~~~~~           ",
+                    "~~~~~~~~~~~~~~  ~~~~~~~~~~~~~~~~  ~~~~~~~~~",
+                ]),
+            },
+        ]
+
+    def _load_forms(self):
+        forms = self._default_forms()
+        if not os.path.exists(ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE):
+            return forms
+
+        try:
+            with open(ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE, "r") as f:
+                data = json.load(f)
+            custom_forms = data.get("forms", [])
+            loaded = []
+            for form in custom_forms:
+                if not isinstance(form, dict):
+                    continue
+                name = str(form.get("name", "CUSTOM"))[:16]
+                attack = form.get("attack", "curtain")
+                if attack not in ["curtain", "wail", "swirl"]:
+                    attack = "curtain"
+                color = form.get("color", [255, 255, 255])
+                if not (isinstance(color, list) and len(color) == 3):
+                    color = [255, 255, 255]
+                template = form.get("template", [])
+                if not isinstance(template, list):
+                    template = []
+                loaded.append({
+                    "name": name,
+                    "attack": attack,
+                    "color": (int(color[0]), int(color[1]), int(color[2])),
+                    "template": self._normalize_art([str(line) for line in template]),
+                })
+            if loaded:
+                return loaded
+        except Exception as e:
+            print(f"[DEBUG] Could not load {ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE}: {e}")
+
+        return forms
+
+    def _normalize_art(self, rows):
+        normalized = []
+        for i in range(self.grid_rows):
+            row = rows[i] if i < len(rows) else ""
+            normalized.append(row[:self.grid_cols].ljust(self.grid_cols))
+        return normalized
+
+    def _current_form(self):
+        return self.forms[self.phase_index]
+
+    def _symbol_cells(self):
+        template = self._current_form()["template"]
+        cells = []
+        base_x = int(self.x)
+        base_y = int(self.y)
+        for row_idx, row in enumerate(template):
+            for col_idx, char in enumerate(row):
+                if char == " ":
+                    continue
+                x = base_x + col_idx * self.symbol_spacing_x
+                y = base_y + row_idx * self.symbol_spacing_y
+                rect = pygame.Rect(x - 5, y - 5, self.symbol_spacing_x, self.symbol_spacing_y)
+                cells.append((row_idx, col_idx, char, x, y, rect))
+        return cells
+
+    def _activate_weakpoints(self):
+        cells = self._symbol_cells()
+        if not cells:
+            self.weakpoint_cells = set()
+            return
+        picks = random.sample(cells, min(self.weakpoint_count, len(cells)))
+        self.weakpoint_cells = {(r, c) for r, c, _, _, _, _ in picks}
+
+    def update(self, players=None, sound_manager=None):
+        if self.destruction_complete:
+            self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
+            for explosion in self.explosion_effects:
+                explosion['radius'] += explosion['growth']
+                explosion['life'] -= 1
+            return []
+
+        now = pygame.time.get_ticks()
+        self.x += self.speed * self.direction
+        if self.x <= 20 or self.x >= SCREEN_WIDTH - self.width - 20:
+            self.direction *= -1
+        self.rect.x = int(self.x)
+
+        if now - self.last_phase_change >= self.phase_duration:
+            self.phase_index = (self.phase_index + 1) % len(self.forms)
+            self.last_phase_change = now
+            self.weakpoint_active = False
+            self.weakpoint_cells.clear()
+            self.last_weakpoint_change = now
+
+        if self.weakpoint_active:
+            if now - self.last_weakpoint_change >= self.weakpoint_duration:
+                self.weakpoint_active = False
+                self.weakpoint_cells.clear()
+                self.last_weakpoint_change = now
+        else:
+            if now - self.last_weakpoint_change >= self.weakpoint_cooldown:
+                self.weakpoint_active = True
+                self.last_weakpoint_change = now
+                self._activate_weakpoints()
+
+        return []
+
+    def shoot(self, players, sound_manager=None):
+        if self.destruction_complete:
+            return []
+
+        now = pygame.time.get_ticks()
+        phase_name = self._current_form()["name"]
+        cooldown_map = {
+            "MONA": ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN,
+            "SCREAM": ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN,
+            "STARRY": ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN,
+        }
+        cooldown = cooldown_map.get(phase_name, 750)
+        if now - self.last_shot < cooldown:
+            return []
+
+        self.last_shot = now
+        bullets = []
+        left = int(self.x + 16)
+        right = int(self.x + self.width - 16)
+        bottom = int(self.y + self.height - 12)
+
+        attack = self._current_form()["attack"]
+        if attack == "curtain":
+            for i in range(6):
+                x = left + int((right - left) * (i / 5))
+                bullets.append(Bullet(x, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
+        elif attack == "wail":
+            center = int(self.x + self.width // 2)
+            offsets = [-110, -70, -35, 0, 35, 70, 110]
+            for off in offsets:
+                speed = ROGUE_TERMINAL_BOSS_BULLET_SPEED + (abs(off) / 110.0)
+                bullets.append(Bullet(center + off, bottom, speed))
+        else:  # swirl
+            symbol_cells = self._symbol_cells()
+            if symbol_cells:
+                for _ in range(5):
+                    _, _, _, sx, _, _ = random.choice(symbol_cells)
+                    bullets.append(Bullet(sx, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED * random.uniform(0.75, 1.2)))
+            else:
+                bullets.append(Bullet(int(self.x + self.width // 2), bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED))
+
+        if sound_manager and bullets:
+            sound_manager.play_sound('enemy_shoot', volume_override=0.45)
+        return bullets
+
+    def hit_weakpoint(self, projectile_rect, damage=1):
+        if not self.weakpoint_active:
+            return False
+        for row, col, _, _, _, rect in self._symbol_cells():
+            if (row, col) in self.weakpoint_cells and projectile_rect.colliderect(rect):
+                self.health = max(0, self.health - damage)
+                self.weakpoint_cells.discard((row, col))
+                if self.health <= 0:
+                    self.start_destruction_sequence()
+                return True
+        return False
+
+    def take_turret_damage(self, turret_index, damage=1):
+        return False
+
+    def take_main_damage(self, damage=1):
+        return False
+
+    def get_turret_rects(self):
+        return []
+
+    def get_main_body_rect(self):
+        return None
+
+    def start_destruction_sequence(self):
+        self.destruction_complete = True
+        self.destruction_start_time = pygame.time.get_ticks()
+        for _ in range(30):
+            self.explosion_effects.append({
+                'x': self.x + random.randint(-50, self.width + 50),
+                'y': self.y + random.randint(-30, self.height + 30),
+                'radius': 0,
+                'growth': random.uniform(5, 11),
+                'color': random.choice([RED, ORANGE, YELLOW, WHITE, CYAN]),
+                'life': random.randint(70, 140)
+            })
+
+    def is_destruction_complete(self):
+        if not self.destruction_complete:
+            return False
+        return pygame.time.get_ticks() - self.destruction_start_time > 2000
+
+    def create_final_explosion(self):
+        particles = []
+        for _ in range(70):
+            particles.append({
+                'x': self.x + random.randint(-80, self.width + 80),
+                'y': self.y + random.randint(-50, self.height + 50),
+                'vel_x': random.uniform(-7, 7),
+                'vel_y': random.uniform(-8, 3),
+                'color': random.choice([(255, 80, 80), (255, 200, 0), (255, 255, 255), (100, 255, 255)]),
+                'size': random.randint(4, 10),
+                'life': random.randint(1000, 1600),
+                'gravity': random.uniform(0.1, 0.3)
+            })
+        return particles
+
+    def draw(self, screen):
+        if self.destruction_complete:
+            for explosion in self.explosion_effects:
+                if explosion['radius'] > 0:
+                    alpha = int(255 * (explosion['life'] / 140))
+                    surf = pygame.Surface((int(explosion['radius']) * 2, int(explosion['radius']) * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(surf, explosion['color'], (int(explosion['radius']), int(explosion['radius'])), int(explosion['radius']))
+                    surf.set_alpha(alpha)
+                    screen.blit(surf, (explosion['x'] - explosion['radius'], explosion['y'] - explosion['radius']))
+            return
+
+        phase_color = self._current_form()["color"]
+        for row, col, char, x, y, _ in self._symbol_cells():
+            symbol_color = RED if (row, col) in self.weakpoint_cells else phase_color
+            glyph = self.font.render(char, True, symbol_color)
+            screen.blit(glyph, (x, y))
+
+        ratio = self.health / self.max_health
+        bar_y = int(self.y - 26)
+        pygame.draw.rect(screen, RED, (int(self.x), bar_y, self.width, 14))
+        pygame.draw.rect(screen, (90, 255, 90), (int(self.x), bar_y, int(self.width * ratio), 14))
+        pygame.draw.rect(screen, WHITE, (int(self.x), bar_y, self.width, 14), 2)
+        label = f"ROGUE TERMINAL [{self._current_form()['name']}] {self.health}/{self.max_health}"
+        text = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 14).render(label, True, WHITE)
+        screen.blit(text, (int(self.x), bar_y - 20))
+
+
 class Enemy:
     def __init__(self, x, y, enemy_type=0):
         self.x = x
@@ -9248,7 +9611,7 @@ class DebugMenu:
             {'type': 'int', 'label': 'XP Current', 'path': ('xp_current',), 'min': 0, 'max': 50000, 'step': 250},
             {'type': 'label', 'label': 'Boss Testing'},
             {'type': 'bool', 'label': 'Force Boss Level', 'path': ('force_boss_level',)},
-            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss', 'SnakeBoss'], 'path': ('force_boss_type',)},
+            {'type': 'choice', 'label': 'Force Boss Type', 'choices': ['Random', 'Boss', 'AlienOverlordBoss', 'BulletHellBoss', 'AsteroidFieldBoss', 'RubiksCubeBoss', 'SnakeBoss', 'RogueTerminalBoss'], 'path': ('force_boss_type',)},
             {'type': 'int', 'label': 'Boss Encounter Level', 'path': ('boss_encounter_level',), 'min': 1, 'max': 50, 'step': 1},
             {'type': 'label', 'label': 'Special Enemy Testing'},
             {'type': 'choice', 'label': 'Force Last Enemy Type', 'choices': ['Random', 'None', 'Gold', 'Silver'], 'path': ('force_special_enemy',)},
@@ -9624,7 +9987,7 @@ class Game:
         self.current_boss = None
         self.is_boss_level = False
         self.boss_shield_granted = False
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0}
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0, RogueTerminalBoss: 0}
         self.last_boss_type = None  # Track last boss to prevent consecutive repeats
 
         # Special enemy system (gold/silver last enemy)
@@ -9655,7 +10018,7 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss, SnakeBoss]
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss, SnakeBoss, RogueTerminalBoss]
 
         self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 28)
         self.small_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 20)
@@ -9778,7 +10141,8 @@ class Game:
                 'BulletHellBoss': BulletHellBoss,
                 'AsteroidFieldBoss': AsteroidFieldBoss,
                 'RubiksCubeBoss': RubiksCubeBoss,
-                'SnakeBoss': SnakeBoss
+                'SnakeBoss': SnakeBoss,
+                'RogueTerminalBoss': RogueTerminalBoss
             }
             self.debug_force_boss_type = boss_map.get(boss_type_name)
 
@@ -9949,7 +10313,10 @@ class Game:
             'Boss': Boss,
             'AlienOverlordBoss': AlienOverlordBoss,
             'BulletHellBoss': BulletHellBoss,
-            'AsteroidFieldBoss': AsteroidFieldBoss
+            'AsteroidFieldBoss': AsteroidFieldBoss,
+            'RubiksCubeBoss': RubiksCubeBoss,
+            'SnakeBoss': SnakeBoss,
+            'RogueTerminalBoss': RogueTerminalBoss
         }
         self.boss_encounters = {}
         for boss_name, count in save_data['boss_encounters'].items():
@@ -11396,6 +11763,44 @@ class Game:
                             bullet.pierce_hits -= 1
                     continue  # Skip normal boss collision logic
 
+                # Special handling for RogueTerminalBoss weakpoint symbols
+                if isinstance(self.current_boss, RogueTerminalBoss):
+                    damage = max(1, int(math.ceil(bullet.boss_damage_multiplier)))
+                    did_damage = self.current_boss.hit_weakpoint(bullet.rect, damage)
+                    consumed_shot = False
+                    if did_damage:
+                        consumed_shot = True
+                        if bullet.pierce_hits <= 0:
+                            self.player_bullets.remove(bullet)
+                        self.sound_manager.play_sound('ufo_hit', volume_override=0.6)
+                        self.score += 15
+                        self.add_xp(7, bullet.rect.centerx, bullet.rect.centery)
+
+                        if bullet.owner_id and bullet.owner_id <= len(self.player_stats):
+                            self.player_stats[bullet.owner_id - 1].record_boss_damage(damage)
+
+                        if self.current_boss.health <= 0:
+                            self.score += 1000
+                            self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
+                            boss_name = self.current_boss.__class__.__name__
+                            self.track_for_all_players("player_defeated_boss", boss_name)
+                            self.enemy_bullets.clear()
+                            self.sound_manager.play_sound('explosion_large')
+                            self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+                            self.grant_post_boss_shield()
+                            self.screen_shake_intensity = 20
+                            self.screen_shake_duration = 1500
+                            self.screen_flash_intensity = 220
+                            self.screen_flash_duration = 1200
+                    else:
+                        # Only consume non-piercing bullets when they actually hit the boss body.
+                        if bullet.pierce_hits <= 0 and self.current_boss.rect.colliderect(bullet.rect):
+                            self.player_bullets.remove(bullet)
+                            consumed_shot = True
+                    if consumed_shot and bullet.pierce_hits > 0:
+                        bullet.pierce_hits -= 1
+                    continue  # Skip normal boss collision logic
+
                 # Check turret collisions first (for other bosses)
                 turret_rects = self.current_boss.get_turret_rects()
                 hit_turret = False
@@ -11558,6 +11963,28 @@ class Game:
                                     self.sound_manager.play_sound('ufo_hit', volume_override=0.4)
                                 self.score += 10
                                 self.add_xp(4, laser.rect.centerx, laser.rect.centery)
+                        continue  # Skip normal boss collision logic
+
+                    # Special handling for RogueTerminalBoss weakpoints with lasers
+                    if isinstance(self.current_boss, RogueTerminalBoss):
+                        if pygame.time.get_ticks() % 100 == 0:
+                            if self.current_boss.hit_weakpoint(laser.rect, 2):
+                                if pygame.time.get_ticks() % 200 == 0:
+                                    self.sound_manager.play_sound('ufo_hit', volume_override=0.5)
+                                self.score += 12
+                                self.add_xp(5, laser.rect.centerx, laser.rect.centery)
+                                if laser.owner_player_id and laser.owner_player_id <= len(self.player_stats):
+                                    self.player_stats[laser.owner_player_id - 1].record_boss_damage(2)
+
+                                if self.current_boss.health <= 0:
+                                    self.score += 1000
+                                    self.add_xp(200, self.current_boss.x + self.current_boss.width // 2, self.current_boss.y)
+                                    boss_name = self.current_boss.__class__.__name__
+                                    self.track_for_all_players("player_defeated_boss", boss_name)
+                                    self.enemy_bullets.clear()
+                                    self.sound_manager.play_sound('explosion_large')
+                                    self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+                                    self.grant_post_boss_shield()
                         continue  # Skip normal boss collision logic
 
                     # Laser vs turrets (for other bosses)
@@ -11809,8 +12236,8 @@ class Game:
         self.screen_flash_intensity = 0
         self.screen_flash_duration = 0
         self.boss_explosion_waves = []
-        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss, SnakeBoss]
-        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0}
+        self.available_bosses = [Boss, AlienOverlordBoss, BulletHellBoss, AsteroidFieldBoss, RubiksCubeBoss, SnakeBoss, RogueTerminalBoss]
+        self.boss_encounters = {Boss: 0, AlienOverlordBoss: 0, BulletHellBoss: 0, AsteroidFieldBoss: 0, RubiksCubeBoss: 0, SnakeBoss: 0, RogueTerminalBoss: 0}
 
         # Reset all players with new individual upgrades
         for player in self.players:
