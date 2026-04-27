@@ -197,6 +197,7 @@ ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN = 900
 ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN = 650
 ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN = 500
 ROGUE_TERMINAL_BOSS_BULLET_SPEED = 7.5
+ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE = "rogue_terminal_art.json"  # Optional JSON file for custom forms
 
 # High scores files
 SINGLE_SCORES_FILE = "high_scores_single.json"
@@ -7723,7 +7724,14 @@ class RogueTerminalBoss:
         self.weakpoint_cells = set()
 
         self.font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", ROGUE_TERMINAL_BOSS_SYMBOL_SIZE)
-        self.forms = [
+        self.forms = self._load_forms()
+
+        self.destruction_complete = False
+        self.destruction_start_time = 0
+        self.explosion_effects = []
+
+    def _default_forms(self):
+        return [
             {
                 "name": "MONA",
                 "attack": "curtain",
@@ -7789,9 +7797,41 @@ class RogueTerminalBoss:
             },
         ]
 
-        self.destruction_complete = False
-        self.destruction_start_time = 0
-        self.explosion_effects = []
+    def _load_forms(self):
+        forms = self._default_forms()
+        if not os.path.exists(ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE):
+            return forms
+
+        try:
+            with open(ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE, "r") as f:
+                data = json.load(f)
+            custom_forms = data.get("forms", [])
+            loaded = []
+            for form in custom_forms:
+                if not isinstance(form, dict):
+                    continue
+                name = str(form.get("name", "CUSTOM"))[:16]
+                attack = form.get("attack", "curtain")
+                if attack not in ["curtain", "wail", "swirl"]:
+                    attack = "curtain"
+                color = form.get("color", [255, 255, 255])
+                if not (isinstance(color, list) and len(color) == 3):
+                    color = [255, 255, 255]
+                template = form.get("template", [])
+                if not isinstance(template, list):
+                    template = []
+                loaded.append({
+                    "name": name,
+                    "attack": attack,
+                    "color": (int(color[0]), int(color[1]), int(color[2])),
+                    "template": self._normalize_art([str(line) for line in template]),
+                })
+            if loaded:
+                return loaded
+        except Exception as e:
+            print(f"[DEBUG] Could not load {ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE}: {e}")
+
+        return forms
 
     def _normalize_art(self, rows):
         normalized = []
@@ -11727,7 +11767,9 @@ class Game:
                 if isinstance(self.current_boss, RogueTerminalBoss):
                     damage = max(1, int(math.ceil(bullet.boss_damage_multiplier)))
                     did_damage = self.current_boss.hit_weakpoint(bullet.rect, damage)
+                    consumed_shot = False
                     if did_damage:
+                        consumed_shot = True
                         if bullet.pierce_hits <= 0:
                             self.player_bullets.remove(bullet)
                         self.sound_manager.play_sound('ufo_hit', volume_override=0.6)
@@ -11751,9 +11793,11 @@ class Game:
                             self.screen_flash_intensity = 220
                             self.screen_flash_duration = 1200
                     else:
-                        if bullet.pierce_hits <= 0:
+                        # Only consume non-piercing bullets when they actually hit the boss body.
+                        if bullet.pierce_hits <= 0 and self.current_boss.rect.colliderect(bullet.rect):
                             self.player_bullets.remove(bullet)
-                    if bullet.pierce_hits > 0:
+                            consumed_shot = True
+                    if consumed_shot and bullet.pierce_hits > 0:
                         bullet.pierce_hits -= 1
                     continue  # Skip normal boss collision logic
 
