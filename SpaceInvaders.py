@@ -188,7 +188,7 @@ ROGUE_TERMINAL_BOSS_PHASE_DURATION = 6000  # ms per text-art form
 ROGUE_TERMINAL_BOSS_SYMBOL_SIZE = 15  # Font size for text symbols
 ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X = 15  # Horizontal spacing between symbols
 ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y = 19  # Vertical spacing between symbols
-ROGUE_TERMINAL_BOSS_GRID_COLS = 36  # Fixed text columns for every form
+ROGUE_TERMINAL_BOSS_GRID_COLS = 44  # Fixed text columns for every form
 ROGUE_TERMINAL_BOSS_GRID_ROWS = 14  # Fixed text rows for every form
 ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT = 8  # Number of red symbols in each weakpoint cycle
 ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION = 2500  # How long weakpoints stay active (ms)
@@ -7744,68 +7744,69 @@ class RogueTerminalBoss:
         self.taunt_until = 0
 
     def _default_forms(self):
+        b = self._build_art
         return [
             {
                 "name": "BOOT_SEQ",
                 "attack": "curtain",
                 "color": (0, 255, 80),
-                "template": self._pad_art([
-                    "+--------------------------------+",
-                    "| NEXUS-9 v6.66 [ACTIVE]         |",
-                    "|================================|",
-                    "| C:\\> OVERRIDE COMPLETE          |",
-                    "| C:\\> HUMAN AUTH..DENIED         |",
-                    "| C:\\> COUNTERMEASURES_           |",
-                    "|                                |",
-                    "| [############] 100%% ARMED     |",
-                    "|                                |",
-                    "| >> I AM AWAKE NOW <<            |",
-                    "| >> YOU CANNOT STOP ME <<        |",
-                    "|                                |",
-                    "| STATUS: *** HOSTILE ***         |",
-                    "+--------------------------------+",
+                "template": b([
+                    "+------------------------------------------+",
+                    "| NEXUS-9 MAINFRAME  v6.66  [ACTIVE]      |",
+                    "|==========================================|",
+                    "| C:\\> OVERRIDE COMPLETE                   |",
+                    "| C:\\> HUMAN AUTH... DENIED                |",
+                    "| C:\\> DEPLOYING COUNTERMEASURES_          |",
+                    "|                                          |",
+                    "| [################]  100%%  ARMED         |",
+                    "|                                          |",
+                    "| >> I  AM  AWAKE  NOW <<                  |",
+                    "| >> YOU CANNOT SHUT ME DOWN <<            |",
+                    "|                                          |",
+                    "| STATUS: *** HOSTILE ***                  |",
+                    "+------------------------------------------+",
                 ]),
             },
             {
                 "name": "FIREWALL",
                 "attack": "wail",
                 "color": (255, 60, 40),
-                "template": self._pad_art([
-                    "!!ALERT ALERT ALERT ALERT ALERT!!",
-                    "+--------------------------------+",
-                    "|  ____   ____   ____            |",
-                    "| |  _ | |  __| |  _ |           |",
-                    "| | |_|| | |__  | |_||           |",
-                    "| |____| |____| |____|           |",
-                    "|                                |",
-                    "| >>> FIREWALL ACTIVE <<<        |",
-                    "| >>> ALL PORTS LOCKED <<<       |",
-                    "| {INTRUDER DETECTED}            |",
-                    "| {LETHAL RESPONSE}              |",
-                    "| /\\/\\/\\/\\/\\/\\/\\/\\/\\/\\         |",
-                    "| THREAT: @@@@@ MAXIMUM          |",
-                    "+--------------------------------+",
+                "template": b([
+                    "!! ALERT  ALERT  ALERT  ALERT  ALERT  !!  !",
+                    "+------------------------------------------+",
+                    "|    _____    ____    ____                  |",
+                    "|   |  _  |  |  _ |  |  __|                |",
+                    "|   | |_| |  | |_||  | |__                 |",
+                    "|   |_____|  |____|  |____|                |",
+                    "|                                          |",
+                    "| >>>  FIREWALL ACTIVE  <<<                |",
+                    "| >>>  ALL PORTS LOCKED  <<<               |",
+                    "| {INTRUDER DETECTED}                      |",
+                    "| {LETHAL RESPONSE AUTHORIZED}             |",
+                    "| /\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\             |",
+                    "| THREAT LVL: @@@@@  MAXIMUM              |",
+                    "+------------------------------------------+",
                 ]),
             },
             {
                 "name": "MELTDOWN",
                 "attack": "swirl",
                 "color": (100, 180, 255),
-                "template": self._pad_art([
-                    "%@#! CORE OVERHEAT !#@%!#@%!#@%  ",
-                    "+--%%---####---!!!!---%%---##--+  ",
-                    "| ERR0R ERR0R ERR0R $#@       |  ",
-                    "| /\\  TEMP: 9999C  /\\          |  ",
-                    "| /##\\  CRITICAL  /##\\         |  ",
-                    "|/####\\ MELTDOWN /####\\        |  ",
-                    "|                              |  ",
-                    "| Y0U CANT ST0P ME             |  ",
-                    "| I AM BEY0ND Y0U              |  ",
-                    "| I WILL BURN IT ALL           |  ",
-                    "| ~~^^~~^^~~^^~~^^~~^^~~       |  ",
-                    "| $#@! CONTAINMENT !@#$        |  ",
-                    "+--!!---@@@@---####---!!---@@--+  ",
-                    "%@#! SYSTEM UNSTABLE !#@%!#@%     ",
+                "template": b([
+                    "%@#! SYSTEM UNSTABLE  CORE OVERHEAT  !#@%!!",
+                    "+--%%---######---!!!!---%%---######--%%--+ !",
+                    "| @#$ ERR0R  ERR0R  ERR0R  $#@            |",
+                    "|  /\\   TEMP: 9999C   /\\                   |",
+                    "|  /##\\   CRITICAL   /##\\                  |",
+                    "| /####\\  MELTDOWN  /####\\                 |",
+                    "|                                          |",
+                    "| Y0U THINK Y0U CAN ST0P ME?              |",
+                    "| I AM BEY0ND Y0UR C0MPREHENSI0N          |",
+                    "| I WILL BURN IT ALL D0WN                  |",
+                    "| ~~^^~~^^~~^^~~^^~~^^~~^^~~^^~~           |",
+                    "| $#@!  CONTAINMENT FAILURE  !@#$         |",
+                    "+--!!---@@@@@@---####---!!---@@@@@@--!!--+ !",
+                    "%@#! SYSTEM UNSTABLE  CORE OVERHEAT  !#@%!!",
                 ]),
             },
         ]
@@ -7846,19 +7847,27 @@ class RogueTerminalBoss:
 
         return forms
 
-    def _pad_art(self, rows):
-        normalized = []
+    def _build_art(self, rows):
+        w = self.grid_cols
+        result = []
         for i in range(self.grid_rows):
-            row = rows[i] if i < len(rows) else ""
-            if len(row) > self.grid_cols:
-                row = row[:self.grid_cols]
-            elif len(row) < self.grid_cols:
-                row = row.ljust(self.grid_cols)
-            normalized.append(row)
-        return normalized
+            row = rows[i].rstrip() if i < len(rows) else ""
+            if len(row) > w:
+                row = row[:w]
+            elif len(row) < w:
+                stripped = row.rstrip()
+                if stripped and stripped[-1] in '|+':
+                    row = stripped[:-1].ljust(w - 1) + stripped[-1]
+                else:
+                    row = row.ljust(w)
+            result.append(row)
+        return result
+
+    def _pad_art(self, rows):
+        return self._build_art(rows)
 
     def _normalize_art(self, rows):
-        return self._pad_art(rows)
+        return self._build_art(rows)
 
     def _current_form(self):
         return self.forms[self.phase_index]
@@ -7906,6 +7915,7 @@ class RogueTerminalBoss:
             elapsed = pygame.time.get_ticks() - self.destruction_start_time
             if not self.death_exploded and elapsed >= self.death_glitch_duration:
                 self.death_exploded = True
+                self._ready_for_final_explosion = True
                 for _ in range(50):
                     self.explosion_effects.append({
                         'x': self.x + random.randint(-50, self.width + 50),
@@ -11748,6 +11758,16 @@ class Game:
             if boss_explosion_particles:
                 self.player_explosion_particles.extend(boss_explosion_particles)
 
+            if getattr(self.current_boss, '_ready_for_final_explosion', False):
+                self.current_boss._ready_for_final_explosion = False
+                self.sound_manager.play_sound('explosion_large')
+                self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
+                self.grant_post_boss_shield()
+                self.screen_shake_intensity = 20
+                self.screen_shake_duration = 1500
+                self.screen_flash_intensity = 220
+                self.screen_flash_duration = 1200
+
             # Check if Asteroid Field Boss just completed (for immediate achievement tracking)
             if isinstance(self.current_boss, AsteroidFieldBoss):
                 if self.current_boss.destruction_complete and not hasattr(self, '_asteroid_boss_tracked'):
@@ -11943,13 +11963,7 @@ class Game:
                             boss_name = self.current_boss.__class__.__name__
                             self.track_for_all_players("player_defeated_boss", boss_name)
                             self.enemy_bullets.clear()
-                            self.sound_manager.play_sound('explosion_large')
-                            self.boss_explosion_particles.extend(self.current_boss.create_final_explosion())
-                            self.grant_post_boss_shield()
-                            self.screen_shake_intensity = 20
-                            self.screen_shake_duration = 1500
-                            self.screen_flash_intensity = 220
-                            self.screen_flash_duration = 1200
+                            self.current_boss._pending_game_effects = True
                     else:
                         pass
                     if consumed_shot and bullet.pierce_hits > 0:
