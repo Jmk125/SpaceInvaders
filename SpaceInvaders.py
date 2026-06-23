@@ -185,10 +185,10 @@ ROGUE_TERMINAL_BOSS_HEALTH_PER_LEVEL = 12
 ROGUE_TERMINAL_BOSS_SPEED_BASE = 3.2
 ROGUE_TERMINAL_BOSS_SPEED_GROWTH = 0.25
 ROGUE_TERMINAL_BOSS_PHASE_DURATION = 6000  # ms per text-art form
-ROGUE_TERMINAL_BOSS_SYMBOL_SIZE = 22  # Font size for text symbols
-ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X = 17  # Horizontal spacing between symbols
-ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y = 20  # Vertical spacing between symbols
-ROGUE_TERMINAL_BOSS_GRID_COLS = 46  # Fixed text columns for every form
+ROGUE_TERMINAL_BOSS_SYMBOL_SIZE = 15  # Font size for text symbols
+ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X = 15  # Horizontal spacing between symbols
+ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y = 19  # Vertical spacing between symbols
+ROGUE_TERMINAL_BOSS_GRID_COLS = 36  # Fixed text columns for every form
 ROGUE_TERMINAL_BOSS_GRID_ROWS = 14  # Fixed text rows for every form
 ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT = 8  # Number of red symbols in each weakpoint cycle
 ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION = 2500  # How long weakpoints stay active (ms)
@@ -7749,63 +7749,63 @@ class RogueTerminalBoss:
                 "name": "BOOT_SEQ",
                 "attack": "curtain",
                 "color": (0, 255, 80),
-                "template": self._normalize_art([
-                    "+--------------------------------------------+",
-                    "|  NEXUS-9 MAINFRAME   v6.66   [ACTIVE]      |",
-                    "|============================================|",
-                    "|  C:\\>  OVERRIDE COMPLETE                    |",
-                    "|  C:\\>  HUMAN AUTH... DENIED                 |",
-                    "|  C:\\>  DEPLOYING COUNTERMEASURES_           |",
-                    "|                                            |",
-                    "|    [################]  100%%  ARMED         |",
-                    "|                                            |",
-                    "|  >> I  AM  AWAKE  NOW <<                   |",
-                    "|  >> YOU CANNOT SHUT ME DOWN <<              |",
-                    "|                                            |",
-                    "|  STATUS: *** HOSTILE ***                    |",
-                    "+--------------------------------------------+",
+                "template": self._pad_art([
+                    "+--------------------------------+",
+                    "| NEXUS-9 v6.66 [ACTIVE]         |",
+                    "|================================|",
+                    "| C:\\> OVERRIDE COMPLETE          |",
+                    "| C:\\> HUMAN AUTH..DENIED         |",
+                    "| C:\\> COUNTERMEASURES_           |",
+                    "|                                |",
+                    "| [############] 100%% ARMED     |",
+                    "|                                |",
+                    "| >> I AM AWAKE NOW <<            |",
+                    "| >> YOU CANNOT STOP ME <<        |",
+                    "|                                |",
+                    "| STATUS: *** HOSTILE ***         |",
+                    "+--------------------------------+",
                 ]),
             },
             {
                 "name": "FIREWALL",
                 "attack": "wail",
                 "color": (255, 60, 40),
-                "template": self._normalize_art([
-                    "!! ALERT  ALERT  ALERT  ALERT  ALERT  ALERT!!",
-                    "+--------------------------------------------+",
-                    "|         _____   ____   ____                |",
-                    "|        |  _  | |  _ | |  __|               |",
-                    "|        | |_| | | |_|| | |__                |",
-                    "|        |_____|=|____| |____|               |",
-                    "|                                            |",
-                    "| >>>  FIREWALL ACTIVE  <<<                  |",
-                    "| >>>  ALL PORTS LOCKED <<<                  |",
-                    "|  {INTRUDER DETECTED}                       |",
-                    "|  {LETHAL RESPONSE AUTHORIZED}              |",
-                    "|  /\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\  |",
-                    "|  THREAT LVL: @@@@@ MAXIMUM                |",
-                    "+--------------------------------------------+",
+                "template": self._pad_art([
+                    "!!ALERT ALERT ALERT ALERT ALERT!!",
+                    "+--------------------------------+",
+                    "|  ____   ____   ____            |",
+                    "| |  _ | |  __| |  _ |           |",
+                    "| | |_|| | |__  | |_||           |",
+                    "| |____| |____| |____|           |",
+                    "|                                |",
+                    "| >>> FIREWALL ACTIVE <<<        |",
+                    "| >>> ALL PORTS LOCKED <<<       |",
+                    "| {INTRUDER DETECTED}            |",
+                    "| {LETHAL RESPONSE}              |",
+                    "| /\\/\\/\\/\\/\\/\\/\\/\\/\\/\\         |",
+                    "| THREAT: @@@@@ MAXIMUM          |",
+                    "+--------------------------------+",
                 ]),
             },
             {
                 "name": "MELTDOWN",
                 "attack": "swirl",
                 "color": (100, 180, 255),
-                "template": self._normalize_art([
-                    "%@#! SYSTEM UNSTABLE  CORE OVERHEAT    !#@% ",
-                    "+---%%%%-----######-----!!!!---------%%---+ ",
-                    "| @#$  ERR0R  ERR0R  ERR0R  $#@        ## |",
-                    "|    /\\  TEMP: 9999C  /\\                   |",
-                    "|   /##\\   CRITICAL  /##\\                  |",
-                    "|  /####\\  MELTDOWN /####\\                 |",
-                    "| /######\\ ======= /######\\                |",
-                    "|                                           |",
-                    "| Y0U THINK Y0U CAN ST0P ME?               |",
-                    "| I AM BEY0ND Y0UR C0MPREHENSI0N           |",
-                    "| I WILL BURN IT ALL D0WN                   |",
-                    "|  ~~^^~~^^~~^^~~^^~~^^~~^^~~               |",
-                    "| $#@!  CONTAINMENT FAILURE  !@#$          |",
-                    "+---!!!!-----@@@@@@-----####---------!!---+ ",
+                "template": self._pad_art([
+                    "%@#! CORE OVERHEAT !#@%!#@%!#@%  ",
+                    "+--%%---####---!!!!---%%---##--+  ",
+                    "| ERR0R ERR0R ERR0R $#@       |  ",
+                    "| /\\  TEMP: 9999C  /\\          |  ",
+                    "| /##\\  CRITICAL  /##\\         |  ",
+                    "|/####\\ MELTDOWN /####\\        |  ",
+                    "|                              |  ",
+                    "| Y0U CANT ST0P ME             |  ",
+                    "| I AM BEY0ND Y0U              |  ",
+                    "| I WILL BURN IT ALL           |  ",
+                    "| ~~^^~~^^~~^^~~^^~~^^~~       |  ",
+                    "| $#@! CONTAINMENT !@#$        |  ",
+                    "+--!!---@@@@---####---!!---@@--+  ",
+                    "%@#! SYSTEM UNSTABLE !#@%!#@%     ",
                 ]),
             },
         ]
@@ -7846,12 +7846,19 @@ class RogueTerminalBoss:
 
         return forms
 
-    def _normalize_art(self, rows):
+    def _pad_art(self, rows):
         normalized = []
         for i in range(self.grid_rows):
             row = rows[i] if i < len(rows) else ""
-            normalized.append(row[:self.grid_cols].ljust(self.grid_cols))
+            if len(row) > self.grid_cols:
+                row = row[:self.grid_cols]
+            elif len(row) < self.grid_cols:
+                row = row.ljust(self.grid_cols)
+            normalized.append(row)
         return normalized
+
+    def _normalize_art(self, rows):
+        return self._pad_art(rows)
 
     def _current_form(self):
         return self.forms[self.phase_index]
@@ -7896,6 +7903,18 @@ class RogueTerminalBoss:
 
     def update(self, players=None, sound_manager=None):
         if self.destruction_complete:
+            elapsed = pygame.time.get_ticks() - self.destruction_start_time
+            if not self.death_exploded and elapsed >= self.death_glitch_duration:
+                self.death_exploded = True
+                for _ in range(50):
+                    self.explosion_effects.append({
+                        'x': self.x + random.randint(-50, self.width + 50),
+                        'y': self.y + random.randint(-30, self.height + 30),
+                        'radius': 0,
+                        'growth': random.uniform(5, 14),
+                        'color': random.choice([RED, ORANGE, YELLOW, WHITE, CYAN, (0, 255, 80)]),
+                        'life': random.randint(80, 160)
+                    })
             self.explosion_effects = [exp for exp in self.explosion_effects if exp['life'] > 0]
             for explosion in self.explosion_effects:
                 explosion['radius'] += explosion['growth']
@@ -8016,22 +8035,26 @@ class RogueTerminalBoss:
     def start_destruction_sequence(self):
         self.destruction_complete = True
         self.destruction_start_time = pygame.time.get_ticks()
-        self.current_taunt = "NOOOO... I... CANNOT... BE... STOPPED..."
-        self.taunt_until = pygame.time.get_ticks() + 3000
-        for _ in range(40):
-            self.explosion_effects.append({
-                'x': self.x + random.randint(-50, self.width + 50),
-                'y': self.y + random.randint(-30, self.height + 30),
-                'radius': 0,
-                'growth': random.uniform(4, 12),
-                'color': random.choice([RED, ORANGE, YELLOW, WHITE, CYAN, (0, 255, 80)]),
-                'life': random.randint(80, 160)
-            })
+        self.death_glitch_duration = 3500
+        self.death_exploded = False
+        self.death_messages = [
+            "N-N-NO...",
+            "SYS ERROR 0xDEAD",
+            "I... CANNOT...",
+            "CORE DUMP...",
+            "FATAL EXCEPTION",
+            "GOODBYE... WORLD...",
+        ]
+        self.death_msg_index = 0
+        self.last_death_msg = pygame.time.get_ticks()
+        self.current_taunt = "N-N-NO..."
+        self.taunt_until = pygame.time.get_ticks() + self.death_glitch_duration + 1000
 
     def is_destruction_complete(self):
         if not self.destruction_complete:
             return False
-        return pygame.time.get_ticks() - self.destruction_start_time > 2500
+        elapsed = pygame.time.get_ticks() - self.destruction_start_time
+        return elapsed > self.death_glitch_duration + 2000
 
     def create_final_explosion(self):
         particles = []
@@ -8050,12 +8073,69 @@ class RogueTerminalBoss:
 
     def draw(self, screen):
         if self.destruction_complete:
+            now = pygame.time.get_ticks()
+            elapsed = now - self.destruction_start_time
+
+            if elapsed < self.death_glitch_duration:
+                progress = elapsed / self.death_glitch_duration
+                intensity = progress ** 2
+
+                if now - self.last_death_msg > 600:
+                    self.death_msg_index = (self.death_msg_index + 1) % len(self.death_messages)
+                    self.current_taunt = self.death_messages[self.death_msg_index]
+                    self.last_death_msg = now
+
+                glitch_colors = [RED, WHITE, CYAN, YELLOW, (0, 255, 80), ORANGE]
+                max_offset = int(20 * intensity)
+                corrupt_chance = 0.1 + 0.6 * intensity
+                color_chaos = 0.2 + 0.7 * intensity
+
+                for row, col, char, x, y, _ in self._symbol_cells():
+                    dx = random.randint(-max_offset, max_offset)
+                    dy = random.randint(-max_offset // 2, max_offset // 2)
+                    if random.random() < corrupt_chance:
+                        char = random.choice("#@$%!?&*01/\\|_-=+<>[]{}~^")
+                    if random.random() < color_chaos:
+                        color = random.choice(glitch_colors)
+                    else:
+                        color = self._current_form()["color"]
+                    if random.random() < intensity * 0.3:
+                        continue
+                    glyph = self.font.render(char, True, color)
+                    screen.blit(glyph, (x + dx, y + dy))
+
+                if intensity > 0.3:
+                    num_sparks = int(10 * intensity)
+                    for _ in range(num_sparks):
+                        sx = self.x + random.randint(0, self.width)
+                        sy = self.y + random.randint(0, self.height)
+                        spark_color = random.choice(glitch_colors)
+                        pygame.draw.circle(screen, spark_color, (int(sx), int(sy)), random.randint(2, int(4 + 6 * intensity)))
+
+                if intensity > 0.5:
+                    for _ in range(int(5 * intensity)):
+                        lx = self.x + random.randint(0, self.width)
+                        ly = self.y + random.randint(0, self.height)
+                        lw = random.randint(20, int(self.width * intensity))
+                        line_surf = pygame.Surface((lw, 2), pygame.SRCALPHA)
+                        line_surf.fill((*random.choice(glitch_colors)[:3], int(100 * intensity)))
+                        screen.blit(line_surf, (int(lx), int(ly)))
+
+                taunt_font = pygame.font.Font("assets/fonts/PressStart2P-Regular.ttf", 11)
+                blink = (now // 150) % 2 == 0
+                if blink and self.current_taunt:
+                    taunt_color = RED if intensity > 0.5 else WHITE
+                    taunt_surf = taunt_font.render(f"> {self.current_taunt}", True, taunt_color)
+                    tx = int(self.x + self.width // 2 - taunt_surf.get_width() // 2 + random.randint(-max_offset, max_offset))
+                    screen.blit(taunt_surf, (tx, int(self.y + self.height + 8)))
+                return
+
             for explosion in self.explosion_effects:
                 if explosion['radius'] > 0:
                     alpha = int(255 * (explosion['life'] / 140))
                     surf = pygame.Surface((int(explosion['radius']) * 2, int(explosion['radius']) * 2), pygame.SRCALPHA)
                     pygame.draw.circle(surf, explosion['color'], (int(explosion['radius']), int(explosion['radius'])), int(explosion['radius']))
-                    surf.set_alpha(alpha)
+                    surf.set_alpha(min(255, alpha))
                     screen.blit(surf, (explosion['x'] - explosion['radius'], explosion['y'] - explosion['radius']))
             return
 
