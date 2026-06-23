@@ -5,20 +5,20 @@
       "attack": "curtain",
       "color": [0, 255, 80],
       "template": [
-        " +------------------------------------------+",
-        " |  NEXUS-9 MAINFRAME   v6.66   [ACTIVE]    |",
-        " |========================================= |",
-        " |  C:\\>  OVERRIDE COMPLETE                  |",
-        " |  C:\\>  HUMAN AUTH... DENIED               |",
-        " |  C:\\>  DEPLOYING COUNTERMEASURES_         |",
-        " |                                           |",
-        " |    [################]  100%  ARMED        |",
-        " |                                           |",
-        " |  >> I  AM  AWAKE  NOW <<                  |",
-        " |  >> YOU CANNOT SHUT ME DOWN <<             |",
-        " |                                           |",
-        " |  STATUS: *** HOSTILE ***                   |",
-        " +------------------------------------------+"
+        "+--------------------------------------------+",
+        "|  NEXUS-9 MAINFRAME   v6.66   [ACTIVE]      |",
+        "|============================================|",
+        "|  C:\\>  OVERRIDE COMPLETE                    |",
+        "|  C:\\>  HUMAN AUTH... DENIED                 |",
+        "|  C:\\>  DEPLOYING COUNTERMEASURES_           |",
+        "|                                            |",
+        "|    [################]  100%  ARMED          |",
+        "|                                            |",
+        "|  >> I  AM  AWAKE  NOW <<                   |",
+        "|  >> YOU CANNOT SHUT ME DOWN <<              |",
+        "|                                            |",
+        "|  STATUS: *** HOSTILE ***                    |",
+        "+--------------------------------------------+"
       ]
     }
   ]

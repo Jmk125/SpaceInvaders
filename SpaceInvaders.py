@@ -188,14 +188,14 @@ ROGUE_TERMINAL_BOSS_PHASE_DURATION = 6000  # ms per text-art form
 ROGUE_TERMINAL_BOSS_SYMBOL_SIZE = 22  # Font size for text symbols
 ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_X = 17  # Horizontal spacing between symbols
 ROGUE_TERMINAL_BOSS_SYMBOL_SPACING_Y = 20  # Vertical spacing between symbols
-ROGUE_TERMINAL_BOSS_GRID_COLS = 44  # Fixed text columns for every form
+ROGUE_TERMINAL_BOSS_GRID_COLS = 46  # Fixed text columns for every form
 ROGUE_TERMINAL_BOSS_GRID_ROWS = 14  # Fixed text rows for every form
-ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT = 5  # Number of red symbols in each weakpoint cycle
+ROGUE_TERMINAL_BOSS_WEAKPOINT_COUNT = 8  # Number of red symbols in each weakpoint cycle
 ROGUE_TERMINAL_BOSS_WEAKPOINT_DURATION = 2500  # How long weakpoints stay active (ms)
 ROGUE_TERMINAL_BOSS_WEAKPOINT_COOLDOWN = 1700  # Delay before next weakpoint set appears (ms)
-ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN = 900
-ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN = 650
-ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN = 500
+ROGUE_TERMINAL_BOSS_BOOT_SHOT_COOLDOWN = 1100
+ROGUE_TERMINAL_BOSS_SCAN_SHOT_COOLDOWN = 850
+ROGUE_TERMINAL_BOSS_MELTDOWN_SHOT_COOLDOWN = 650
 ROGUE_TERMINAL_BOSS_BULLET_SPEED = 7.5
 ROGUE_TERMINAL_BOSS_CUSTOM_ART_FILE = "rogue_terminal_art.json"  # Optional JSON file for custom forms
 
@@ -7750,20 +7750,20 @@ class RogueTerminalBoss:
                 "attack": "curtain",
                 "color": (0, 255, 80),
                 "template": self._normalize_art([
-                    " +------------------------------------------+",
-                    " |  NEXUS-9 MAINFRAME   v6.66   [ACTIVE]    |",
-                    " |========================================= |",
-                    " |  C:\\>  OVERRIDE COMPLETE                  |",
-                    " |  C:\\>  HUMAN AUTH... DENIED               |",
-                    " |  C:\\>  DEPLOYING COUNTERMEASURES_         |",
-                    " |                                           |",
-                    " |    [################]  100%  ARMED        |",
-                    " |                                           |",
-                    " |  >> I  AM  AWAKE  NOW <<                  |",
-                    " |  >> YOU CANNOT SHUT ME DOWN <<             |",
-                    " |                                           |",
-                    " |  STATUS: *** HOSTILE ***                   |",
-                    " +------------------------------------------+",
+                    "+--------------------------------------------+",
+                    "|  NEXUS-9 MAINFRAME   v6.66   [ACTIVE]      |",
+                    "|============================================|",
+                    "|  C:\\>  OVERRIDE COMPLETE                    |",
+                    "|  C:\\>  HUMAN AUTH... DENIED                 |",
+                    "|  C:\\>  DEPLOYING COUNTERMEASURES_           |",
+                    "|                                            |",
+                    "|    [################]  100%%  ARMED         |",
+                    "|                                            |",
+                    "|  >> I  AM  AWAKE  NOW <<                   |",
+                    "|  >> YOU CANNOT SHUT ME DOWN <<              |",
+                    "|                                            |",
+                    "|  STATUS: *** HOSTILE ***                    |",
+                    "+--------------------------------------------+",
                 ]),
             },
             {
@@ -7771,20 +7771,20 @@ class RogueTerminalBoss:
                 "attack": "wail",
                 "color": (255, 60, 40),
                 "template": self._normalize_art([
-                    " !!  ALERT  ALERT  ALERT  ALERT  ALERT  !!  ",
-                    " +------------------------------------------+",
-                    " |         _____   ____   ____              |",
-                    " |        |  _  | |  _ | |  __|             |",
-                    " |        | |_| | | |_|| | |__              |",
-                    " |        |_____|=|____| |____|             |",
-                    " |                                          |",
-                    " | >>>  FIREWALL ACTIVE  <<<                |",
-                    " | >>>  ALL PORTS LOCKED <<<                |",
-                    " |  {INTRUDER DETECTED}                     |",
-                    " |  {LETHAL RESPONSE AUTHORIZED}            |",
-                    " |  /\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\       |",
-                    " |  THREAT LVL: @@@@@ MAXIMUM               |",
-                    " +------------------------------------------+",
+                    "!! ALERT  ALERT  ALERT  ALERT  ALERT  ALERT!!",
+                    "+--------------------------------------------+",
+                    "|         _____   ____   ____                |",
+                    "|        |  _  | |  _ | |  __|               |",
+                    "|        | |_| | | |_|| | |__                |",
+                    "|        |_____|=|____| |____|               |",
+                    "|                                            |",
+                    "| >>>  FIREWALL ACTIVE  <<<                  |",
+                    "| >>>  ALL PORTS LOCKED <<<                  |",
+                    "|  {INTRUDER DETECTED}                       |",
+                    "|  {LETHAL RESPONSE AUTHORIZED}              |",
+                    "|  /\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\  |",
+                    "|  THREAT LVL: @@@@@ MAXIMUM                |",
+                    "+--------------------------------------------+",
                 ]),
             },
             {
@@ -7792,20 +7792,20 @@ class RogueTerminalBoss:
                 "attack": "swirl",
                 "color": (100, 180, 255),
                 "template": self._normalize_art([
-                    " %@#!  SYSTEM UNSTABLE  CORE OVERHEAT  !#@% ",
-                    " +---%%%%-----######-----!!!!----------%--+ ",
-                    " | @#$  ERR0R  ERR0R  ERR0R  $#@       ## |",
-                    " |    /\\  TEMP: 9999C  /\\                  |",
-                    " |   /##\\   CRITICAL  /##\\                 |",
-                    " |  /####\\  MELTDOWN /####\\                |",
-                    " | /######\\ ======= /######\\               |",
-                    " |                                          |",
-                    " | Y0U THINK Y0U CAN ST0P ME?              |",
-                    " | I AM BEY0ND Y0UR C0MPREHENSI0N          |",
-                    " | I WILL BURN IT ALL D0WN                  |",
-                    " |  ~~^^~~^^~~^^~~^^~~^^~~^^~~              |",
-                    " | $#@!  CONTAINMENT FAILURE  !@#$         |",
-                    " +---!!!!-----@@@@@@-----####----------!--+ ",
+                    "%@#! SYSTEM UNSTABLE  CORE OVERHEAT    !#@% ",
+                    "+---%%%%-----######-----!!!!---------%%---+ ",
+                    "| @#$  ERR0R  ERR0R  ERR0R  $#@        ## |",
+                    "|    /\\  TEMP: 9999C  /\\                   |",
+                    "|   /##\\   CRITICAL  /##\\                  |",
+                    "|  /####\\  MELTDOWN /####\\                 |",
+                    "| /######\\ ======= /######\\                |",
+                    "|                                           |",
+                    "| Y0U THINK Y0U CAN ST0P ME?               |",
+                    "| I AM BEY0ND Y0UR C0MPREHENSI0N           |",
+                    "| I WILL BURN IT ALL D0WN                   |",
+                    "|  ~~^^~~^^~~^^~~^^~~^^~~^^~~               |",
+                    "| $#@!  CONTAINMENT FAILURE  !@#$          |",
+                    "+---!!!!-----@@@@@@-----####---------!!---+ ",
                 ]),
             },
         ]
@@ -7876,8 +7876,23 @@ class RogueTerminalBoss:
         if not cells:
             self.weakpoint_cells = set()
             return
-        picks = random.sample(cells, min(self.weakpoint_count, len(cells)))
-        self.weakpoint_cells = {(r, c) for r, c, _, _, _, _ in picks}
+        cell_set = {(r, c) for r, c, _, _, _, _ in cells}
+        seed = random.choice(cells)
+        cluster = {(seed[0], seed[1])}
+        neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+        frontier = [(seed[0], seed[1])]
+        while len(cluster) < self.weakpoint_count and frontier:
+            r, c = random.choice(frontier)
+            frontier.remove((r, c))
+            random.shuffle(neighbors)
+            for dr, dc in neighbors:
+                nr, nc = r + dr, c + dc
+                if (nr, nc) in cell_set and (nr, nc) not in cluster:
+                    cluster.add((nr, nc))
+                    frontier.append((nr, nc))
+                    if len(cluster) >= self.weakpoint_count:
+                        break
+        self.weakpoint_cells = cluster
 
     def update(self, players=None, sound_manager=None):
         if self.destruction_complete:
@@ -7938,36 +7953,37 @@ class RogueTerminalBoss:
         bottom = int(self.y + self.height - 12)
 
         attack = self._current_form()["attack"]
+        spd = ROGUE_TERMINAL_BOSS_BULLET_SPEED
         if attack == "curtain":
-            scan_offset = (now // 200) % 8
-            for i in range(8):
-                shifted = (i + scan_offset) % 8
-                x = left + int((right - left) * (shifted / 7))
-                bullets.append(Bullet(x, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED + (i * 0.3)))
+            scan_offset = (now // 250) % 5
+            for i in range(5):
+                shifted = (i + scan_offset) % 5
+                x = left + int((right - left) * (shifted / 4))
+                bullets.append(Bullet(x, bottom, spd + (i * 0.2)))
         elif attack == "wail":
             center = int(self.x + self.width // 2)
             if players:
                 target = players[0]
                 if hasattr(target, 'x'):
                     target_x = target.x + getattr(target, 'width', 40) // 2
-                    for off in [-30, -15, 0, 15, 30]:
-                        bx = target_x + off + random.randint(-20, 20)
-                        bullets.append(Bullet(bx, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED * 1.15))
-            offsets = [-140, -70, 0, 70, 140]
+                    for off in [-25, 0, 25]:
+                        bx = target_x + off + random.randint(-30, 30)
+                        bullets.append(Bullet(bx, bottom, spd * 1.05))
+            offsets = [-120, 0, 120]
             for off in offsets:
-                bullets.append(Bullet(center + off, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED * 0.9))
+                bullets.append(Bullet(center + off, bottom, spd * 0.85))
         else:  # swirl
             symbol_cells = self._symbol_cells()
             if symbol_cells:
-                for _ in range(7):
+                for _ in range(4):
                     _, _, _, sx, sy, _ = random.choice(symbol_cells)
-                    bullets.append(Bullet(sx, sy, ROGUE_TERMINAL_BOSS_BULLET_SPEED * random.uniform(0.6, 1.4)))
+                    bullets.append(Bullet(sx, sy, spd * random.uniform(0.6, 1.2)))
             center = int(self.x + self.width // 2)
-            angle_base = (now / 300.0)
-            for i in range(3):
-                angle = angle_base + i * (2.094)
-                bx = center + int(math.cos(angle) * 120)
-                bullets.append(Bullet(bx, bottom, ROGUE_TERMINAL_BOSS_BULLET_SPEED * 1.1))
+            angle_base = (now / 350.0)
+            for i in range(2):
+                angle = angle_base + i * math.pi
+                bx = center + int(math.cos(angle) * 100)
+                bullets.append(Bullet(bx, bottom, spd * 0.95))
 
         if sound_manager and bullets:
             sound_manager.play_sound('enemy_shoot', volume_override=0.45)
@@ -11855,10 +11871,7 @@ class Game:
                             self.screen_flash_intensity = 220
                             self.screen_flash_duration = 1200
                     else:
-                        # Only consume non-piercing bullets when they actually hit the boss body.
-                        if bullet.pierce_hits <= 0 and self.current_boss.rect.colliderect(bullet.rect):
-                            self.player_bullets.remove(bullet)
-                            consumed_shot = True
+                        pass
                     if consumed_shot and bullet.pierce_hits > 0:
                         bullet.pierce_hits -= 1
                     continue  # Skip normal boss collision logic
